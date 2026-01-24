@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  APPLICANT      // Registered but not paid/verified
+  PARTICIPANT    // Paid and Verified (Has ID Card)
+  ADMIN
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model User {
+  id          String   @id @default(cuid())
+  
+  // Section 1: Personal Details
+  firstName   String
+  lastName    String
+  email       String   @unique
+  phone       String
+  password    String   // Hashed security
+  
+  // Education
+  collegeName String
+  collegeLoc  String
+  department  String
+  yearOfStudy String
+  
+  // System Fields
+  shacklesId  String?  @unique // This starts NULL. Generated ONLY after Admin Verification.
+  role        Role     @default(APPLICANT)
+  
+  payment     Payment?
+  createdAt   DateTime @default(now())
+  resetToken       String?   @unique
+  resetTokenExpiry DateTime?
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  
+  // Section 2: Payment Details
+  amount        Int
+  transactionId String
+  proofUrl      String        // We will store the file path/URL here
+  
+  status        PaymentStatus @default(PENDING)
+  
+  user          User          @relation(fields: [userId], references: [id])
+  userId        String        @unique
+  
+  createdAt     DateTime      @default(now())
+}

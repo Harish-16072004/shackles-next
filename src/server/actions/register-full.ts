@@ -2,12 +2,11 @@
 
 import { z } from "zod";
 import { PrismaClient } from "@prisma/client";
-import { hash } from "bcryptjs"; // The security tool
-import { redirect } from "next/navigation";
+import { hash } from "bcryptjs";
+import crypto from "crypto"; 
 
 const prisma = new PrismaClient();
 
-// 1. Strict Validation Rules
 const FullRegisterSchema = z.object({
   firstName: z.string().min(2),
   lastName: z.string().min(1),
@@ -19,25 +18,27 @@ const FullRegisterSchema = z.object({
   yearOfStudy: z.string(),
   password: z.string().min(6),
   
-  // Payment Details
+  // --- NEW FIELDS ---
+  registrationType: z.enum(["GENERAL", "WORKSHOP", "COMBO"]),
+  
+  // Payment
   amount: z.number(),
   transactionId: z.string().min(4),
-  proofUrl: z.string().optional(), // We will handle real file uploads later
+  proofUrl: z.string().url("Invalid Image URL"), 
 });
 
-// 2. The Main Function
 export async function registerFullUser(data: any) {
-  // Validate Data
   const result = FullRegisterSchema.safeParse(data);
   
   if (!result.success) {
     return { success: false, error: "Invalid Data. Please check all fields." };
   }
 
-  const { password, amount, transactionId, proofUrl, ...personalDetails } = result.data;
+  // Extract registrationType specifically
+  const { password, amount, transactionId, proofUrl, registrationType, ...personalDetails } = result.data;
 
   try {
-    // A. Check if user exists
+    // A. Check for existing user
     const existing = await prisma.user.findUnique({
       where: { email: personalDetails.email }
     });
@@ -45,19 +46,34 @@ export async function registerFullUser(data: any) {
       return { success: false, error: "Email already registered." };
     }
 
-    // B. Encrypt Password
+    // B. Security Prep
     const hashedPassword = await hash(password, 10);
+    
+    // Generate Secure QR Token
+    const qrRaw = crypto.randomBytes(32).toString('hex');
+    const qrExpiry = new Date();
+    qrExpiry.setDate(qrExpiry.getDate() + 30); 
 
-    // C. Save Everything (User + Payment) in one go
+    // C. Create User
     await prisma.user.create({
       data: {
         ...personalDetails,
         password: hashedPassword,
+        role: "APPLICANT",
+        
+        // --- SAVE THE TYPE ---
+        registrationType: registrationType, 
+        
+        // Save QR Data
+        qrToken: qrRaw,
+        qrTokenExpiry: qrExpiry,
+        
+        // Save Payment
         payment: {
           create: {
             amount,
             transactionId,
-            proofUrl: proofUrl || "pending_upload",
+            proofUrl: proofUrl, 
             status: "PENDING"
           }
         }
@@ -67,7 +83,7 @@ export async function registerFullUser(data: any) {
     return { success: true };
 
   } catch (error) {
-    console.error(error);
-    return { success: false, error: "Database Error. Try again." };
+    console.error("Registration Error:", error);
+    return { success: false, error: "Registration failed. Please try again." };
   }
 }

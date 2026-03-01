@@ -1,17 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { stringifyCsvRow } from "@/lib/csv";
+import { logAdminAudit } from "@/lib/admin-audit";
 
-async function assertAdmin() {
+async function getAdminContext() {
   const session = await getSession();
-  if (!session?.userId) return false;
+  if (!session?.userId) return null;
   const user = await prisma.user.findUnique({ where: { id: String(session.userId) } });
-  return user?.role === "ADMIN";
+  if (!user || user.role !== "ADMIN") return null;
+  return { id: user.id, email: user.email };
 }
 
 export async function GET() {
-  const isAdmin = await assertAdmin();
-  if (!isAdmin) {
+  const admin = await getAdminContext();
+  if (!admin) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -49,6 +51,14 @@ export async function GET() {
       ])
     ),
   ];
+
+  await logAdminAudit({
+    action: "CSV_REGISTRATIONS_EXPORT",
+    actorId: admin.id,
+    actorEmail: admin.email,
+    status: "SUCCESS",
+    details: { rows: registrations.length },
+  });
 
   return new Response(lines.join("\n"), {
     headers: {

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import type { Prisma } from "@prisma/client";
 import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
+import { logAdminAudit } from "@/lib/admin-audit";
 
 function formatDate(date?: Date | null) {
   if (!date) return "--";
@@ -29,6 +30,7 @@ async function assertAdmin() {
   if (!session?.userId) redirect("/login");
   const user = await prisma.user.findUnique({ where: { id: session.userId as string } });
   if (!user || user.role !== "ADMIN") redirect("/login");
+  return user;
 }
 
 function revalidateEventPaths() {
@@ -42,7 +44,7 @@ function revalidateEventPaths() {
 
 async function deleteEventAction(formData: FormData) {
   'use server'
-  await assertAdmin();
+  const admin = await assertAdmin();
 
   const eventId = (formData.get("eventId") as string | null)?.trim();
   if (!eventId) return;
@@ -55,11 +57,19 @@ async function deleteEventAction(formData: FormData) {
   revalidateEventPaths();
   revalidatePath("/admin/event-registrations");
   revalidatePath("/admin/adminDashboard");
+
+  await logAdminAudit({
+    action: "EVENT_DELETE",
+    actorId: admin.id,
+    actorEmail: admin.email,
+    target: eventId,
+    status: "SUCCESS",
+  });
 }
 
 async function updateEventAction(formData: FormData) {
   'use server'
-  await assertAdmin();
+  const admin = await assertAdmin();
 
   const eventId = (formData.get("eventId") as string | null)?.trim();
   const name = (formData.get("name") as string | null)?.trim();
@@ -121,14 +131,26 @@ async function updateEventAction(formData: FormData) {
   });
 
   revalidateEventPaths();
+
+  await logAdminAudit({
+    action: "EVENT_UPDATE",
+    actorId: admin.id,
+    actorEmail: admin.email,
+    target: eventId,
+    status: "SUCCESS",
+    details: {
+      name,
+      participationMode,
+      maxParticipants,
+      maxTeams,
+      isActive,
+    },
+  });
 }
 
 async function createEventAction(formData: FormData) {
   'use server'
-  const session = await getSession();
-  if (!session?.userId) redirect("/login");
-  const user = await prisma.user.findUnique({ where: { id: session.userId as string } });
-  if (!user || user.role !== "ADMIN") redirect("/login");
+  const user = await assertAdmin();
 
   const name = (formData.get("name") as string | null)?.trim();
   const typeRaw = (formData.get("type") as string | null)?.trim();
@@ -261,6 +283,20 @@ async function createEventAction(formData: FormData) {
   revalidatePath("/events/non-technical");
   revalidatePath("/events/special");
   revalidatePath("/workshops");
+
+  await logAdminAudit({
+    action: "EVENT_CREATE_OR_UPDATE",
+    actorId: user.id,
+    actorEmail: user.email,
+    target: name,
+    status: "SUCCESS",
+    details: {
+      participationMode,
+      maxParticipants,
+      maxTeams,
+      isActive,
+    },
+  });
 }
 
 async function saveDayConfigAction(formData: FormData) {
@@ -402,6 +438,9 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                 accept=".csv,text/csv"
                 className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border file:border-gray-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-gray-700 hover:file:bg-gray-50"
               />
+              <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                <input type="checkbox" name="dryRun" value="true" /> Dry run
+              </label>
               <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">
                 Import
               </button>

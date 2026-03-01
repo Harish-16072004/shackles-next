@@ -158,6 +158,9 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
                 accept=".csv,text/csv"
                 className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border file:border-gray-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-gray-700 hover:file:bg-gray-50"
               />
+              <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                <input type="checkbox" name="dryRun" value="true" /> Dry run
+              </label>
               <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">
                 Import
               </button>

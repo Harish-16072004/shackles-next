@@ -1,0 +1,157 @@
+'use server'
+
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
+
+export default async function AdminEventRegistrationsPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+  const session = await getSession();
+  if (!session?.userId) redirect("/login");
+  const user = await prisma.user.findUnique({ where: { id: session.userId as string } });
+  if (!user || user.role !== "ADMIN") redirect("/login");
+
+  const typeFilter = typeof searchParams?.type === "string" ? searchParams.type : "";
+  const q = typeof searchParams?.q === "string" ? searchParams.q.trim() : "";
+
+  const events = await prisma.event.findMany({
+    orderBy: { name: "asc" },
+    include: {
+      registrations: {
+        include: {
+          user: true,
+        },
+      },
+    },
+  });
+
+  const filtered = events
+    .filter((evt) => {
+      if (!typeFilter) return true;
+      const t = (evt.type || "").toLowerCase();
+      if (typeFilter === "TECHNICAL") return t === "technical";
+      if (typeFilter === "NON-TECHNICAL") return t === "non-technical";
+      if (typeFilter === "WORKSHOP") return t.includes("workshop") || evt.name.toLowerCase().includes("workshop");
+      if (typeFilter === "SPECIAL") return t === "special";
+      return true;
+    })
+    .map((evt) => {
+      const regs = evt.registrations.filter((reg) => {
+        if (!q) return true;
+        const u = reg.user;
+        const haystack = `${u.firstName} ${u.lastName} ${u.email} ${u.collegeName}`.toLowerCase();
+        return haystack.includes(q.toLowerCase());
+      });
+      return { ...evt, registrations: regs };
+    });
+
+  const totals = filtered.reduce(
+    (acc, evt) => {
+      acc.registrations += evt.registrations.length;
+      acc.events += 1;
+      return acc;
+    },
+    { registrations: 0, events: 0 }
+  );
+
+  const typeOptions = [
+    { label: "All Types", value: "" },
+    { label: "Technical", value: "TECHNICAL" },
+    { label: "Non-Technical", value: "NON-TECHNICAL" },
+    { label: "Workshop", value: "WORKSHOP" },
+    { label: "Special", value: "SPECIAL" },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-6xl mx-auto space-y-8">
+        <div className="flex justify-between items-start gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Event Registrations</h1>
+            <p className="text-gray-600">Filter by event type and search participants.</p>
+          </div>
+          <div className="text-right text-sm text-gray-600">
+            <div className="font-semibold text-gray-900">Total Registrations: {totals.registrations}</div>
+            <div>Events: {totals.events}</div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <form className="grid grid-cols-1 md:grid-cols-3 gap-3" method="get">
+            <select
+              name="type"
+              defaultValue={typeFilter}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            >
+              {typeOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              name="q"
+              defaultValue={q}
+              placeholder="Name, email, or college"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800"
+              >
+                Apply
+              </button>
+              <a
+                href="/admin/events"
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                View all events
+              </a>
+            </div>
+          </form>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            {filtered.length === 0 ? (
+              <div className="p-12 text-center text-gray-500">No registrations found.</div>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
+                  <tr>
+                    <th className="px-4 py-3">Event</th>
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">Registrations</th>
+                    <th className="px-4 py-3">Participants</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filtered.map((evt) => (
+                    <tr key={evt.id} className="align-top">
+                      <td className="px-4 py-3 font-semibold text-gray-900">{evt.name}</td>
+                      <td className="px-4 py-3 text-gray-700">{evt.type || "--"}</td>
+                      <td className="px-4 py-3 text-gray-900 font-semibold">{evt.registrations.length}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {evt.registrations.length === 0 ? (
+                          <span className="text-gray-400 text-xs">No participants</span>
+                        ) : (
+                          <ul className="space-y-1 text-xs text-gray-800">
+                            {evt.registrations.map((reg) => (
+                              <li key={reg.id} className="flex justify-between gap-2">
+                                <span className="font-semibold text-gray-900">{reg.user.firstName} {reg.user.lastName}</span>
+                                <span className="text-gray-500">{reg.user.collegeName}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

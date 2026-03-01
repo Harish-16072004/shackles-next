@@ -25,6 +25,28 @@ async function main() {
   })
 
   console.log({ admin })
+
+  // --- SEED EVENTS ---
+  const events = [
+    { name: "Paper Presentation", type: "TECHNICAL" },
+    { name: "Aqua Missile", type: "NON-TECHNICAL" },
+    { name: "CAD Modelling", type: "TECHNICAL" },
+    { name: "Treasure Hunt", type: "NON-TECHNICAL" },
+    { name: "Workshop: EV Tech", type: "TECHNICAL" }
+  ]
+
+  for (const evt of events) {
+    await prisma.event.upsert({
+      where: { name: evt.name },
+      update: {},
+      create: {
+         name: evt.name,
+         type: evt.type,
+         date: new Date() // Set to today for now
+      }
+    })
+  }
+  console.log("Events Seeded")
 }
 
 main()

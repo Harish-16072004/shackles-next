@@ -103,7 +103,7 @@ export default function AccommodationForm({ userId }: { userId: string }) {
                       gender === "MALE" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
                     }`}
                   >
-                    Boys
+                    Male
                   </button>
                   <button 
                     onClick={() => setGender("FEMALE")}
@@ -111,7 +111,7 @@ export default function AccommodationForm({ userId }: { userId: string }) {
                       gender === "FEMALE" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
                     }`}
                   >
-                    Girls
+                    Female
                   </button>
                 </div>
               </div>

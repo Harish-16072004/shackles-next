@@ -1,11 +1,8 @@
 'use server'
 
 import { z } from "zod";
-import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
-import crypto from "crypto"; 
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 const FullRegisterSchema = z.object({
   firstName: z.string().min(2),
@@ -24,10 +21,11 @@ const FullRegisterSchema = z.object({
   // Payment
   amount: z.number(),
   transactionId: z.string().min(4),
-  proofUrl: z.string().url("Invalid Image URL"), 
+  proofUrl: z.string().url("Invalid Image URL").optional(),
+  proofPath: z.string().min(1).optional(),
 });
 
-export async function registerFullUser(data: any) {
+export async function registerFullUser(data: unknown) {
   const result = FullRegisterSchema.safeParse(data);
   
   if (!result.success) {
@@ -35,7 +33,10 @@ export async function registerFullUser(data: any) {
   }
 
   // Extract registrationType specifically
-  const { password, amount, transactionId, proofUrl, registrationType, ...personalDetails } = result.data;
+  const { password, amount, transactionId, proofUrl, proofPath: inputProofPath, registrationType, ...personalDetails } = result.data;
+  if (!proofUrl && !inputProofPath) {
+    return { success: false, error: "Payment proof is required." };
+  }
 
   try {
     // A. Check for existing user
@@ -48,13 +49,10 @@ export async function registerFullUser(data: any) {
 
     // B. Security Prep
     const hashedPassword = await hash(password, 10);
-    
-    // Generate Secure QR Token
-    const qrRaw = crypto.randomBytes(32).toString('hex');
-    const qrExpiry = new Date();
-    qrExpiry.setDate(qrExpiry.getDate() + 30); 
 
-    // C. Create User
+    const proofPath: string | undefined = inputProofPath;
+
+    // D. Create User
     await prisma.user.create({
       data: {
         ...personalDetails,
@@ -62,18 +60,15 @@ export async function registerFullUser(data: any) {
         role: "APPLICANT",
         
         // --- SAVE THE TYPE ---
-        registrationType: registrationType, 
-        
-        // Save QR Data
-        qrToken: qrRaw,
-        qrTokenExpiry: qrExpiry,
+        registrationType: registrationType,
         
         // Save Payment
         payment: {
           create: {
             amount,
             transactionId,
-            proofUrl: proofUrl, 
+            proofUrl: proofUrl || "",
+            proofPath,
             status: "PENDING"
           }
         }

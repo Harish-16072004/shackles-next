@@ -60,6 +60,8 @@ model User {
   
   // --- 4. Security (Dynamic QR) ---
   qrToken       String?   @unique 
+  qrImageUrl    String?
+  qrPath        String?
   qrTokenExpiry DateTime?
   lastQrScan    DateTime?
   
@@ -81,13 +83,33 @@ model User {
 
   // Accommodation
   accommodation Accommodation?
+
+  // Events
+  registrations EventRegistration[]
+
+  // Contact Messages
+  contactMessages ContactMessage[]
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  mobile    String
+  message   String
+  createdAt DateTime @default(now())
+
+  // Optional: Link to a registered user if email matches
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?
 }
 
 model Payment {
   id            String        @id @default(cuid())
   amount        Int
   transactionId String
-  proofUrl      String        
+  proofUrl      String
+  proofPath     String?
   status        PaymentStatus @default(PENDING)
   
   verifiedAt    DateTime?
@@ -111,4 +133,44 @@ model Accommodation {
   userId    String   @unique
   
   createdAt DateTime @default(now())
+}
+// --- NEW MODELS FOR LOGISTICS ---
+
+model Event {
+  id          String   @id @default(cuid())
+  name        String   @unique // 'Paper Presentation', 'Aqua Missile'
+  type        String?  // 'TECHNICAL', 'NON-TECHNICAL', 'SPECIAL', 'WORKSHOP'
+  dayLabel    String?
+  date        DateTime?
+  maxParticipants Int?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  registrations EventRegistration[]
+}
+
+model EventDayConfig {
+  id         String   @id @default(cuid())
+  dayLabel   String
+  category   String
+  maxEvents  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([dayLabel, category])
+}
+
+model EventRegistration {
+  id        String   @id @default(cuid())
+  
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  
+  event     Event    @relation(fields: [eventId], references: [id])
+  eventId   String
+  
+  attended  Boolean  @default(false)
+  attendedAt DateTime?
+
+  @@unique([userId, eventId]) // Prevent duplicate registration
 }

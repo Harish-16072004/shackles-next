@@ -7,7 +7,6 @@ export async function middleware(request: NextRequest) {
 
   // 1. Define Protected Routes
   const isAdminRoute = path.startsWith('/admin')
-  const isDashboardRoute = path.startsWith('/dashboard')
 
   // 2. Get the Cookie
   const cookie = request.cookies.get('session')?.value
@@ -19,7 +18,7 @@ export async function middleware(request: NextRequest) {
     try {
       const { payload } = await jwtVerify(cookie, secret, { algorithms: ['HS256'] })
       session = payload
-    } catch (err) {
+    } catch {
       // Invalid token
     }
   }
@@ -31,15 +30,10 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 5. Rule: Dashboard is for LOGGED IN users
-  if (isDashboardRoute && !session) {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
-
   return NextResponse.next()
 }
 
 // Optimization: Only run on these paths
 export const config = {
-  matcher: ['/admin/:path*', '/dashboard/:path*']
+  matcher: ['/admin/:path*']
 }

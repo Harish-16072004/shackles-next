@@ -1,10 +1,10 @@
 'use server'
 
 import { z } from "zod";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { hash } from "bcryptjs";
 
-const prisma = new PrismaClient();
 
 // 1. Define the Validation Schema (The Rules)
 const RegisterSchema = z.object({
@@ -15,7 +15,7 @@ const RegisterSchema = z.object({
 });
 
 // 2. The Server Action (The Function)
-export async function registerUser(prevState: any, formData: FormData) {
+export async function registerUser(prevState: unknown, formData: FormData) {
   // Extract data from the form
   const rawData = {
     name: formData.get("name"),
@@ -36,17 +36,29 @@ export async function registerUser(prevState: any, formData: FormData) {
 
   // Save to Database
   try {
+    const nameParts = validatedFields.data.name.split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+    
     await prisma.user.create({
       data: {
-        ...validatedFields.data,
+        firstName,
+        lastName,
+        email: validatedFields.data.email,
+        phone: validatedFields.data.phone,
+        collegeName: validatedFields.data.college,
+        collegeLoc: "",
+        department: "",
+        yearOfStudy: "",
+        password: await hash("defaultPassword123", 10),
         // We generate a random "Shackles ID" for now (e.g., SH-1234)
         shacklesId: `SH-${Math.floor(1000 + Math.random() * 9000)}`,
       },
     });
-  } catch (e) {
+  } catch {
     return { message: "Email already registered. Try logging in." };
   }
 
-  // Success! Redirect to the Dashboard
-  redirect("/dashboard");
+  // Success! Redirect to the User Dashboard
+  redirect("/userDashboard");
 }

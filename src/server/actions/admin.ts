@@ -1,9 +1,91 @@
 'use server'
 
-import { PrismaClient } from "@prisma/client";
+import crypto from "crypto";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getStorageProvider, shouldUseDigitalOcean, shouldUseLocal } from "@/lib/storage-provider";
+import { uploadToSpaces } from "@/lib/digitalocean/spaces";
+import { promises as fs } from "fs";
+import path from "path";
 
-const prisma = new PrismaClient();
+type QrUploadResult = {
+  qrImageUrl: string | null;
+  qrPath?: string;
+};
+
+async function generateQrImageBuffer(qrToken: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrToken)}`;
+  let response: Response;
+  try {
+    response = await fetch(qrApiUrl, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!response.ok) {
+    throw new Error("Failed to generate QR image");
+  }
+
+  return response.arrayBuffer();
+}
+
+async function uploadQrToStorage(
+  qrImageBuffer: ArrayBuffer,
+  shacklesId: string,
+  registrationType: string
+) {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const typeSegment = registrationType.toLowerCase();
+  const spacesKey = `qr-codes/${year}/${month}/${typeSegment}/${shacklesId}.png`;
+
+  const storageProvider = getStorageProvider();
+
+  if (shouldUseLocal(storageProvider)) {
+    // Local filesystem storage
+    const publicDir = path.join(process.cwd(), "public", "uploads", "qr-codes");
+    const fileDir = path.join(publicDir, year.toString(), month, typeSegment);
+    const filePath = path.join(fileDir, `${shacklesId}.png`);
+    
+    // Ensure directory exists
+    await fs.mkdir(fileDir, { recursive: true });
+    
+    // Write file
+    await fs.writeFile(filePath, Buffer.from(qrImageBuffer));
+    
+    // Return path relative to public directory
+    const publicPath = `/uploads/qr-codes/${year}/${month}/${typeSegment}/${shacklesId}.png`;
+    
+    return { qrPath: publicPath };
+  } else if (shouldUseDigitalOcean(storageProvider)) {
+    await uploadToSpaces({
+      key: spacesKey,
+      body: Buffer.from(qrImageBuffer),
+      contentType: "image/png",
+      upsert: true,
+    });
+
+    return { qrPath: spacesKey };
+  } else {
+    throw new Error("Unsupported storage provider configuration.");
+  }
+}
+
+async function uploadQrImage(qrToken: string, shacklesId: string, registrationType: string): Promise<QrUploadResult> {
+  const qrImageBuffer = await generateQrImageBuffer(qrToken);
+  const uploadResult = await uploadQrToStorage(qrImageBuffer, shacklesId, registrationType);
+
+  return {
+    qrImageUrl: null,
+    qrPath: uploadResult.qrPath,
+  };
+}
 
 export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJECT') {
   try {
@@ -21,15 +103,15 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
       if (!user) return { success: false, error: "User not found" };
 
       // 2. Determine Prefix based on Type
-      // General -> SH26EN...
-      // Workshop -> SH26WK...
-      // Combo -> SH26GN...
-      let prefix = "SH26EN"; 
-      if (user.registrationType === 'WORKSHOP') prefix = "SH26WK";
-      if (user.registrationType === 'COMBO')    prefix = "SH26GN";
+      // General -> SH26G...
+      // Workshop -> SH26W...
+      // Combo -> SH26C...
+      let prefix = "SH26G"; 
+      if (user.registrationType === 'WORKSHOP') prefix = "SH26W";
+      if (user.registrationType === 'COMBO')    prefix = "SH26C";
 
       // 3. Count ONLY verified users in this specific category
-      // This ensures SH26EN001 and SH26WK001 are separate counters
+      // This ensures SH26G001 and SH26W001 are separate counters
       const count = await prisma.user.count({ 
         where: { 
           role: 'PARTICIPANT', 
@@ -38,9 +120,15 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
       });
 
       // 4. Generate the ID (Prefix + 3-digit number)
-      // Example: SH26GN + 001 = SH26GN001
-      const nextId = (count + 1).toString().padStart(2,'0');
+      // Example: SH26C + 001 = SH26C001
+      const nextId = (count + 1).toString().padStart(3,'0');
       const shacklesId = `${prefix}${nextId}`;
+
+      // Generate QR token only after successful payment verification
+      const qrToken = crypto.randomBytes(32).toString('hex');
+      const qrTokenExpiry = new Date();
+      qrTokenExpiry.setDate(qrTokenExpiry.getDate() + 30);
+      const qrUpload = await uploadQrImage(qrToken, shacklesId, user.registrationType);
 
       // 5. Update Database
       await prisma.$transaction([
@@ -55,13 +143,19 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
           where: { id: userId },
           data: {
             role: 'PARTICIPANT',
-            shacklesId: shacklesId
+            shacklesId: shacklesId,
+            qrToken,
+            qrImageUrl: qrUpload.qrImageUrl,
+            qrPath: qrUpload.qrPath,
+            qrTokenExpiry
           }
         })
       ]);
     }
 
     revalidatePath('/admin');
+    revalidatePath('/admin/adminDashboard');
+    revalidatePath('/userDashboard');
     return { success: true };
 
   } catch (error) {

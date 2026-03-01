@@ -1,20 +1,20 @@
 'use server'
 
 import { z } from "zod";
-import { PrismaClient } from "@prisma/client";
 import { compare } from "bcryptjs"; 
 import { createSession } from "@/lib/session";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
 
 const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
 
-export async function loginUser(prevState: any, formData: FormData) {
+export async function loginUser(prevState: unknown, formData: FormData) {
   const data = Object.fromEntries(formData.entries());
+  let loggedInRole: string | null = null;
   
   // 1. Validate Input
   const result = LoginSchema.safeParse(data);
@@ -42,6 +42,7 @@ export async function loginUser(prevState: any, formData: FormData) {
 
     // 4. Create Session
     await createSession(user.id, user.role);
+    loggedInRole = user.role;
 
   } catch (error) {
     console.error("Login error:", error);
@@ -49,5 +50,9 @@ export async function loginUser(prevState: any, formData: FormData) {
   }
 
   // 5. Redirect (Must be outside try-catch)
-  redirect("/dashboard");
+  if (loggedInRole === "ADMIN") {
+    redirect("/admin/adminDashboard");
+  }
+
+  redirect("/");
 }

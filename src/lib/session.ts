@@ -38,7 +38,7 @@ export async function getSession() {
       algorithms: ['HS256'],
     })
     return payload
-  } catch (err) {
+  } catch {
     return null
   }
 }

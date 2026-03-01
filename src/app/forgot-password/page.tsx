@@ -4,6 +4,7 @@ import { useFormState } from "react-dom";
 import { requestPasswordReset } from "@/server/actions/forgot-password";
 
 const initialState = {
+  success: false,
   message: "",
   error: "",
 };

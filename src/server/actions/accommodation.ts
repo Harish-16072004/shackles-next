@@ -1,10 +1,8 @@
 'use server'
 
-import { PrismaClient } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 const AccommodationSchema = z.object({
   userId: z.string(),
@@ -12,7 +10,7 @@ const AccommodationSchema = z.object({
   days: z.array(z.string()).min(1, "Select at least one day"),
 });
 
-export async function registerAccommodation(data: any) {
+export async function registerAccommodation(data: unknown) {
   const result = AccommodationSchema.safeParse(data);
   
   if (!result.success) {

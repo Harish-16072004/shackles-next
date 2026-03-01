@@ -99,7 +99,11 @@ export default async function UserDashboardPage() {
             <ul className="mt-4 space-y-3">
               {events.map((registration) => (
                 <li key={registration.id} className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800">
-                  {registration.event.name}
+                  <div className="font-medium text-gray-900">{registration.event.name}</div>
+                  <div className="mt-1 text-xs text-gray-600">
+                    {registration.teamName ? `Team: ${registration.teamName} • ` : ""}
+                    Participants: {registration.teamSize || 1}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -114,7 +118,11 @@ export default async function UserDashboardPage() {
             <ul className="mt-4 space-y-3">
               {workshops.map((registration) => (
                 <li key={registration.id} className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800">
-                  {registration.event.name}
+                  <div className="font-medium text-gray-900">{registration.event.name}</div>
+                  <div className="mt-1 text-xs text-gray-600">
+                    {registration.teamName ? `Team: ${registration.teamName} • ` : ""}
+                    Participants: {registration.teamSize || 1}
+                  </div>
                 </li>
               ))}
             </ul>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
 
 const eventCategories = [
   {
@@ -59,6 +60,7 @@ export default async function Events() {
 
   return (
     <div className="flex flex-col gap-12 pb-8">
+      <LiveSyncRefresher intervalMs={12000} />
       <section className="flex flex-col gap-4 text-center">
         <h1 className="text-4xl font-semibold tracking-tight text-gray-900">
           EVENTS

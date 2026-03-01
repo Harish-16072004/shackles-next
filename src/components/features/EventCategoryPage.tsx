@@ -83,14 +83,38 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
   }, [category]);
 
   useEffect(() => {
-    loadEvents();
+    void loadEvents();
 
-    const interval = setInterval(() => {
-      void loadEvents();
-    }, 12000);
+    let source: EventSource | null = null;
+    let fallbackInterval: ReturnType<typeof setInterval> | null = null;
+
+    const setupFallback = () => {
+      if (!fallbackInterval) {
+        fallbackInterval = setInterval(() => {
+          void loadEvents();
+        }, 12000);
+      }
+    };
+
+    try {
+      source = new EventSource("/api/live-sync");
+      source.onmessage = () => {
+        void loadEvents();
+      };
+      source.onerror = () => {
+        setupFallback();
+      };
+    } catch {
+      setupFallback();
+    }
 
     return () => {
-      clearInterval(interval);
+      if (source) {
+        source.close();
+      }
+      if (fallbackInterval) {
+        clearInterval(fallbackInterval);
+      }
     };
   }, [loadEvents]);
 

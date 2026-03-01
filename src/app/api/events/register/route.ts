@@ -68,6 +68,13 @@ export async function POST(request: Request) {
       }
 
       if (isTeamEvent) {
+        if (!teamNameInput) {
+          return {
+            ok: false as const,
+            code: 400,
+            error: "Team name is required for team events.",
+          };
+        }
         if (event.teamMinSize != null && inferredTeamSize < event.teamMinSize) {
           return {
             ok: false as const,
@@ -119,7 +126,7 @@ export async function POST(request: Request) {
         data: {
           userId: user.id,
           eventId: event.id,
-          teamName: teamNameInput || null,
+          teamName: isTeamEvent ? teamNameInput : null,
           teamSize: inferredTeamSize,
           attended: false,
         },

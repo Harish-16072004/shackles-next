@@ -310,6 +310,16 @@ export default async function AdminDashboard() {
               </div>
               <p className="text-gray-900 font-semibold text-sm">Kit Distribution</p>
             </a>
+
+            {/* Audit Logs */}
+            <a href="/admin/audit-logs" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
+              <div className="bg-gray-100 w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <svg className="w-8 h-8 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1h5a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1h5V3a1 1 0 011-1zm-4 7a1 1 0 000 2h8a1 1 0 100-2H6zm0 4a1 1 0 000 2h5a1 1 0 100-2H6z" clipRule="evenodd"></path>
+                </svg>
+              </div>
+              <p className="text-gray-900 font-semibold text-sm">Audit Logs</p>
+            </a>
           </div>
         </div>
 

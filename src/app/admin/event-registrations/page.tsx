@@ -62,6 +62,14 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
     { label: "Special", value: "SPECIAL" },
   ];
 
+  const quickChips = [
+    { label: "All", value: "" },
+    { label: "Technical", value: "TECHNICAL" },
+    { label: "Non-Technical", value: "NON-TECHNICAL" },
+    { label: "Workshop", value: "WORKSHOP" },
+    { label: "Special", value: "SPECIAL" },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <LiveSyncRefresher intervalMs={12000} />
@@ -110,6 +118,51 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
               </a>
             </div>
           </form>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {quickChips.map((chip) => {
+              const isActive = typeFilter === chip.value;
+              return (
+                <a
+                  key={chip.label}
+                  href={`/admin/event-registrations?${new URLSearchParams({ ...(chip.value ? { type: chip.value } : {}), ...(q ? { q } : {}) }).toString()}`}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                    isActive ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {chip.label}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+            <h2 className="text-lg font-bold text-gray-900">CSV Export</h2>
+            <p className="text-sm text-gray-600">Download all event registrations with team and attendance fields.</p>
+            <a
+              href="/api/admin/csv/registrations/export"
+              className="inline-flex rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Download Registrations CSV
+            </a>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+            <h2 className="text-lg font-bold text-gray-900">CSV Import</h2>
+            <p className="text-sm text-gray-600">Upload registrations CSV (eventName + userEmail required) to bulk upsert rows.</p>
+            <form action="/api/admin/csv/registrations/import" method="post" encType="multipart/form-data" className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <input
+                type="file"
+                name="file"
+                required
+                accept=".csv,text/csv"
+                className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border file:border-gray-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-gray-700 hover:file:bg-gray-50"
+              />
+              <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">
+                Import
+              </button>
+            </form>
+          </div>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">

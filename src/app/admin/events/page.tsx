@@ -380,6 +380,35 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
           </div>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+            <h2 className="text-lg font-bold text-gray-900">CSV Export</h2>
+            <p className="text-sm text-gray-600">Download all events for backup or bulk editing.</p>
+            <a
+              href="/api/admin/csv/events/export"
+              className="inline-flex rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Download Events CSV
+            </a>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+            <h2 className="text-lg font-bold text-gray-900">CSV Import</h2>
+            <p className="text-sm text-gray-600">Upload events CSV (same headers as export) to upsert records.</p>
+            <form action="/api/admin/csv/events/import" method="post" encType="multipart/form-data" className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <input
+                type="file"
+                name="file"
+                required
+                accept=".csv,text/csv"
+                className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border file:border-gray-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-gray-700 hover:file:bg-gray-50"
+              />
+              <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">
+                Import
+              </button>
+            </form>
+          </div>
+        </div>
+
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
           <form className="flex flex-col md:flex-row gap-3 md:items-center" method="get">
             <input

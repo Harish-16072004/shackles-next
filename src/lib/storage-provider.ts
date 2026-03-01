@@ -4,7 +4,12 @@ export function getStorageProvider(): StorageProvider {
   const provider = process.env.STORAGE_PROVIDER;
   if (provider === "local") return "local";
   if (provider === "digitalocean") return "digitalocean";
-  return "local";
+
+  if (process.env.NODE_ENV !== "production") {
+    return "local";
+  }
+
+  throw new Error("Invalid STORAGE_PROVIDER. Use 'local' or 'digitalocean'.");
 }
 
 export function shouldUseLocal(provider: StorageProvider) {

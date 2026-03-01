@@ -1,8 +1,9 @@
 import 'server-only'
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
+import { getRequiredEnv } from '@/lib/env'
 
-const secretKey = process.env.SESSION_SECRET || 'your-super-secret-key-shackles-2025'
+const secretKey = getRequiredEnv('SESSION_SECRET')
 const encodedKey = new TextEncoder().encode(secretKey)
 
 // 1. Create the Session (Login)

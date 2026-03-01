@@ -4,6 +4,7 @@ import { getStorageProvider, shouldUseDigitalOcean, shouldUseLocal } from "@/lib
 import { createSpacesSignedGetUrl, uploadToSpaces } from "@/lib/digitalocean/spaces";
 import { promises as fs } from "fs";
 import path from "path";
+import { safeLogError } from "@/lib/safe-log";
 
 export async function GET() {
   return NextResponse.json({
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const raw = error instanceof Error ? error.message : "Failed to upload payment proof";
     const message = toReadableError(raw);
-    console.error("[payment-proof upload] Unhandled error:", error);
+    safeLogError("[payment-proof upload] Unhandled error", error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

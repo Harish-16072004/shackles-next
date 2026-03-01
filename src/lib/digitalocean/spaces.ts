@@ -1,20 +1,13 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-
-function requireEnv(name: string) {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
+import { getRequiredEnv } from "@/lib/env";
 
 function getSpacesConfig() {
-  const region = requireEnv("DO_SPACES_REGION");
-  const bucket = requireEnv("DO_SPACES_BUCKET");
-  const endpoint = requireEnv("DO_SPACES_ENDPOINT");
-  const key = requireEnv("DO_SPACES_KEY");
-  const secret = requireEnv("DO_SPACES_SECRET");
+  const region = getRequiredEnv("DO_SPACES_REGION");
+  const bucket = getRequiredEnv("DO_SPACES_BUCKET");
+  const endpoint = getRequiredEnv("DO_SPACES_ENDPOINT");
+  const key = getRequiredEnv("DO_SPACES_KEY");
+  const secret = getRequiredEnv("DO_SPACES_SECRET");
   const cdnBaseUrl = process.env.DO_SPACES_CDN_BASE_URL;
 
   return { region, bucket, endpoint, key, secret, cdnBaseUrl };

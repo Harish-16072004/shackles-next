@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getQrSignedUrl } from "@/lib/storage/signed-urls";
 import Image from "next/image";
+import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
 
 export default async function UserDashboardPage() {
   const session = await getSession();
@@ -50,6 +51,7 @@ export default async function UserDashboardPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+      <LiveSyncRefresher intervalMs={12000} />
       <section className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
         <p className="text-xs uppercase tracking-[0.2em] text-gray-500">User Dashboard</p>
         <h1 className="mt-2 text-3xl font-bold text-gray-900 md:text-4xl">Welcome {userName},</h1>

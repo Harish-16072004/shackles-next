@@ -20,7 +20,7 @@ export async function registerAccommodation(data: unknown) {
   try {
     // Check if already registered
     const existing = await prisma.accommodation.findUnique({
-      where: { userId: data.userId }
+      where: { userId: result.data.userId }
     });
 
     if (existing) {
@@ -30,7 +30,7 @@ export async function registerAccommodation(data: unknown) {
     // Save to DB
     await prisma.accommodation.create({
       data: {
-        userId: data.userId,
+        userId: result.data.userId,
         gender: result.data.gender,
         days: result.data.days
       }

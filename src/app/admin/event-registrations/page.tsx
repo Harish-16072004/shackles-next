@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
 
 export default async function AdminEventRegistrationsPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const session = await getSession();
@@ -46,7 +47,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
 
   const totals = filtered.reduce(
     (acc, evt) => {
-      acc.registrations += evt.registrations.length;
+      acc.registrations += evt.registrations.reduce((sum, reg) => sum + (reg.teamSize || 1), 0);
       acc.events += 1;
       return acc;
     },
@@ -63,6 +64,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
+      <LiveSyncRefresher intervalMs={12000} />
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex justify-between items-start gap-4">
           <div>
@@ -129,7 +131,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
                     <tr key={evt.id} className="align-top">
                       <td className="px-4 py-3 font-semibold text-gray-900">{evt.name}</td>
                       <td className="px-4 py-3 text-gray-700">{evt.type || "--"}</td>
-                      <td className="px-4 py-3 text-gray-900 font-semibold">{evt.registrations.length}</td>
+                      <td className="px-4 py-3 text-gray-900 font-semibold">{evt.registrations.reduce((sum, reg) => sum + (reg.teamSize || 1), 0)}</td>
                       <td className="px-4 py-3 text-gray-700">
                         {evt.registrations.length === 0 ? (
                           <span className="text-gray-400 text-xs">No participants</span>
@@ -138,7 +140,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
                             {evt.registrations.map((reg) => (
                               <li key={reg.id} className="flex justify-between gap-2">
                                 <span className="font-semibold text-gray-900">{reg.user.firstName} {reg.user.lastName}</span>
-                                <span className="text-gray-500">{reg.user.collegeName}</span>
+                                <span className="text-gray-500">{reg.teamName ? `${reg.teamName} • ` : ""}{reg.teamSize || 1}P</span>
                               </li>
                             ))}
                           </ul>

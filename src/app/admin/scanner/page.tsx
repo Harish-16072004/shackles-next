@@ -16,12 +16,12 @@ type ParticipantRecord = {
     events: { eventName: string; attended: boolean }[];
 };
 
-type EventOption = { name: string; type: string };
+type EventOption = { name: string; type: string | null };
 
 function isEventOption(value: unknown): value is EventOption {
     if (!value || typeof value !== 'object') return false;
     const record = value as Record<string, unknown>;
-    return typeof record.name === 'string' && typeof record.type === 'string';
+    return typeof record.name === 'string' && (typeof record.type === 'string' || record.type === null);
 }
 
 const ROSTER_CACHE_KEY = 'shackles_roster_v1';
@@ -42,6 +42,36 @@ const generateActionId = () => (
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(16).slice(2)}`
 );
+
+function toParticipantRecord(value: unknown): ParticipantRecord | null {
+    if (!value || typeof value !== 'object') return null;
+    const record = value as Record<string, unknown>;
+    if (typeof record.id !== 'string') return null;
+
+    const eventsRaw = Array.isArray(record.events) ? record.events : [];
+    const events = eventsRaw
+        .map((eventValue) => {
+            if (!eventValue || typeof eventValue !== 'object') return null;
+            const eventRecord = eventValue as Record<string, unknown>;
+            if (typeof eventRecord.eventName !== 'string') return null;
+            return {
+                eventName: eventRecord.eventName,
+                attended: Boolean(eventRecord.attended),
+            };
+        })
+        .filter((event): event is { eventName: string; attended: boolean } => Boolean(event));
+
+    return {
+        id: record.id,
+        firstName: typeof record.firstName === 'string' ? record.firstName : '',
+        shacklesId: typeof record.shacklesId === 'string' ? record.shacklesId : null,
+        registrationType: typeof record.registrationType === 'string' ? record.registrationType : '',
+        kitStatus: typeof record.kitStatus === 'string' ? record.kitStatus : 'PENDING',
+        qrTokenHash: typeof record.qrTokenHash === 'string' ? record.qrTokenHash : null,
+        updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : undefined,
+        events,
+    };
+}
 
 export default function ScannerPage() {
   const [scanResult, setScanResult] = useState<string | null>(null);
@@ -269,9 +299,14 @@ export default function ScannerPage() {
             try {
                 const res = await scanParticipantQR(token);
                 if (res.success) {
-                    setParticipant(res.data as ParticipantRecord);
-                    setUsedOfflineData(false);
-                    resolved = true;
+                    const normalizedParticipant = toParticipantRecord(res.data);
+                    if (normalizedParticipant) {
+                        setParticipant(normalizedParticipant);
+                        setUsedOfflineData(false);
+                        resolved = true;
+                    } else {
+                        lastError = 'Unable to read participant details.';
+                    }
                 } else {
                     lastError = res.error || 'Invalid QR';
                 }

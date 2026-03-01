@@ -124,8 +124,18 @@ export async function quickRegisterForEvent(userId: string, eventName: string) {
     });
     if (!event) return { success: false, error: "Event not found" };
 
-    const registeredCount = await prisma.eventRegistration.count({ where: { eventId: event.id } });
-    if (event.maxParticipants != null && registeredCount >= event.maxParticipants) {
+    const registeredTeams = await prisma.eventRegistration.count({ where: { eventId: event.id } });
+    if (event.maxTeams != null && registeredTeams >= event.maxTeams) {
+      return { success: false, error: "Team slots are full" };
+    }
+
+    const participants = await prisma.eventRegistration.aggregate({
+      where: { eventId: event.id },
+      _sum: { teamSize: true },
+    });
+    const participantCount = participants._sum.teamSize || 0;
+
+    if (event.maxParticipants != null && participantCount + 1 > event.maxParticipants) {
       return { success: false, error: "Event is full" };
     }
 
@@ -134,6 +144,7 @@ export async function quickRegisterForEvent(userId: string, eventName: string) {
       data: {
         userId: userId,
         eventId: event.id,
+        teamSize: 1,
         attended: true, // Auto-mark present since they are standing right there
         attendedAt: new Date()
       }
@@ -203,7 +214,17 @@ export async function registerCurrentUserForEvent(eventName: string) {
     }
 
     const currentCount = await prisma.eventRegistration.count({ where: { eventId: event.id } });
-    if (event.maxParticipants != null && currentCount >= event.maxParticipants) {
+    if (event.maxTeams != null && currentCount >= event.maxTeams) {
+      return { success: false, error: "Team slots are full." };
+    }
+
+    const participants = await prisma.eventRegistration.aggregate({
+      where: { eventId: event.id },
+      _sum: { teamSize: true },
+    });
+    const participantCount = participants._sum.teamSize || 0;
+
+    if (event.maxParticipants != null && participantCount + 1 > event.maxParticipants) {
       return { success: false, error: "This event is full." };
     }
 
@@ -211,6 +232,7 @@ export async function registerCurrentUserForEvent(eventName: string) {
       data: {
         userId: user.id,
         eventId: event.id,
+        teamSize: 1,
       },
     });
 

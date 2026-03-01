@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import type { Prisma } from "@prisma/client";
+import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
 
 function formatDate(date?: Date | null) {
   if (!date) return "--";
@@ -28,10 +29,25 @@ async function createEventAction(formData: FormData) {
   const type = typeRaw ? typeRaw.toUpperCase() : null;
   const dayLabel = dayLabelRaw ? dayLabelRaw.toUpperCase() : null;
   const dateRaw = (formData.get("date") as string | null)?.trim();
+  const description = (formData.get("description") as string | null)?.trim() || null;
+  const rulesUrl = (formData.get("rulesUrl") as string | null)?.trim() || null;
+  const coordinatorName = (formData.get("coordinatorName") as string | null)?.trim() || null;
+  const coordinatorPhone = (formData.get("coordinatorPhone") as string | null)?.trim() || null;
+  const trainerName = (formData.get("trainerName") as string | null)?.trim() || null;
+  const contactName = (formData.get("contactName") as string | null)?.trim() || null;
+  const contactPhone = (formData.get("contactPhone") as string | null)?.trim() || null;
+  const participationModeRaw = (formData.get("participationMode") as string | null)?.trim();
+  const participationMode = participationModeRaw === "TEAM" ? "TEAM" : "INDIVIDUAL";
   const maxParticipantsRaw = (formData.get("maxParticipants") as string | null)?.trim();
+  const maxTeamsRaw = (formData.get("maxTeams") as string | null)?.trim();
+  const teamMinSizeRaw = (formData.get("teamMinSize") as string | null)?.trim();
+  const teamMaxSizeRaw = (formData.get("teamMaxSize") as string | null)?.trim();
   const isActiveRaw = formData.get("isActive") as string | null;
   const date = dateRaw ? new Date(dateRaw) : null;
   const maxParticipants = maxParticipantsRaw ? Number(maxParticipantsRaw) : null;
+  const maxTeams = maxTeamsRaw ? Number(maxTeamsRaw) : null;
+  const teamMinSize = teamMinSizeRaw ? Number(teamMinSizeRaw) : null;
+  const teamMaxSize = teamMaxSizeRaw ? Number(teamMaxSizeRaw) : null;
   const isActive = isActiveRaw === "on";
 
   if (!name) {
@@ -40,6 +56,22 @@ async function createEventAction(formData: FormData) {
 
   if (maxParticipants != null && (!Number.isFinite(maxParticipants) || maxParticipants < 1)) {
     return;
+  }
+
+  if (maxTeams != null && (!Number.isFinite(maxTeams) || maxTeams < 1)) {
+    return;
+  }
+
+  if (participationMode === "TEAM") {
+    if (teamMinSize != null && (!Number.isFinite(teamMinSize) || teamMinSize < 1)) {
+      return;
+    }
+    if (teamMaxSize != null && (!Number.isFinite(teamMaxSize) || teamMaxSize < 1)) {
+      return;
+    }
+    if (teamMinSize != null && teamMaxSize != null && teamMinSize > teamMaxSize) {
+      return;
+    }
   }
 
   if (dayLabel && type) {
@@ -77,11 +109,51 @@ async function createEventAction(formData: FormData) {
 
   await prisma.event.upsert({
     where: { name },
-    update: { type, dayLabel, date, maxParticipants, isActive },
-    create: { name, type, dayLabel, date, maxParticipants, isActive },
+    update: {
+      type,
+      dayLabel,
+      date,
+      description,
+      rulesUrl,
+      coordinatorName,
+      coordinatorPhone,
+      trainerName,
+      contactName,
+      contactPhone,
+      participationMode,
+      teamMinSize: participationMode === "TEAM" ? teamMinSize : null,
+      teamMaxSize: participationMode === "TEAM" ? teamMaxSize : null,
+      maxTeams,
+      maxParticipants,
+      isActive,
+    },
+    create: {
+      name,
+      type,
+      dayLabel,
+      date,
+      description,
+      rulesUrl,
+      coordinatorName,
+      coordinatorPhone,
+      trainerName,
+      contactName,
+      contactPhone,
+      participationMode,
+      teamMinSize: participationMode === "TEAM" ? teamMinSize : null,
+      teamMaxSize: participationMode === "TEAM" ? teamMaxSize : null,
+      maxTeams,
+      maxParticipants,
+      isActive,
+    },
   });
 
   revalidatePath("/admin/events");
+  revalidatePath("/events");
+  revalidatePath("/events/technical");
+  revalidatePath("/events/non-technical");
+  revalidatePath("/events/special");
+  revalidatePath("/workshops");
 }
 
 async function saveDayConfigAction(formData: FormData) {
@@ -169,6 +241,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
+      <LiveSyncRefresher intervalMs={12000} />
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold text-gray-900">Event Management</h1>
@@ -215,9 +288,11 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                 <tr>
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Mode</th>
                   <th className="px-4 py-3">Day</th>
                   <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Capacity</th>
+                  <th className="px-4 py-3">Teams</th>
                   <th className="px-4 py-3">Registrations</th>
                   <th className="px-4 py-3">Status</th>
                 </tr>
@@ -227,9 +302,16 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                   <tr key={event.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-semibold text-gray-900">{event.name}</td>
                     <td className="px-4 py-3 text-gray-700">{event.type || "--"}</td>
+                    <td className="px-4 py-3 text-gray-700">{event.participationMode}</td>
                     <td className="px-4 py-3 text-gray-700">{event.dayLabel || "--"}</td>
                     <td className="px-4 py-3 text-gray-700">{formatDate(event.date)}</td>
                     <td className="px-4 py-3 text-gray-700">{event.maxParticipants ?? "Unlimited"}</td>
+                    <td className="px-4 py-3 text-gray-700">
+                      {event.maxTeams ?? "Unlimited"}
+                      {event.participationMode === "TEAM" && (event.teamMinSize || event.teamMaxSize)
+                        ? ` (${event.teamMinSize ?? "?"}-${event.teamMaxSize ?? "?"})`
+                        : ""}
+                    </td>
                     <td className="px-4 py-3 text-gray-900 font-semibold">{event._count.registrations}</td>
                     <td className="px-4 py-3 text-gray-700">{event.isActive ? "Active" : "Inactive"}</td>
                   </tr>
@@ -237,7 +319,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
 
                 {events.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-6 py-10 text-center text-gray-500 text-sm">
+                    <td colSpan={9} className="px-6 py-10 text-center text-gray-500 text-sm">
                       No events found.
                     </td>
                   </tr>
@@ -310,7 +392,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900 mb-3">Create Event</h2>
           <form action={createEventAction} className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Event Name*
                 <input name="name" required className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
@@ -318,6 +400,13 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Type
                 <input name="type" placeholder="Technical / Workshop" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-gray-700">
+                Participation Mode
+                <select name="participationMode" defaultValue="INDIVIDUAL" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
+                  <option value="INDIVIDUAL">INDIVIDUAL</option>
+                  <option value="TEAM">TEAM</option>
+                </select>
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Day Label
@@ -331,9 +420,53 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                 Max Participants
                 <input type="number" min={1} name="maxParticipants" placeholder="Leave empty for unlimited" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
               </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 mt-6">
+              <label className="flex flex-col gap-1 text-sm text-gray-700">
+                Max Teams
+                <input type="number" min={1} name="maxTeams" placeholder="Team events only" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-gray-700">
+                Team Min Size
+                <input type="number" min={1} name="teamMinSize" placeholder="e.g. 2" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-gray-700">
+                Team Max Size
+                <input type="number" min={1} name="teamMaxSize" placeholder="e.g. 4" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 mt-7">
                 <input type="checkbox" name="isActive" defaultChecked /> Active
               </label>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1 text-sm text-gray-700">
+                Description
+                <textarea name="description" rows={3} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1 text-sm text-gray-700">
+                  Rules URL
+                  <input name="rulesUrl" placeholder="https://..." className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                </label>
+                <label className="flex flex-col gap-1 text-sm text-gray-700">
+                  Trainer
+                  <input name="trainerName" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                </label>
+                <label className="flex flex-col gap-1 text-sm text-gray-700">
+                  Coordinator Name
+                  <input name="coordinatorName" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                </label>
+                <label className="flex flex-col gap-1 text-sm text-gray-700">
+                  Coordinator Phone
+                  <input name="coordinatorPhone" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                </label>
+                <label className="flex flex-col gap-1 text-sm text-gray-700">
+                  Contact Name
+                  <input name="contactName" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                </label>
+                <label className="flex flex-col gap-1 text-sm text-gray-700">
+                  Contact Phone
+                  <input name="contactPhone" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                </label>
+              </div>
             </div>
             <div className="flex justify-end">
               <button type="submit" className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800">Create</button>

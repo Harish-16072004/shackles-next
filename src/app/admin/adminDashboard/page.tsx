@@ -3,6 +3,7 @@
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
 
 export default async function AdminDashboard() {
   // Get session
@@ -71,6 +72,7 @@ export default async function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
+      <LiveSyncRefresher intervalMs={12000} />
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-12">

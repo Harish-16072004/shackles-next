@@ -16,6 +16,11 @@ export async function GET(request: Request) {
           }
         : undefined,
       include: {
+        registrations: {
+          select: {
+            teamSize: true,
+          },
+        },
         _count: {
           select: {
             registrations: true,
@@ -31,13 +36,32 @@ export async function GET(request: Request) {
       type: event.type,
       dayLabel: event.dayLabel,
       date: event.date,
+      description: event.description,
+      rulesUrl: event.rulesUrl,
+      coordinatorName: event.coordinatorName,
+      coordinatorPhone: event.coordinatorPhone,
+      trainerName: event.trainerName,
+      contactName: event.contactName,
+      contactPhone: event.contactPhone,
+      participationMode: event.participationMode,
+      teamMinSize: event.teamMinSize,
+      teamMaxSize: event.teamMaxSize,
+      maxTeams: event.maxTeams,
       maxParticipants: event.maxParticipants,
       isActive: event.isActive,
-      registeredCount: event._count.registrations,
+      registeredTeams: event._count.registrations,
+      registeredCount: event.registrations.reduce((sum, reg) => sum + (reg.teamSize || 1), 0),
+      teamsLeft:
+        event.maxTeams == null
+          ? null
+          : Math.max(event.maxTeams - event._count.registrations, 0),
       spotsLeft:
         event.maxParticipants == null
           ? null
-          : Math.max(event.maxParticipants - event._count.registrations, 0),
+          : Math.max(
+              event.maxParticipants - event.registrations.reduce((sum, reg) => sum + (reg.teamSize || 1), 0),
+              0
+            ),
     }));
 
     return NextResponse.json({ events: payload });

@@ -51,10 +51,13 @@ export default function RegistrationForm() {
 
   // Handle standard input changes
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value } = e.target;
+    const nextValue = e.target instanceof HTMLInputElement && e.target.type === 'checkbox'
+      ? e.target.checked
+      : value;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: nextValue
     }));
   };
 

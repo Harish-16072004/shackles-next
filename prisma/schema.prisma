@@ -34,6 +34,11 @@ enum KitStatus {
   ISSUED
 }
 
+enum EventParticipationMode {
+  INDIVIDUAL
+  TEAM
+}
+
 model User {
   id            String    @id @default(cuid())
   
@@ -142,6 +147,17 @@ model Event {
   type        String?  // 'TECHNICAL', 'NON-TECHNICAL', 'SPECIAL', 'WORKSHOP'
   dayLabel    String?
   date        DateTime?
+  description String?
+  rulesUrl    String?
+  coordinatorName String?
+  coordinatorPhone String?
+  trainerName String?
+  contactName String?
+  contactPhone String?
+  participationMode EventParticipationMode @default(INDIVIDUAL)
+  teamMinSize Int?
+  teamMaxSize Int?
+  maxTeams    Int?
   maxParticipants Int?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -168,6 +184,9 @@ model EventRegistration {
   
   event     Event    @relation(fields: [eventId], references: [id])
   eventId   String
+
+  teamName  String?
+  teamSize  Int      @default(1)
   
   attended  Boolean  @default(false)
   attendedAt DateTime?

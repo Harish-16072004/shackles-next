@@ -5,41 +5,26 @@ const eventCategories = [
   {
     id: "technical",
     title: "Technical Events",
-    description: "6 Challenging Events for Engineering Minds",
+    description: "Admin-managed technical challenges",
     icon: "■",
     color: "pink",
-    eventCount: 6,
-    events: [
-      "INNOVATION DUEL",
-      "BRAIN BUSTERS ARENA",
-      "DIMENSIONS FORGE",
-      "SKY SHOT",
-      "ENGINE GAMBLE",
-      "MECH SHOWDOWN",
-    ],
+    eventCount: 0,
   },
   {
     id: "non-technical",
     title: "Non-Technical Events",
-    description: "4 Creative Challenges for All Minds",
+    description: "Admin-managed creative challenges",
     icon: "○",
     color: "cyan",
-    eventCount: 4,
-    events: [
-      "SURVIVAL BID",
-      "FILM QUEST",
-      "RED LIGHT GREEN LIGHT",
-      "DALGONA CANDY",
-    ],
+    eventCount: 0,
   },
   {
     id: "special",
     title: "Special Events",
-    description: "2 Unique Experiences Beyond Categories",
+    description: "Admin-managed unique experiences",
     icon: "△",
     color: "green",
-    eventCount: 2,
-    events: ["VISION TRIAL", "ROBO RUMBLE"],
+    eventCount: 0,
   },
 ];
 
@@ -79,7 +64,7 @@ export default async function Events() {
           EVENTS
         </h1>
         <p className="text-lg text-gray-600">
-          12 Challenges. 3 Categories. Infinite Possibilities.
+          All category pages are synced from admin-created events.
         </p>
       </section>
 
@@ -105,19 +90,12 @@ export default async function Events() {
                   <h2 className="text-xl font-semibold text-gray-900">
                     {category.title}
                   </h2>
-                  <p className="text-sm text-gray-600">{category.eventCount} Events</p>
+                  <p className="text-sm text-gray-600">{category.eventCount} active</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              {category.events.map((event) => (
-                <div key={event} className="flex items-center gap-2 text-sm">
-                  <span className={`h-1.5 w-1.5 rounded-full ${textColorMap[category.color as keyof typeof textColorMap]}`} />
-                  <span className="text-gray-700 uppercase tracking-wide">{event}</span>
-                </div>
-              ))}
-            </div>
+            <p className="text-sm text-gray-700">{category.description}</p>
 
             <div className={`mt-auto flex items-center gap-2 ${textColorMap[category.color as keyof typeof textColorMap]} font-semibold uppercase text-sm`}>
               <span>EXPLORE</span>

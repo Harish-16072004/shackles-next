@@ -16,6 +16,8 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => ({}));
     const eventName = typeof body?.eventName === "string" ? body.eventName.trim() : "";
+    const teamNameInput = typeof body?.teamName === "string" ? body.teamName.trim() : "";
+    const teamSizeInput = typeof body?.teamSize === "number" ? body.teamSize : Number(body?.teamSize);
 
     if (!eventName) {
       return NextResponse.json({ error: "Event name is required." }, { status: 400 });
@@ -54,6 +56,34 @@ export async function POST(request: Request) {
         return { ok: false as const, code: 404, error: "Event is not available." };
       }
 
+      const isTeamEvent = event.participationMode === "TEAM";
+      const inferredTeamSize = Number.isFinite(teamSizeInput)
+        ? Number(teamSizeInput)
+        : isTeamEvent
+        ? event.teamMinSize || event.teamMaxSize || 1
+        : 1;
+
+      if (!Number.isFinite(inferredTeamSize) || inferredTeamSize < 1) {
+        return { ok: false as const, code: 400, error: "Invalid team size." };
+      }
+
+      if (isTeamEvent) {
+        if (event.teamMinSize != null && inferredTeamSize < event.teamMinSize) {
+          return {
+            ok: false as const,
+            code: 400,
+            error: `Team must have at least ${event.teamMinSize} participants.`,
+          };
+        }
+        if (event.teamMaxSize != null && inferredTeamSize > event.teamMaxSize) {
+          return {
+            ok: false as const,
+            code: 400,
+            error: `Team can have at most ${event.teamMaxSize} participants.`,
+          };
+        }
+      }
+
       const existing = await tx.eventRegistration.findUnique({
         where: {
           userId_eventId: {
@@ -67,11 +97,21 @@ export async function POST(request: Request) {
         return { ok: true as const, code: 200, message: "Already registered for this event." };
       }
 
-      const currentCount = await tx.eventRegistration.count({
+      const currentTeams = await tx.eventRegistration.count({
         where: { eventId: event.id },
       });
 
-      if (event.maxParticipants != null && currentCount >= event.maxParticipants) {
+      if (event.maxTeams != null && currentTeams >= event.maxTeams) {
+        return { ok: false as const, code: 409, error: "Team slots are full." };
+      }
+
+      const participantAggregate = await tx.eventRegistration.aggregate({
+        where: { eventId: event.id },
+        _sum: { teamSize: true },
+      });
+      const currentParticipants = participantAggregate._sum.teamSize || 0;
+
+      if (event.maxParticipants != null && currentParticipants + inferredTeamSize > event.maxParticipants) {
         return { ok: false as const, code: 409, error: "This event is full." };
       }
 
@@ -79,6 +119,8 @@ export async function POST(request: Request) {
         data: {
           userId: user.id,
           eventId: event.id,
+          teamName: teamNameInput || null,
+          teamSize: inferredTeamSize,
           attended: false,
         },
       });
@@ -94,6 +136,11 @@ export async function POST(request: Request) {
     revalidatePath("/admin/events");
     revalidatePath("/admin/event-registrations");
     revalidatePath("/admin/adminDashboard");
+    revalidatePath("/events");
+    revalidatePath("/events/technical");
+    revalidatePath("/events/non-technical");
+    revalidatePath("/events/special");
+    revalidatePath("/workshops");
 
     return NextResponse.json({ message: result.message });
   } catch (error) {

@@ -20,10 +20,10 @@ export const DynamicRegisterPage = dynamic(
 );
 
 export const DynamicAdminPage = dynamic(
-  () => import('@/app/admin/page'),
+  () => import('@/app/admin/adminDashboard/page'),
   { 
     loading: () => "Loading...",
-    ssr: false
+    ssr: true
   }
 );
 

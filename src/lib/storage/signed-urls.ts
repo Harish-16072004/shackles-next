@@ -6,7 +6,23 @@ async function createSignedUrl(bucket: string, path: string, expiresIn = 300) {
     const normalizedPath = path.trim();
     if (!normalizedPath) return null;
 
+    const storageProvider = getStorageProvider();
+
     if (normalizedPath.startsWith("http://") || normalizedPath.startsWith("https://")) {
+      if (shouldUseDigitalOcean(storageProvider)) {
+        try {
+          const parsed = new URL(normalizedPath);
+          let key = decodeURIComponent(parsed.pathname || "").replace(/^\/+/, "");
+          if (key.startsWith(`${bucket}/`)) {
+            key = key.slice(`${bucket}/`.length);
+          }
+          if (key) {
+            return createSpacesSignedGetUrl(`${bucket}/${key}`.replace(`${bucket}/${bucket}/`, `${bucket}/`), expiresIn);
+          }
+        } catch {
+          return normalizedPath;
+        }
+      }
       return normalizedPath;
     }
 
@@ -14,8 +30,6 @@ async function createSignedUrl(bucket: string, path: string, expiresIn = 300) {
     if (normalizedPath.startsWith("/")) {
       return `${appUrl}${normalizedPath}`;
     }
-
-    const storageProvider = getStorageProvider();
 
     if (shouldUseLocal(storageProvider)) {
       return `${appUrl}/uploads/${bucket}/${normalizedPath}`;

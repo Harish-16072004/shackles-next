@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { scanParticipantQR, markEventAttendance, updateKitStatus, quickRegisterForEvent, getAvailableEvents } from '@/server/actions/event-logistics';
+import { scanParticipantQR, markEventAttendance, updateKitStatus, quickRegisterForEvent, getAvailableEvents, scannerRegisterTeamMember, scannerCompleteTeamRegistration } from '@/server/actions/event-logistics';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { Loader2, CheckCircle, XCircle, Package, Calendar, AlertTriangle } from 'lucide-react';
 
@@ -13,10 +13,16 @@ type ParticipantRecord = {
     kitStatus: string;
     qrTokenHash: string | null;
     updatedAt?: string;
-    events: { eventName: string; attended: boolean }[];
+    events: { eventName: string; attended: boolean; teamName?: string | null; memberRole?: string | null }[];
 };
 
-type EventOption = { name: string; type: string | null };
+type EventOption = {
+    name: string;
+    type: string | null;
+    participationMode?: "INDIVIDUAL" | "TEAM";
+    teamMinSize?: number | null;
+    teamMaxSize?: number | null;
+};
 
 function isEventOption(value: unknown): value is EventOption {
     if (!value || typeof value !== 'object') return false;
@@ -76,6 +82,7 @@ function toParticipantRecord(value: unknown): ParticipantRecord | null {
 export default function ScannerPage() {
   const [scanResult, setScanResult] = useState<string | null>(null);
     const [participant, setParticipant] = useState<ParticipantRecord | null>(null);
+    const [justIssuedParticipantId, setJustIssuedParticipantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [roster, setRoster] = useState<ParticipantRecord[]>([]);
@@ -90,9 +97,19 @@ export default function ScannerPage() {
   // Logistics Context
     const [allEvents, setAllEvents] = useState<EventOption[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<string>("");
+    const [teamNameInput, setTeamNameInput] = useState("");
+    const [teamLeaderUserId, setTeamLeaderUserId] = useState("");
 
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
     const handleScanRef = useRef<(token: string) => Promise<void>>(async () => {});
+
+        const handleStationChange = useCallback((nextStation: string) => {
+                setSelectedEvent(nextStation);
+                setMsg(null);
+                setTeamNameInput("");
+                setTeamLeaderUserId("");
+                setJustIssuedParticipantId(null);
+        }, []);
 
     const syncRoster = useCallback(async () => {
         if (typeof window === 'undefined') return;
@@ -291,6 +308,7 @@ export default function ScannerPage() {
         setLoading(true);
         setMsg(null);
         setParticipant(null);
+        setJustIssuedParticipantId(null);
 
         let resolved = false;
         let lastError = '';
@@ -337,6 +355,21 @@ export default function ScannerPage() {
         setLoading(false);
     }, [isOffline, loading, resolveOfflineParticipant, scanResult]);
 
+    // Refreshes the current participant card after an action WITHOUT the
+    // scanResult === token debounce guard that blocks handleScan re-calls.
+    const refreshParticipant = useCallback(async () => {
+        if (!scanResult) return;
+        try {
+            const res = await scanParticipantQR(scanResult);
+            if (res.success) {
+                const updated = toParticipantRecord(res.data);
+                if (updated) setParticipant(updated);
+            }
+        } catch (err) {
+            console.error('refreshParticipant failed', err);
+        }
+    }, [scanResult]);
+
         useEffect(() => {
             handleScanRef.current = handleScan;
         }, [handleScan]);
@@ -369,8 +402,7 @@ export default function ScannerPage() {
     
     if (res.success) {
       setMsg({ type: 'success', text: res.message || "Marked Present!" });
-      // Refresh participant data
-      handleScan(scanResult!); 
+      await refreshParticipant();
     } else {
         if(res.code === "NOT_REGISTERED") {
              setMsg({ type: 'error', text: res.error || "Not Registered" });
@@ -386,16 +418,58 @@ export default function ScannerPage() {
     if (!participant) return;
     if(!confirm(`Confirm registration for ${eventName}?`)) return;
 
+        const selectedEventMeta = allEvents.find((item) => item.name === eventName);
+        const isTeamEvent = selectedEventMeta?.participationMode === "TEAM";
+
+        if (isTeamEvent) {
+            const normalizedTeamName = teamNameInput.trim();
+            if (!normalizedTeamName) {
+                setMsg({ type: 'error', text: 'Team name is required for team events.' });
+                return;
+            }
+
+            setLoading(true);
+            const result = await scannerRegisterTeamMember(participant.id, eventName, normalizedTeamName);
+            if (result.success) {
+                const successText = "message" in result ? result.message : "Added to team successfully.";
+                setMsg({ type: 'success', text: successText || 'Added to team successfully.' });
+                await refreshParticipant();
+            } else {
+                setMsg({ type: 'error', text: result.error || 'Failed to add member to team.' });
+            }
+            setLoading(false);
+            return;
+        }
+
     setLoading(true);
     const res = await quickRegisterForEvent(participant.id, eventName);
     if(res.success) {
         setMsg({ type: 'success', text: "Registered & Checked In!" });
-        handleScan(scanResult!); // Reload
+        await refreshParticipant();
     } else {
         setMsg({ type: 'error', text: res.error || "Failed" });
     }
     setLoading(false);
   }
+
+    const handleCompleteTeam = async (eventName: string) => {
+        const normalizedTeamName = teamNameInput.trim();
+        if (!normalizedTeamName) {
+            setMsg({ type: 'error', text: 'Enter team name to complete registration.' });
+            return;
+        }
+
+        setLoading(true);
+        const result = await scannerCompleteTeamRegistration(eventName, normalizedTeamName, teamLeaderUserId || undefined);
+        if (result.success) {
+            const successText = "message" in result ? result.message : "Team registration completed.";
+            setMsg({ type: 'success', text: successText || 'Team registration completed.' });
+            await refreshParticipant();
+        } else {
+            setMsg({ type: 'error', text: result.error || 'Failed to complete team registration.' });
+        }
+        setLoading(false);
+    }
 
   const handleKitIssue = async () => {
     if (!participant) return;
@@ -409,6 +483,7 @@ export default function ScannerPage() {
                 createdAt: Date.now(),
             });
             setParticipant((prev) => prev ? { ...prev, kitStatus: 'ISSUED' } : prev);
+            setJustIssuedParticipantId(participant.id);
             setMsg({ type: 'success', text: 'Kit issuance queued for sync.' });
             return;
         }
@@ -416,8 +491,9 @@ export default function ScannerPage() {
     setLoading(true);
     const res = await updateKitStatus(participant.id);
     if (res.success) {
+            setJustIssuedParticipantId(participant.id);
       setMsg({ type: 'success', text: "Kit Issued!" });
-      handleScan(scanResult!);
+      await refreshParticipant();
     } else {
       setMsg({ type: 'error', text: res.error || "Failed" });
     }
@@ -447,7 +523,7 @@ export default function ScannerPage() {
              <select 
                 className="w-full mt-1 p-2 border rounded-lg text-sm bg-gray-50"
                 value={selectedEvent}
-                onChange={(e) => setSelectedEvent(e.target.value)}
+                     onChange={(e) => handleStationChange(e.target.value)}
              >
                 <option value="">General / Help Desk</option>
                 <option value="KIT_DISTRIBUTION">Kit Distribution Counter</option>
@@ -577,7 +653,7 @@ export default function ScannerPage() {
                             </button>
                         ) : (
                             <div className="text-center text-xs text-gray-400 py-2">
-                                Kit already issued.
+                                {justIssuedParticipantId === participant.id ? "Kit issued successfully." : "Kit already issued."}
                             </div>
                         )}
                     </div>
@@ -589,6 +665,39 @@ export default function ScannerPage() {
                         <h3 className="text-xs font-bold text-blue-800 uppercase mb-3 flex items-center gap-2">
                             <Calendar className="w-4 h-4"/> Event Action: {selectedEvent}
                         </h3>
+                                                {allEvents.find((item) => item.name === selectedEvent)?.participationMode === "TEAM" && (
+                                                    <div className="mb-3 space-y-2 rounded-lg border border-blue-200 bg-white p-3">
+                                                        <label className="text-[11px] font-semibold text-gray-600 uppercase">Team Name</label>
+                                                        <input
+                                                            value={teamNameInput}
+                                                            onChange={(event) => setTeamNameInput(event.target.value)}
+                                                            placeholder="Enter exact team name"
+                                                            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                                                        />
+                                                        <label className="text-[11px] font-semibold text-gray-600 uppercase">Leader</label>
+                                                        <select
+                                                            value={teamLeaderUserId}
+                                                            onChange={(event) => setTeamLeaderUserId(event.target.value)}
+                                                            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                                                        >
+                                                            <option value="">Keep existing/creator as leader</option>
+                                                            {participant.events
+                                                                .filter((event) => event.eventName === selectedEvent && event.teamName === teamNameInput.trim())
+                                                                .map((event) => (
+                                                                    <option key={`${participant.id}-${event.eventName}`} value={participant.id}>
+                                                                        {participant.firstName} ({event.memberRole || "Member"})
+                                                                    </option>
+                                                                ))}
+                                                        </select>
+                                                        <button
+                                                            onClick={() => handleCompleteTeam(selectedEvent)}
+                                                            disabled={isOffline || loading}
+                                                            className="w-full rounded bg-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-50"
+                                                        >
+                                                            Complete & Lock Team
+                                                        </button>
+                                                    </div>
+                                                )}
                         
                         {(() => {
                             const reg = getRegStatus(selectedEvent);
@@ -622,7 +731,7 @@ export default function ScannerPage() {
                                             disabled={isOffline}
                                             className="w-full py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                            {isOffline ? 'Reconnect to register' : 'Register & Check-In'}
+                                            {isOffline ? 'Reconnect to register' : allEvents.find((item) => item.name === selectedEvent)?.participationMode === "TEAM" ? 'Add Member to Team' : 'Register & Check-In'}
                                         </button>
                                     </div>
                                 );

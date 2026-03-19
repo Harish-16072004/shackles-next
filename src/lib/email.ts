@@ -55,3 +55,45 @@ export const sendResetEmail = async (email: string, token: string) => {
     return { success: false, error: "Failed to send email" };
   }
 };
+
+export const sendTeamInviteEmail = async (params: {
+  toEmail: string;
+  leaderName: string;
+  eventName: string;
+  teamName: string;
+  teamCode: string;
+  inviteToken: string;
+  expiresAt: Date;
+}) => {
+  const inviteLink = `${appUrl}/events?inviteToken=${encodeURIComponent(params.inviteToken)}&teamCode=${encodeURIComponent(params.teamCode)}&event=${encodeURIComponent(params.eventName)}`;
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('----------------------------------------');
+    console.log(`Team Invite Link for ${params.toEmail}:`);
+    console.log(inviteLink);
+    console.log('----------------------------------------');
+  }
+
+  try {
+    await transporter.sendMail({
+      from: '"Shackles Symposium" <noreply@shacklessymposium.com>',
+      to: params.toEmail,
+      subject: `Team Invite: ${params.eventName}`,
+      html: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>You're invited to join a team</h2>
+          <p><strong>${params.leaderName}</strong> invited you to join team <strong>${params.teamName}</strong> for <strong>${params.eventName}</strong>.</p>
+          <p>Team Code: <strong>${params.teamCode}</strong></p>
+          <p>Click below, login, then join using this invite:</p>
+          <a href="${inviteLink}" style="display: inline-block; padding: 10px 20px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px;">Open Join Link</a>
+          <p style="margin-top: 14px; font-size: 12px; color: #666;">Invite expires at ${params.expiresAt.toUTCString()}.</p>
+        </div>
+      `,
+    });
+
+    return { success: true as const, inviteLink };
+  } catch (error) {
+    safeLogError("Team invite email send error", error, { email: params.toEmail, teamCode: params.teamCode });
+    return { success: false as const, error: "Failed to send invite email", inviteLink };
+  }
+};

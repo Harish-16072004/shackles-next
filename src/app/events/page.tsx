@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
 import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
 
 const eventCategories = [
@@ -9,7 +8,6 @@ const eventCategories = [
     description: "Admin-managed technical challenges",
     icon: "■",
     color: "pink",
-    eventCount: 0,
   },
   {
     id: "non-technical",
@@ -17,7 +15,6 @@ const eventCategories = [
     description: "Admin-managed creative challenges",
     icon: "○",
     color: "cyan",
-    eventCount: 0,
   },
   {
     id: "special",
@@ -25,26 +22,11 @@ const eventCategories = [
     description: "Admin-managed unique experiences",
     icon: "△",
     color: "green",
-    eventCount: 0,
   },
 ];
 
-export default async function Events() {
-  const liveEvents = await prisma.event.findMany({
-    where: { isActive: true },
-    select: { type: true },
-  });
-
-  const liveCounts = {
-    technical: liveEvents.filter((e) => (e.type || "").toUpperCase() === "TECHNICAL").length,
-    "non-technical": liveEvents.filter((e) => (e.type || "").toUpperCase() === "NON-TECHNICAL").length,
-    special: liveEvents.filter((e) => (e.type || "").toUpperCase() === "SPECIAL").length,
-  } as Record<string, number>;
-
-  const mergedCategories = eventCategories.map((category) => ({
-    ...category,
-    eventCount: liveCounts[category.id] ?? category.eventCount,
-  }));
+export default function Events() {
+  const mergedCategories = eventCategories;
 
   const borderColorMap = {
     pink: "border-red-900/50 hover:border-red-700",
@@ -92,7 +74,6 @@ export default async function Events() {
                   <h2 className="text-xl font-semibold text-gray-900">
                     {category.title}
                   </h2>
-                  <p className="text-sm text-gray-600">{category.eventCount} active</p>
                 </div>
               </div>
             </div>

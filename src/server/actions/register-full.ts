@@ -4,11 +4,22 @@ import { z } from "zod";
 import { hash } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
+function normalizeIndianPhone(value: string) {
+  const trimmed = value.replace(/[\s-]/g, "");
+  const match = trimmed.match(/^(?:\+91|91)?([6-9]\d{9})$/);
+  return match ? match[1] : null;
+}
+
 const FullRegisterSchema = z.object({
   firstName: z.string().min(2),
   lastName: z.string().min(1),
   email: z.string().email(),
-  phone: z.string().min(10),
+  phone: z
+    .string()
+    .transform((value) => normalizeIndianPhone(value))
+    .refine((value): value is string => Boolean(value), {
+      message: "Invalid Indian mobile number",
+    }),
   collegeName: z.string().min(2),
   collegeLoc: z.string().min(2),
   department: z.string().min(2),

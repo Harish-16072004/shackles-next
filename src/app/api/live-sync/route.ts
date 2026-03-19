@@ -1,20 +1,59 @@
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const encoder = new TextEncoder();
+  let closed = false;
+  let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
+  let interval: ReturnType<typeof setInterval> | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  const cleanup = () => {
+    if (interval) {
+      clearInterval(interval);
+      interval = undefined;
+    }
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = undefined;
+    }
+  };
+
+  const safeEnqueue = () => {
+    if (closed || !controllerRef) return;
+    try {
+      controllerRef.enqueue(encoder.encode(`data: ${Date.now()}\n\n`));
+    } catch {
+      closed = true;
+      cleanup();
+    }
+  };
+
+  const safeClose = () => {
+    if (closed || !controllerRef) return;
+    closed = true;
+    cleanup();
+    try {
+      controllerRef.close();
+    } catch {}
+  };
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(encoder.encode(`data: ${Date.now()}\n\n`));
+      controllerRef = controller;
 
-      const interval = setInterval(() => {
-        controller.enqueue(encoder.encode(`data: ${Date.now()}\n\n`));
+      safeEnqueue();
+
+      interval = setInterval(() => {
+        safeEnqueue();
       }, 10000);
 
-      const close = () => {
-        clearInterval(interval);
-        controller.close();
-      };
-
-      setTimeout(close, 1000 * 60 * 5);
+      timeout = setTimeout(() => {
+        safeClose();
+      }, 1000 * 60 * 5);
+    },
+    cancel() {
+      cleanup();
+      safeClose();
     },
   });
 

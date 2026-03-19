@@ -41,7 +41,8 @@ export async function loginUser(prevState: unknown, formData: FormData) {
     }
 
     // 4. Create Session
-    await createSession(user.id, user.role);
+    const displayName = `${user.firstName} ${user.lastName}`.trim();
+    await createSession(user.id, user.role, displayName || undefined);
     loggedInRole = user.role;
 
   } catch (error) {

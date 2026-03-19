@@ -1,8 +1,39 @@
 'use server'
 
+import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+
+function normalizeTeamName(name: string) {
+  return name.trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+async function generateUniqueTeamCode(
+  tx: {
+    team: {
+      findUnique: typeof prisma.team.findUnique;
+    };
+  },
+  eventId: string
+) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = crypto.randomBytes(4).toString("hex").toUpperCase();
+    const existing = await tx.team.findUnique({
+      where: {
+        eventId_teamCode: {
+          eventId,
+          teamCode: code,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!existing) return code;
+  }
+
+  throw new Error("Unable to allocate a unique team code.");
+}
 
 // --- 1. SCAN LOGIC (For Volunteers) ---
 // Input: Scanned QR Token string
@@ -34,7 +65,9 @@ export async function scanParticipantQR(token: string) {
         registrationType: user.registrationType,
         events: user.registrations.map(r => ({
           eventName: r.event.name,
-          attended: r.attended
+          attended: r.attended,
+          teamName: r.teamName,
+          memberRole: r.memberRole
         }))
       }
     };
@@ -116,6 +149,15 @@ export async function markEventAttendance(userId: string, eventName: string) {
 // --- 4. QUICK REGISTRATION (On-Spot) ---
 export async function quickRegisterForEvent(userId: string, eventName: string) {
   try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { payment: true },
+    });
+    if (!user) return { success: false, error: "User not found" };
+    if (user.payment?.status !== "VERIFIED") {
+      return { success: false, error: "Only verified users can be registered." };
+    }
+
     const event = await prisma.event.findFirst({
       where: {
         name: { equals: eventName, mode: "insensitive" },
@@ -124,16 +166,25 @@ export async function quickRegisterForEvent(userId: string, eventName: string) {
     });
     if (!event) return { success: false, error: "Event not found" };
 
+    if (event.participationMode === "TEAM") {
+      return {
+        success: false,
+        error: "Team events require full team registration flow with leader assignment.",
+      };
+    }
+
     const registeredTeams = await prisma.eventRegistration.count({ where: { eventId: event.id } });
     if (event.maxTeams != null && registeredTeams >= event.maxTeams) {
       return { success: false, error: "Team slots are full" };
     }
 
-    const participants = await prisma.eventRegistration.aggregate({
+    const participants = await prisma.eventRegistration.findMany({
       where: { eventId: event.id },
-      _sum: { teamSize: true },
+      select: { teamId: true, teamSize: true },
     });
-    const participantCount = participants._sum.teamSize || 0;
+    const participantCount = participants.reduce((sum, registration) => {
+      return sum + (registration.teamId ? 1 : registration.teamSize || 1);
+    }, 0);
 
     if (event.maxParticipants != null && participantCount + 1 > event.maxParticipants) {
       return { success: false, error: "Event is full" };
@@ -162,10 +213,279 @@ export async function getAvailableEvents() {
   try {
     return await prisma.event.findMany({
       where: { isActive: true },
-      select: { name: true, type: true, dayLabel: true, maxParticipants: true }
+      select: {
+        name: true,
+        type: true,
+        dayLabel: true,
+        maxParticipants: true,
+        participationMode: true,
+        teamMinSize: true,
+        teamMaxSize: true,
+      }
     });
   } catch {
     return [];
+  }
+}
+
+export async function scannerRegisterTeamMember(userId: string, eventName: string, teamName: string) {
+  try {
+    const normalizedTeam = normalizeTeamName(teamName);
+    if (!normalizedTeam) {
+      return { success: false, error: "Team name is required." };
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        include: { payment: true },
+      });
+
+      if (!user) return { success: false as const, error: "User not found." };
+      if (user.payment?.status !== "VERIFIED") {
+        return { success: false as const, error: "Only verified users can be added to team events." };
+      }
+
+      const event = await tx.event.findFirst({
+        where: {
+          name: { equals: eventName, mode: "insensitive" },
+          isActive: true,
+        },
+      });
+      if (!event) return { success: false as const, error: "Event not found." };
+      if (event.participationMode !== "TEAM") {
+        return { success: false as const, error: "This event is not a team event." };
+      }
+
+      const existing = await tx.eventRegistration.findUnique({
+        where: {
+          userId_eventId: {
+            userId,
+            eventId: event.id,
+          },
+        },
+      });
+      if (existing) return { success: true as const, message: "Participant already in this event." };
+
+      const eventRegistrations = await tx.eventRegistration.findMany({
+        where: { eventId: event.id },
+        select: { teamId: true, teamSize: true },
+      });
+      const participantCount = eventRegistrations.reduce(
+        (sum, registration) => sum + (registration.teamId ? 1 : registration.teamSize || 1),
+        0
+      );
+      if (event.maxParticipants != null && participantCount + 1 > event.maxParticipants) {
+        return { success: false as const, error: "Event is full." };
+      }
+
+      let team = await tx.team.findUnique({
+        where: {
+          eventId_nameNormalized: {
+            eventId: event.id,
+            nameNormalized: normalizedTeam,
+          },
+        },
+      });
+
+      if (!team) {
+        const currentTeams = await tx.team.count({ where: { eventId: event.id } });
+        if (event.maxTeams != null && currentTeams >= event.maxTeams) {
+          return { success: false as const, error: "Team slots are full." };
+        }
+
+        team = await tx.team.create({
+          data: {
+            eventId: event.id,
+            name: teamName.trim(),
+            nameNormalized: normalizedTeam,
+            teamCode: await generateUniqueTeamCode(tx, event.id),
+            memberCount: 0,
+            status: "DRAFT",
+            leaderUserId: user.id,
+            leaderContactPhoneSnapshot: user.phone,
+            leaderContactEmailSnapshot: user.email,
+          },
+        });
+      }
+
+      if (team.status !== "DRAFT") {
+        return { success: false as const, error: "Team is already locked." };
+      }
+
+      const maxTeamSize = event.teamMaxSize ?? 4;
+      if (team.memberCount + 1 > maxTeamSize) {
+        return { success: false as const, error: `Team can have at most ${maxTeamSize} members.` };
+      }
+
+      await tx.eventRegistration.create({
+        data: {
+          userId: user.id,
+          eventId: event.id,
+          teamId: team.id,
+          teamName: team.name,
+          teamSize: 1,
+          memberRole: team.leaderUserId === user.id ? "LEADER" : "MEMBER",
+          attended: true,
+          attendedAt: new Date(),
+        },
+      });
+
+      await tx.team.update({
+        where: { id: team.id },
+        data: {
+          memberCount: {
+            increment: 1,
+          },
+        },
+      });
+
+      return { success: true as const, message: `Added to team ${team.name} and marked present.` };
+    });
+
+    if (!result.success) return result;
+
+    revalidatePath("/admin/event-registrations");
+    revalidatePath("/admin/events");
+    revalidatePath("/admin/adminDashboard");
+    revalidatePath("/events");
+    revalidatePath("/workshops");
+
+    return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[scannerRegisterTeamMember]", msg);
+    return { success: false, error: `Team registration failed: ${msg}` };
+  }
+}
+
+export async function scannerCompleteTeamRegistration(eventName: string, teamName: string, leaderUserId?: string) {
+  try {
+    const normalizedTeam = normalizeTeamName(teamName);
+    if (!normalizedTeam) {
+      return { success: false, error: "Team name is required." };
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const event = await tx.event.findFirst({
+        where: {
+          name: { equals: eventName, mode: "insensitive" },
+          isActive: true,
+        },
+      });
+
+      if (!event) return { success: false as const, error: "Event not found." };
+      if (event.participationMode !== "TEAM") {
+        return { success: false as const, error: "This event is not a team event." };
+      }
+
+      const team = await tx.team.findUnique({
+        where: {
+          eventId_nameNormalized: {
+            eventId: event.id,
+            nameNormalized: normalizedTeam,
+          },
+        },
+        include: {
+          members: {
+            select: {
+              id: true,
+              userId: true,
+            },
+          },
+        },
+      });
+
+      if (!team) return { success: false as const, error: "Team not found." };
+      if (team.status !== "DRAFT") {
+        return { success: false as const, error: "Team is already completed and locked." };
+      }
+
+      if (leaderUserId) {
+        const proposedLeader = team.members.find((member) => member.userId === leaderUserId);
+        if (!proposedLeader) {
+          return { success: false as const, error: "Leader must be a member of this team." };
+        }
+
+        const leaderUser = await tx.user.findUnique({ where: { id: leaderUserId } });
+        if (!leaderUser) {
+          return { success: false as const, error: "Leader user not found." };
+        }
+
+        await tx.team.update({
+          where: { id: team.id },
+          data: {
+            leaderUserId,
+            leaderContactPhoneSnapshot: leaderUser.phone,
+            leaderContactEmailSnapshot: leaderUser.email,
+          },
+        });
+
+        await tx.eventRegistration.updateMany({
+          where: { teamId: team.id },
+          data: { memberRole: "MEMBER" },
+        });
+
+        await tx.eventRegistration.update({
+          where: { id: proposedLeader.id },
+          data: { memberRole: "LEADER" },
+        });
+      }
+
+      const refreshedTeam = await tx.team.findUnique({
+        where: { id: team.id },
+        include: { members: { select: { userId: true } } },
+      });
+
+      if (!refreshedTeam || !refreshedTeam.leaderUserId) {
+        return { success: false as const, error: "Team leader is required." };
+      }
+
+      if (!refreshedTeam.members.some((member) => member.userId === refreshedTeam.leaderUserId)) {
+        return { success: false as const, error: "Team leader must be part of this team." };
+      }
+
+      const memberCount = refreshedTeam.members.length;
+      const teamMinSize = event.teamMinSize ?? 2;
+      const teamMaxSize = event.teamMaxSize ?? 4;
+      if (memberCount < teamMinSize) {
+        return {
+          success: false as const,
+          error: `At least ${teamMinSize} members are required to complete team registration.`,
+        };
+      }
+      if (memberCount > teamMaxSize) {
+        return {
+          success: false as const,
+          error: `Team can have at most ${teamMaxSize} members.`,
+        };
+      }
+
+      await tx.team.update({
+        where: { id: refreshedTeam.id },
+        data: {
+          status: "LOCKED",
+          memberCount,
+          lockedAt: new Date(),
+        },
+      });
+
+      return { success: true as const, message: `Team ${refreshedTeam.name} registration completed.` };
+    });
+
+    if (!result.success) return result;
+
+    revalidatePath("/admin/event-registrations");
+    revalidatePath("/admin/events");
+    revalidatePath("/admin/adminDashboard");
+    revalidatePath("/events");
+    revalidatePath("/workshops");
+
+    return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[scannerCompleteTeamRegistration]", msg);
+    return { success: false, error: `Unable to complete team registration: ${msg}` };
   }
 }
 
@@ -218,11 +538,20 @@ export async function registerCurrentUserForEvent(eventName: string) {
       return { success: false, error: "Team slots are full." };
     }
 
-    const participants = await prisma.eventRegistration.aggregate({
+    if (event.participationMode === "TEAM") {
+      return {
+        success: false,
+        error: "This is a team event. Please register with your team and leader.",
+      };
+    }
+
+    const participants = await prisma.eventRegistration.findMany({
       where: { eventId: event.id },
-      _sum: { teamSize: true },
+      select: { teamId: true, teamSize: true },
     });
-    const participantCount = participants._sum.teamSize || 0;
+    const participantCount = participants.reduce((sum, registration) => {
+      return sum + (registration.teamId ? 1 : registration.teamSize || 1);
+    }, 0);
 
     if (event.maxParticipants != null && participantCount + 1 > event.maxParticipants) {
       return { success: false, error: "This event is full." };

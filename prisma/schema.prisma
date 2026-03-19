@@ -39,6 +39,17 @@ enum EventParticipationMode {
   TEAM
 }
 
+enum TeamStatus {
+  DRAFT
+  COMPLETED
+  LOCKED
+}
+
+enum TeamMemberRole {
+  LEADER
+  MEMBER
+}
+
 model User {
   id            String    @id @default(cuid())
   
@@ -91,6 +102,9 @@ model User {
 
   // Events
   registrations EventRegistration[]
+  teamsLed      Team[] @relation("TeamLeader")
+  teamInvitesSent TeamInvite[] @relation("TeamInviteSender")
+  teamInvitesUsed TeamInvite[] @relation("TeamInviteConsumer")
 
   // Contact Messages
   contactMessages ContactMessage[]
@@ -147,6 +161,7 @@ model Event {
   type        String?  // 'TECHNICAL', 'NON-TECHNICAL', 'SPECIAL', 'WORKSHOP'
   dayLabel    String?
   date        DateTime?
+  endDate     DateTime?
   description String?
   rulesUrl    String?
   coordinatorName String?
@@ -155,6 +170,7 @@ model Event {
   contactName String?
   contactPhone String?
   participationMode EventParticipationMode @default(INDIVIDUAL)
+  isAllDay   Boolean  @default(false)
   teamMinSize Int?
   teamMaxSize Int?
   maxTeams    Int?
@@ -163,17 +179,50 @@ model Event {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   registrations EventRegistration[]
+  teams       Team[]
 }
 
-model EventDayConfig {
-  id         String   @id @default(cuid())
-  dayLabel   String
-  category   String
-  maxEvents  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+model Team {
+  id                       String     @id @default(cuid())
+  event                    Event      @relation(fields: [eventId], references: [id])
+  eventId                  String
+  name                     String
+  nameNormalized           String
+  teamCode                 String
+  memberCount              Int        @default(0)
+  status                   TeamStatus @default(DRAFT)
+  leader                   User?      @relation("TeamLeader", fields: [leaderUserId], references: [id])
+  leaderUserId             String?
+  leaderContactPhoneSnapshot String?
+  leaderContactEmailSnapshot String?
+  lockedAt                 DateTime?
+  lockedBy                 String?
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
+  members                  EventRegistration[]
+  invites                  TeamInvite[]
 
-  @@unique([dayLabel, category])
+  @@unique([eventId, nameNormalized])
+  @@unique([eventId, teamCode])
+}
+
+model TeamInvite {
+  id              String    @id @default(cuid())
+  team            Team      @relation(fields: [teamId], references: [id])
+  teamId          String
+  token           String    @unique
+  invitedEmail    String?
+  invitedByUser   User      @relation("TeamInviteSender", fields: [invitedByUserId], references: [id])
+  invitedByUserId String
+  usedByUser      User?     @relation("TeamInviteConsumer", fields: [usedByUserId], references: [id])
+  usedByUserId    String?
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([teamId])
+  @@index([invitedByUserId])
+  @@index([invitedEmail])
 }
 
 model EventRegistration {
@@ -184,6 +233,10 @@ model EventRegistration {
   
   event     Event    @relation(fields: [eventId], references: [id])
   eventId   String
+
+  team      Team?    @relation(fields: [teamId], references: [id])
+  teamId    String?
+  memberRole TeamMemberRole?
 
   teamName  String?
   teamSize  Int      @default(1)

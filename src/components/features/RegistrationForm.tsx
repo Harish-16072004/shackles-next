@@ -1,6 +1,6 @@
 'use client'
 
-import { type ChangeEvent, type FormEvent, useState } from "react";
+import { type ChangeEvent, type FormEvent, useState, useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { registerFullUser } from "@/server/actions/register-full";
@@ -17,16 +17,20 @@ const COLLEGES = ["ACGCET", "PSG Tech", "CIT", "GCE Salem", "Anna University"];
 const DEPARTMENTS = ["Mechanical", "CSE", "ECE", "EEE", "Civil"];
 const YEARS = ["I", "II", "III", "IV"];
 
-export default function RegistrationForm() {
-  const router = useRouter();
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [uploadingProof, setUploadingProof] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+const STORAGE_KEY = "registration_form_data";
 
-  // Form State
-  const [formData, setFormData] = useState({
+function isValidIndianMobile(value: string) {
+  const normalized = value.replace(/[\s-]/g, "");
+  return /^(?:\+91|91)?[6-9]\d{9}$/.test(normalized);
+}
+
+type PersistedFormData = Omit<
+  ReturnType<typeof getDefaultFormData>,
+  "password" | "confirmPassword"
+>;
+
+function getDefaultFormData() {
+  return {
     firstName: "", 
     lastName: "", 
     email: "", 
@@ -47,7 +51,49 @@ export default function RegistrationForm() {
     proofUrl: "", 
     proofPath: "",
     acceptedTerms: false
-  });
+  };
+}
+
+export default function RegistrationForm() {
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Form State
+  const [formData, setFormData] = useState(getDefaultFormData());
+
+  // Load form data from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsedData = JSON.parse(saved) as Partial<PersistedFormData>;
+        setFormData(prev => ({
+          ...prev,
+          ...parsedData,
+          password: "",
+          confirmPassword: "",
+        }));
+      }
+    } catch (error) {
+      console.warn("Failed to load form data from storage:", error);
+    }
+  }, []);
+
+  // Save form data to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      const { password, confirmPassword, ...persistable } = formData;
+      void password;
+      void confirmPassword;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
+    } catch (error) {
+      console.warn("Failed to save form data to storage:", error);
+    }
+  }, [formData]);
 
   // Handle standard input changes
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -102,6 +148,10 @@ export default function RegistrationForm() {
   // Step 1 Validation
   const handleNext = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!isValidIndianMobile(formData.phone)) {
+      alert("Please enter a valid Indian mobile number (10 digits starting with 6-9, optional +91). ");
+      return;
+    }
     if (formData.password !== formData.confirmPassword) {
       alert("Passwords do not match!");
       return;
@@ -145,6 +195,12 @@ export default function RegistrationForm() {
        const res = await registerFullUser(payload);
        
        if(res.success) {
+         // Clear saved form data on successful registration
+         try {
+           localStorage.removeItem(STORAGE_KEY);
+         } catch (e) {
+           console.warn("Failed to clear form data:", e);
+         }
          router.push('/userDashboard'); 
        } else {
          alert(res.error || "Registration Failed");
@@ -172,13 +228,25 @@ export default function RegistrationForm() {
         {step === 1 && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <input name="firstName" placeholder="First Name" className="input-field" onChange={handleChange} required />
-              <input name="lastName" placeholder="Last Name" className="input-field" onChange={handleChange} required />
+              <input name="firstName" placeholder="First Name" className="input-field" value={formData.firstName} onChange={handleChange} required />
+              <input name="lastName" placeholder="Last Name" className="input-field" value={formData.lastName} onChange={handleChange} required />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              <input name="email" type="email" placeholder="Email ID" className="input-field" onChange={handleChange} required />
-              <input name="phone" placeholder="Mobile Number" className="input-field" onChange={handleChange} required />
+              <input name="email" type="email" placeholder="Email ID" className="input-field" value={formData.email} onChange={handleChange} required />
+              <input
+                name="phone"
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel"
+                placeholder="Mobile (+91XXXXXXXXXX)"
+                className="input-field"
+                value={formData.phone}
+                onChange={handleChange}
+                pattern="^(?:\+91|91)?[6-9]\d{9}$"
+                title="Enter a valid Indian mobile number"
+                required
+              />
             </div>
 
             {/* --- COLLEGE SECTION --- */}
@@ -191,7 +259,7 @@ export default function RegistrationForm() {
               required
             />
 
-            <input name="collegeLoc" placeholder="College Location" className="input-field" onChange={handleChange} required />
+            <input name="collegeLoc" placeholder="College Location" className="input-field" value={formData.collegeLoc} onChange={handleChange} required />
 
             {/* --- DEPARTMENT SECTION --- */}
             <div className="grid grid-cols-2 gap-4">
@@ -207,7 +275,7 @@ export default function RegistrationForm() {
               </div>
               
               <div className="w-full">
-                <select name="yearOfStudy" className="input-field" onChange={handleChange} required>
+                <select name="yearOfStudy" className="input-field" value={formData.yearOfStudy} onChange={handleChange} required>
                   {YEARS.map(y => <option key={y} value={y}>Year {y}</option>)}
                 </select>
               </div>
@@ -220,6 +288,7 @@ export default function RegistrationForm() {
                   type={showPassword ? "text" : "password"}
                   placeholder="Password"
                   className="input-field pr-10"
+                  value={formData.password}
                   onChange={handleChange}
                   required
                 />
@@ -238,6 +307,7 @@ export default function RegistrationForm() {
                   type={showConfirmPassword ? "text" : "password"}
                   placeholder="Re-Enter Password"
                   className="input-field pr-10"
+                  value={formData.confirmPassword}
                   onChange={handleChange}
                   required
                 />
@@ -356,12 +426,12 @@ export default function RegistrationForm() {
                   </div>
                 )}
                 
-                <input name="transactionId" placeholder="Enter Transaction ID / UTR" className="input-field mt-4" onChange={handleChange} required />
+                <input name="transactionId" placeholder="Enter Transaction ID / UTR" className="input-field mt-4" value={formData.transactionId} onChange={handleChange} required />
               </div>
 
               {/* --- FIXED SECTION START --- */}
               <div className="flex items-center gap-2 mt-4 bg-gray-50 p-3 rounded">
-                <input name="acceptedTerms" type="checkbox" id="terms" className="w-4 h-4" onChange={handleChange} />
+                <input name="acceptedTerms" type="checkbox" id="terms" className="w-4 h-4" checked={formData.acceptedTerms} onChange={handleChange} />
                 <label htmlFor="terms" className="text-sm text-gray-600">
                   I accept the <a 
                     href="/terms" 

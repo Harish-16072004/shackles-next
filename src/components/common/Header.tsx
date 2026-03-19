@@ -4,7 +4,7 @@ import { deleteSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-const navItems = [
+const publicNavItems = [
   { label: "Home", href: "/" },
   { label: "Events", href: "/events" },
   { label: "Workshops", href: "/workshops" },
@@ -14,11 +14,23 @@ const navItems = [
 
 export default async function Header() {
   const session = await getSession();
+  const sessionRole = typeof session?.role === "string" ? session.role : null;
+  const sessionDisplayName =
+    typeof (session as { displayName?: unknown } | null)?.displayName === "string"
+      ? ((session as { displayName?: string }).displayName || null)
+      : null;
+  const navItems = session?.userId
+    ? [
+        ...publicNavItems.slice(0, 3),
+        { label: "Accommodation", href: "/accommodation" },
+        ...publicNavItems.slice(3),
+      ]
+    : publicNavItems;
 
-  let profileName: string | null = null;
-  let profileHref = "/userDashboard";
+  let profileName: string | null = sessionDisplayName;
+  let profileHref = sessionRole === "ADMIN" ? "/admin/adminDashboard" : "/userDashboard";
 
-  if (session?.userId) {
+  if (session?.userId && !profileName) {
     const user = await prisma.user.findUnique({
       where: { id: String(session.userId) },
       select: { firstName: true, lastName: true, role: true },
@@ -26,9 +38,7 @@ export default async function Header() {
 
     if (user) {
       profileName = `${user.firstName} ${user.lastName}`.trim();
-      if (user.role === "ADMIN") {
-        profileHref = "/admin/adminDashboard";
-      }
+      profileHref = user.role === "ADMIN" ? "/admin/adminDashboard" : "/userDashboard";
     }
   }
 

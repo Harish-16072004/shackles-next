@@ -63,7 +63,7 @@ export function NavLinks() {
       {/* Right Section - Admin & Logout */}
       <div className="hidden items-center gap-3 md:flex">
         <Link
-          href="/admin"
+          href="/admin/adminDashboard"
           prefetch={false}
           className="rounded-full border-2 border-pink-600 px-4 py-1.5 text-sm font-semibold text-pink-600 transition-colors hover:bg-pink-600 hover:text-white"
         >
@@ -109,7 +109,7 @@ export function NavLinks() {
             ))}
             <div className="border-t border-gray-200 pt-2">
               <Link
-                href="/admin"
+                href="/admin/adminDashboard"
                 prefetch={false}
                 onClick={handleMobileMenuClose}
                 className="block rounded border-2 border-pink-600 px-3 py-2 text-center text-sm font-semibold text-pink-600 transition-colors hover:bg-pink-600 hover:text-white"

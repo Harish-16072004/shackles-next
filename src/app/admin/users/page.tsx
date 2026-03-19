@@ -131,28 +131,9 @@ export default async function UserManagementPage({ searchParams }: { searchParam
     ],
   };
 
-  const buildQuery = (next: Record<string, string>) => {
-    const params = new URLSearchParams();
-    if (search) params.set("q", search);
-    if (regType) params.set("type", regType);
-    if (paymentStatus) params.set("payment", paymentStatus);
-    if (kitStatus) params.set("kit", kitStatus);
-    if (sort) params.set("sort", sort);
-    Object.entries(next).forEach(([k, v]) => {
-      if (v) params.set(k, v);
-      else params.delete(k);
-    });
-    const query = params.toString();
-    return query ? `?${query}` : "";
-  };
-
-  const navigateWithQuery = (next: Record<string, string>) => {
-    window.location.assign(buildQuery(next));
-  };
-
   const proofUrlByUserId = new Map<string, string>();
   for (const user of users) {
-    const signed = await getPaymentProofSignedUrl(user.payment?.proofPath, 300);
+    const signed = await getPaymentProofSignedUrl(user.payment?.proofPath || user.payment?.proofUrl, 300);
     const resolved = signed || user.payment?.proofUrl;
     if (resolved) {
       proofUrlByUserId.set(user.id, resolved);
@@ -177,58 +158,31 @@ export default async function UserManagementPage({ searchParams }: { searchParam
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col gap-3">
-          <div className="flex flex-col md:flex-row gap-3 md:items-center">
-            <input
-              type="text"
-              defaultValue={search}
-              placeholder="Search by name, email, phone, or college"
-              className="w-full md:flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const target = e.target as HTMLInputElement;
-                  navigateWithQuery({ q: target.value });
-                }
-              }}
-            />
+          <form method="get" className="flex flex-col md:flex-row gap-3 md:items-center">
+
             <div className="flex flex-wrap gap-2 md:flex-nowrap md:w-full">
-              <select
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                defaultValue={regType || ""}
-                onChange={(e) => navigateWithQuery({ type: e.target.value })}
-              >
+              <select className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" name="type" defaultValue={regType || ""}>
                 {filters.type.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
                 ))}
               </select>
-              <select
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                defaultValue={paymentStatus || ""}
-                onChange={(e) => navigateWithQuery({ payment: e.target.value })}
-              >
+              <select className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" name="payment" defaultValue={paymentStatus || ""}>
                 {filters.payment.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
                 ))}
               </select>
-              <select
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                defaultValue={kitStatus || ""}
-                onChange={(e) => navigateWithQuery({ kit: e.target.value })}
-              >
+              <select className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" name="kit" defaultValue={kitStatus || ""}>
                 {filters.kit.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
                 ))}
               </select>
-              <select
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                defaultValue={sort}
-                onChange={(e) => navigateWithQuery({ sort: e.target.value })}
-              >
+              <select className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" name="sort" defaultValue={sort}>
                 {filters.sort.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -236,7 +190,15 @@ export default async function UserManagementPage({ searchParams }: { searchParam
                 ))}
               </select>
             </div>
-          </div>
+            <div className="flex gap-2 md:flex-none">
+              <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">
+                Apply
+              </button>
+              <a href="/admin/users" className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100">
+                Reset
+              </a>
+            </div>
+          </form>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">

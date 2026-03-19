@@ -8,13 +8,38 @@ import type { Prisma } from "@prisma/client";
 import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
 import { logAdminAudit } from "@/lib/admin-audit";
 
+const EVENT_TYPE_OPTIONS = [
+  { value: "TECHNICAL", label: "Technical" },
+  { value: "NON-TECHNICAL", label: "Non Technical" },
+  { value: "SPECIAL", label: "Special" },
+];
+
+const DAY_LABEL_OPTIONS = [
+  { value: "DAY1", label: "Day 1" },
+  { value: "DAY2", label: "Day 2" },
+];
+
 function formatDate(date?: Date | null) {
   if (!date) return "--";
   return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(date);
+}
+
+function formatDateRange(start?: Date | null, end?: Date | null) {
+  if (!start) return "--";
+  if (!end || end.getTime() === start.getTime()) return formatDate(start);
+  return `${formatDate(start)} → ${formatDate(end)}`;
+}
+
+function toDateTimeLocalValue(date?: Date | null) {
+  if (!date) return "";
+  const timezoneOffsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
 }
 
 function toOptionalNumber(value: FormDataEntryValue | null) {
@@ -23,6 +48,43 @@ function toOptionalNumber(value: FormDataEntryValue | null) {
   if (!trimmed) return null;
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function splitCoordinatorField(value?: string | null) {
+  const parts = (value || "")
+    .split(" | ")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+
+  return [parts[0] || "", parts[1] || "", parts[2] || ""] as const;
+}
+
+function parseCoordinators(formData: FormData) {
+  const entries = [1, 2, 3].map((index) => ({
+    name: (formData.get(`coordinatorName${index}`) as string | null)?.trim() || "",
+    phone: (formData.get(`coordinatorPhone${index}`) as string | null)?.trim() || "",
+  }));
+
+  const first = entries[0];
+  if (!first.name || !first.phone) {
+    return null;
+  }
+
+  for (const entry of entries.slice(1)) {
+    const hasName = Boolean(entry.name);
+    const hasPhone = Boolean(entry.phone);
+    if (hasName !== hasPhone) {
+      return null;
+    }
+  }
+
+  const normalized = entries.filter((entry) => entry.name && entry.phone);
+
+  return {
+    coordinatorName: normalized.map((entry) => entry.name).join(" | "),
+    coordinatorPhone: normalized.map((entry) => entry.phone).join(" | "),
+  };
 }
 
 async function assertAdmin() {
@@ -65,6 +127,8 @@ async function deleteEventAction(formData: FormData) {
     target: eventId,
     status: "SUCCESS",
   });
+
+  redirect(`/admin/events?formReset=${Date.now()}`);
 }
 
 async function updateEventAction(formData: FormData) {
@@ -76,17 +140,16 @@ async function updateEventAction(formData: FormData) {
   const typeRaw = (formData.get("type") as string | null)?.trim();
   const dayLabelRaw = (formData.get("dayLabel") as string | null)?.trim();
   const dateRaw = (formData.get("date") as string | null)?.trim();
+  const endDateRaw = (formData.get("endDate") as string | null)?.trim();
   const description = (formData.get("description") as string | null)?.trim() || null;
   const rulesUrl = (formData.get("rulesUrl") as string | null)?.trim() || null;
-  const coordinatorName = (formData.get("coordinatorName") as string | null)?.trim() || null;
-  const coordinatorPhone = (formData.get("coordinatorPhone") as string | null)?.trim() || null;
-  const trainerName = (formData.get("trainerName") as string | null)?.trim() || null;
-  const contactName = (formData.get("contactName") as string | null)?.trim() || null;
-  const contactPhone = (formData.get("contactPhone") as string | null)?.trim() || null;
+  const coordinatorDetails = parseCoordinators(formData);
   const participationModeRaw = (formData.get("participationMode") as string | null)?.trim();
   const isActiveRaw = formData.get("isActive") as string | null;
+  const isAllDayRaw = formData.get("isAllDay") as string | null;
 
   if (!eventId || !name) return;
+  if (!coordinatorDetails) return;
 
   const type = typeRaw ? typeRaw.toUpperCase() : null;
   const dayLabel = dayLabelRaw ? dayLabelRaw.toUpperCase() : null;
@@ -96,7 +159,12 @@ async function updateEventAction(formData: FormData) {
   const teamMinSize = toOptionalNumber(formData.get("teamMinSize"));
   const teamMaxSize = toOptionalNumber(formData.get("teamMaxSize"));
   const date = dateRaw ? new Date(dateRaw) : null;
+  const endDate = endDateRaw ? new Date(endDateRaw) : null;
   const isActive = isActiveRaw === "on";
+  const isAllDay = isAllDayRaw === "on";
+
+  if ((date && Number.isNaN(date.getTime())) || (endDate && Number.isNaN(endDate.getTime()))) return;
+  if (date && endDate && endDate < date) return;
 
   if (maxParticipants != null && maxParticipants < 1) return;
   if (maxTeams != null && maxTeams < 1) return;
@@ -114,14 +182,16 @@ async function updateEventAction(formData: FormData) {
       type,
       dayLabel,
       date,
+      endDate,
       description,
       rulesUrl,
-      coordinatorName,
-      coordinatorPhone,
-      trainerName,
-      contactName,
-      contactPhone,
+      coordinatorName: coordinatorDetails.coordinatorName,
+      coordinatorPhone: coordinatorDetails.coordinatorPhone,
+      trainerName: null,
+      contactName: null,
+      contactPhone: null,
       participationMode,
+      isAllDay,
       teamMinSize: participationMode === "TEAM" ? teamMinSize : null,
       teamMaxSize: participationMode === "TEAM" ? teamMaxSize : null,
       maxTeams,
@@ -146,6 +216,8 @@ async function updateEventAction(formData: FormData) {
       isActive,
     },
   });
+
+  redirect("/admin/events");
 }
 
 async function createEventAction(formData: FormData) {
@@ -158,13 +230,10 @@ async function createEventAction(formData: FormData) {
   const type = typeRaw ? typeRaw.toUpperCase() : null;
   const dayLabel = dayLabelRaw ? dayLabelRaw.toUpperCase() : null;
   const dateRaw = (formData.get("date") as string | null)?.trim();
+  const endDateRaw = (formData.get("endDate") as string | null)?.trim();
   const description = (formData.get("description") as string | null)?.trim() || null;
   const rulesUrl = (formData.get("rulesUrl") as string | null)?.trim() || null;
-  const coordinatorName = (formData.get("coordinatorName") as string | null)?.trim() || null;
-  const coordinatorPhone = (formData.get("coordinatorPhone") as string | null)?.trim() || null;
-  const trainerName = (formData.get("trainerName") as string | null)?.trim() || null;
-  const contactName = (formData.get("contactName") as string | null)?.trim() || null;
-  const contactPhone = (formData.get("contactPhone") as string | null)?.trim() || null;
+  const coordinatorDetails = parseCoordinators(formData);
   const participationModeRaw = (formData.get("participationMode") as string | null)?.trim();
   const participationMode = participationModeRaw === "TEAM" ? "TEAM" : "INDIVIDUAL";
   const maxParticipantsRaw = (formData.get("maxParticipants") as string | null)?.trim();
@@ -172,14 +241,29 @@ async function createEventAction(formData: FormData) {
   const teamMinSizeRaw = (formData.get("teamMinSize") as string | null)?.trim();
   const teamMaxSizeRaw = (formData.get("teamMaxSize") as string | null)?.trim();
   const isActiveRaw = formData.get("isActive") as string | null;
+  const isAllDayRaw = formData.get("isAllDay") as string | null;
   const date = dateRaw ? new Date(dateRaw) : null;
   const maxParticipants = maxParticipantsRaw ? Number(maxParticipantsRaw) : null;
   const maxTeams = maxTeamsRaw ? Number(maxTeamsRaw) : null;
   const teamMinSize = teamMinSizeRaw ? Number(teamMinSizeRaw) : null;
   const teamMaxSize = teamMaxSizeRaw ? Number(teamMaxSizeRaw) : null;
   const isActive = isActiveRaw === "on";
+  const isAllDay = isAllDayRaw === "on";
+  const endDate = endDateRaw ? new Date(endDateRaw) : null;
 
   if (!name) {
+    return;
+  }
+
+  if ((date && Number.isNaN(date.getTime())) || (endDate && Number.isNaN(endDate.getTime()))) {
+    return;
+  }
+
+  if (date && endDate && endDate < date) {
+    return;
+  }
+
+  if (!coordinatorDetails) {
     return;
   }
 
@@ -203,53 +287,22 @@ async function createEventAction(formData: FormData) {
     }
   }
 
-  if (dayLabel && type) {
-    const config = await prisma.eventDayConfig.findUnique({
-      where: {
-        dayLabel_category: {
-          dayLabel,
-          category: type,
-        },
-      },
-    });
-
-    if (config && config.maxEvents > 0) {
-      const existing = await prisma.event.findUnique({ where: { name } });
-      const alreadyAssigned =
-        existing &&
-        existing.dayLabel === dayLabel &&
-        (existing.type || "") === type;
-
-      if (!alreadyAssigned) {
-        const assignedCount = await prisma.event.count({
-          where: {
-            dayLabel,
-            type,
-            isActive: true,
-          },
-        });
-
-        if (assignedCount >= config.maxEvents) {
-          return;
-        }
-      }
-    }
-  }
-
   await prisma.event.upsert({
     where: { name },
     update: {
       type,
       dayLabel,
       date,
+      endDate,
       description,
       rulesUrl,
-      coordinatorName,
-      coordinatorPhone,
-      trainerName,
-      contactName,
-      contactPhone,
+      coordinatorName: coordinatorDetails.coordinatorName,
+      coordinatorPhone: coordinatorDetails.coordinatorPhone,
+      trainerName: null,
+      contactName: null,
+      contactPhone: null,
       participationMode,
+      isAllDay,
       teamMinSize: participationMode === "TEAM" ? teamMinSize : null,
       teamMaxSize: participationMode === "TEAM" ? teamMaxSize : null,
       maxTeams,
@@ -261,14 +314,16 @@ async function createEventAction(formData: FormData) {
       type,
       dayLabel,
       date,
+      endDate,
       description,
       rulesUrl,
-      coordinatorName,
-      coordinatorPhone,
-      trainerName,
-      contactName,
-      contactPhone,
+      coordinatorName: coordinatorDetails.coordinatorName,
+      coordinatorPhone: coordinatorDetails.coordinatorPhone,
+      trainerName: null,
+      contactName: null,
+      contactPhone: null,
       participationMode,
+      isAllDay,
       teamMinSize: participationMode === "TEAM" ? teamMinSize : null,
       teamMaxSize: participationMode === "TEAM" ? teamMaxSize : null,
       maxTeams,
@@ -297,44 +352,8 @@ async function createEventAction(formData: FormData) {
       isActive,
     },
   });
-}
 
-async function saveDayConfigAction(formData: FormData) {
-  'use server'
-  const session = await getSession();
-  if (!session?.userId) redirect("/login");
-  const user = await prisma.user.findUnique({ where: { id: session.userId as string } });
-  if (!user || user.role !== "ADMIN") redirect("/login");
-
-  const dayLabelRaw = (formData.get("configDayLabel") as string | null)?.trim();
-  const categoryRaw = (formData.get("configCategory") as string | null)?.trim();
-  const dayLabel = dayLabelRaw?.toUpperCase();
-  const category = categoryRaw?.toUpperCase();
-  const maxEventsRaw = (formData.get("configMaxEvents") as string | null)?.trim();
-  const maxEvents = maxEventsRaw ? Number(maxEventsRaw) : NaN;
-
-  if (!dayLabel || !category || !Number.isFinite(maxEvents) || maxEvents < 0) {
-    return;
-  }
-
-  await prisma.eventDayConfig.upsert({
-    where: {
-      dayLabel_category: {
-        dayLabel,
-        category,
-      },
-    },
-    update: {
-      maxEvents,
-    },
-    create: {
-      dayLabel,
-      category,
-      maxEvents,
-    },
-  });
-
-  revalidatePath("/admin/events");
+  redirect(`/admin/events?formReset=${Date.now()}`);
 }
 
 export default async function AdminEventsPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
@@ -346,6 +365,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
 
   const q = typeof searchParams?.q === "string" ? searchParams.q.trim() : "";
   const editId = typeof searchParams?.edit === "string" ? searchParams.edit.trim() : "";
+  const formReset = typeof searchParams?.formReset === "string" ? searchParams.formReset : "base";
 
   const where: Prisma.EventWhereInput = {};
   if (q) where.name = { contains: q, mode: "insensitive" };
@@ -356,6 +376,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
       _count: { select: { registrations: true } },
       registrations: {
         select: {
+          teamId: true,
           teamSize: true,
         },
       },
@@ -365,32 +386,11 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
 
   const editingEvent = editId ? events.find((event) => event.id === editId) || null : null;
 
-  const dayConfigs = await prisma.eventDayConfig.findMany({
-    orderBy: [{ dayLabel: "asc" }, { category: "asc" }],
-  });
-
-  const assignedByDayCategory = await prisma.event.groupBy({
-    by: ["dayLabel", "type"],
-    where: {
-      isActive: true,
-      dayLabel: { not: null },
-      type: { not: null },
-    },
-    _count: {
-      _all: true,
-    },
-  });
-
-  const assignedLookup = new Map<string, number>();
-  for (const row of assignedByDayCategory) {
-    if (row.dayLabel && row.type) {
-      assignedLookup.set(`${row.dayLabel}::${row.type}`, row._count._all);
-    }
-  }
-
   const totalEvents = events.length;
   const workshopCount = events.filter((e) => (e.type || "").toLowerCase().includes("workshop") || e.name.toLowerCase().includes("workshop")).length;
   const upcomingCount = events.filter((e) => e.date && e.date > new Date()).length;
+  const [editingCoordinatorName1, editingCoordinatorName2, editingCoordinatorName3] = splitCoordinatorField(editingEvent?.coordinatorName);
+  const [editingCoordinatorPhone1, editingCoordinatorPhone2, editingCoordinatorPhone3] = splitCoordinatorField(editingEvent?.coordinatorPhone);
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -486,7 +486,10 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {events.map((event) => {
-                  const participantCount = event.registrations.reduce((sum, registration) => sum + (registration.teamSize || 1), 0);
+                  const participantCount = event.registrations.reduce(
+                    (sum, registration) => sum + (registration.teamId ? 1 : registration.teamSize || 1),
+                    0
+                  );
                   const teamCount = event._count.registrations;
                   const participantRatio = event.maxParticipants
                     ? Math.min((participantCount / event.maxParticipants) * 100, 100)
@@ -501,7 +504,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                       <td className="px-4 py-3 text-gray-700">{event.type || "--"}</td>
                       <td className="px-4 py-3 text-gray-700">{event.participationMode}</td>
                       <td className="px-4 py-3 text-gray-700">{event.dayLabel || "--"}</td>
-                      <td className="px-4 py-3 text-gray-700">{formatDate(event.date)}</td>
+                      <td className="px-4 py-3 text-gray-700">{event.isAllDay ? "All Day" : formatDateRange(event.date, event.endDate)}</td>
                       <td className="px-4 py-3 text-gray-700">{event.maxParticipants ?? "Unlimited"}</td>
                       <td className="px-4 py-3 text-gray-700">
                         {event.maxTeams ?? "Unlimited"}
@@ -587,7 +590,18 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Type
-                  <input name="type" defaultValue={editingEvent.type || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <select
+                    name="type"
+                    defaultValue={editingEvent.type || ""}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  >
+                    <option value="">Select type</option>
+                    {EVENT_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Participation Mode
@@ -596,13 +610,31 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                     <option value="TEAM">TEAM</option>
                   </select>
                 </label>
-                <label className="flex flex-col gap-1 text-sm text-gray-700">
-                  Day Label
-                  <input name="dayLabel" defaultValue={editingEvent.dayLabel || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <label className="flex items-center gap-2 text-sm text-gray-700 mt-7">
+                  <input type="checkbox" name="isAllDay" defaultChecked={editingEvent.isAllDay} /> All Day Event
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
-                  Date
-                  <input type="date" name="date" defaultValue={editingEvent.date ? new Date(editingEvent.date).toISOString().split("T")[0] : ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  Day Label
+                  <select
+                    name="dayLabel"
+                    defaultValue={editingEvent.dayLabel || ""}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  >
+                    <option value="">Select day</option>
+                    {DAY_LABEL_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-sm text-gray-700">
+                  Date & Time
+                  <input type="datetime-local" name="date" defaultValue={toDateTimeLocalValue(editingEvent.date)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                </label>
+                <label className="flex flex-col gap-1 text-sm text-gray-700">
+                  End Date & Time
+                  <input type="datetime-local" name="endDate" defaultValue={toDateTimeLocalValue(editingEvent.endDate)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Max Participants
@@ -635,24 +667,28 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                     <input name="rulesUrl" defaultValue={editingEvent.rulesUrl || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
-                    Trainer
-                    <input name="trainerName" defaultValue={editingEvent.trainerName || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    Coordinator 1 Name*
+                    <input name="coordinatorName1" required defaultValue={editingCoordinatorName1} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
-                    Coordinator Name
-                    <input name="coordinatorName" defaultValue={editingEvent.coordinatorName || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    Coordinator 1 Phone*
+                    <input name="coordinatorPhone1" required defaultValue={editingCoordinatorPhone1} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
-                    Coordinator Phone
-                    <input name="coordinatorPhone" defaultValue={editingEvent.coordinatorPhone || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    Coordinator 2 Name
+                    <input name="coordinatorName2" defaultValue={editingCoordinatorName2} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
-                    Contact Name
-                    <input name="contactName" defaultValue={editingEvent.contactName || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    Coordinator 2 Phone
+                    <input name="coordinatorPhone2" defaultValue={editingCoordinatorPhone2} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
-                    Contact Phone
-                    <input name="contactPhone" defaultValue={editingEvent.contactPhone || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    Coordinator 3 Name
+                    <input name="coordinatorName3" defaultValue={editingCoordinatorName3} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm text-gray-700">
+                    Coordinator 3 Phone
+                    <input name="coordinatorPhone3" defaultValue={editingCoordinatorPhone3} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                   </label>
                 </div>
               </div>
@@ -664,68 +700,8 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
         )}
 
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900 mb-3">Daily Slot Configuration</h2>
-          <form action={saveDayConfigAction} className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <label className="flex flex-col gap-1 text-sm text-gray-700">
-                Day Label*
-                <input name="configDayLabel" required placeholder="DAY1" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-gray-700">
-                Category*
-                <input name="configCategory" required placeholder="WORKSHOP / TECHNICAL" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-gray-700">
-                Max Events*
-                <input type="number" min={0} name="configMaxEvents" required className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </label>
-            </div>
-            <div className="flex justify-end">
-              <button type="submit" className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800">Save Day Config</button>
-            </div>
-          </form>
-
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
-                <tr>
-                  <th className="px-4 py-3">Day</th>
-                  <th className="px-4 py-3">Category</th>
-                  <th className="px-4 py-3">Max Events</th>
-                  <th className="px-4 py-3">Assigned Active</th>
-                  <th className="px-4 py-3">Slots Left</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {dayConfigs.map((config) => {
-                  const assigned = assignedLookup.get(`${config.dayLabel}::${config.category}`) || 0;
-                  const slotsLeft = Math.max(config.maxEvents - assigned, 0);
-                  return (
-                    <tr key={config.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-semibold text-gray-900">{config.dayLabel}</td>
-                      <td className="px-4 py-3 text-gray-700">{config.category}</td>
-                      <td className="px-4 py-3 text-gray-700">{config.maxEvents}</td>
-                      <td className="px-4 py-3 text-gray-700">{assigned}</td>
-                      <td className="px-4 py-3 text-gray-700">{slotsLeft}</td>
-                    </tr>
-                  );
-                })}
-
-                {dayConfigs.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-6 text-center text-gray-500 text-sm">
-                      No day configurations added.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900 mb-3">Create Event</h2>
-          <form action={createEventAction} className="space-y-3">
+          <form key={formReset} action={createEventAction} className="space-y-3" autoComplete="off">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Event Name*
@@ -733,7 +709,18 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Type
-                <input name="type" placeholder="Technical / Workshop" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <select
+                  name="type"
+                  defaultValue=""
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="">Select type</option>
+                  {EVENT_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Participation Mode
@@ -742,13 +729,31 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                   <option value="TEAM">TEAM</option>
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-sm text-gray-700">
-                Day Label
-                <input name="dayLabel" placeholder="DAY1" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <label className="flex items-center gap-2 text-sm text-gray-700 mt-7">
+                <input type="checkbox" name="isAllDay" /> All Day Event
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
-                Date
-                <input type="date" name="date" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                Day Label
+                <select
+                  name="dayLabel"
+                  defaultValue=""
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="">Select day</option>
+                  {DAY_LABEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-gray-700">
+                Date & Time
+                <input type="datetime-local" name="date" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-gray-700">
+                End Date & Time
+                <input type="datetime-local" name="endDate" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Max Participants
@@ -781,24 +786,28 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                   <input name="rulesUrl" placeholder="https://..." className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
-                  Trainer
-                  <input name="trainerName" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  Coordinator 1 Name*
+                  <input name="coordinatorName1" required className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
-                  Coordinator Name
-                  <input name="coordinatorName" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  Coordinator 1 Phone*
+                  <input name="coordinatorPhone1" required className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
-                  Coordinator Phone
-                  <input name="coordinatorPhone" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  Coordinator 2 Name
+                  <input name="coordinatorName2" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
-                  Contact Name
-                  <input name="contactName" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  Coordinator 2 Phone
+                  <input name="coordinatorPhone2" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
-                  Contact Phone
-                  <input name="contactPhone" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  Coordinator 3 Name
+                  <input name="coordinatorName3" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                </label>
+                <label className="flex flex-col gap-1 text-sm text-gray-700">
+                  Coordinator 3 Phone
+                  <input name="coordinatorPhone3" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                 </label>
               </div>
             </div>

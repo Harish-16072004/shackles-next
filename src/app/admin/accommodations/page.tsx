@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import type { Prisma } from "@prisma/client";
+import { Download } from "lucide-react";
 
 function formatDate(date?: Date | null) {
   if (!date) return "--";
@@ -55,6 +56,24 @@ export default async function AdminAccommodationsPage({ searchParams }: { search
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Accommodation Management</h1>
             <p className="text-gray-600">Review participant accommodation requests.</p>
+          </div>
+          <div className="flex gap-2">
+            <a
+              href="/api/admin/accommodations/download?gender=MALE"
+              download
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+            >
+              <Download className="w-4 h-4" />
+              Download Male
+            </a>
+            <a
+              href="/api/admin/accommodations/download?gender=FEMALE"
+              download
+              className="inline-flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition text-sm font-medium"
+            >
+              <Download className="w-4 h-4" />
+              Download Female
+            </a>
           </div>
         </div>
 

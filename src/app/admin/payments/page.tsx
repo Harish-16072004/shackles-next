@@ -49,7 +49,7 @@ export default async function PaymentVerificationPage({ searchParams }: { search
 
   const proofUrlByPaymentId = new Map<string, string>();
   for (const payment of payments) {
-    const signed = await getPaymentProofSignedUrl(payment.proofPath, 300);
+    const signed = await getPaymentProofSignedUrl(payment.proofPath || payment.proofUrl, 300);
     const resolved = signed || payment.proofUrl;
     if (resolved) {
       proofUrlByPaymentId.set(payment.id, resolved);
@@ -71,9 +71,17 @@ export default async function PaymentVerificationPage({ searchParams }: { search
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold text-gray-900">Payment Verification</h1>
-          <p className="text-gray-600">Review payment proofs and approve participant IDs.</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-3xl font-bold text-gray-900">Payment Verification</h1>
+            <p className="text-gray-600">Review payment proofs and approve participant IDs.</p>
+          </div>
+          <a
+            href={`/api/admin/payments/export?status=${activeStatus.toLowerCase()}`}
+            className="inline-flex items-center px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            Download {activeStatus.toLowerCase()} CSV
+          </a>
         </div>
 
         {/* Stats */}
@@ -205,10 +213,11 @@ export default async function PaymentVerificationPage({ searchParams }: { search
                     </form>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between text-sm text-gray-600">
-                    <span>Reviewed on {formatDate(payment.verifiedAt || payment.rejectedAt || payment.createdAt)}</span>
+                  <div className="space-y-2 text-sm text-gray-600">
+                    <p>Reviewed on {formatDate(payment.verifiedAt || payment.rejectedAt || payment.createdAt)}</p>
+                    <p>Reviewed by {payment.verifiedBy || "--"}</p>
                     {user.shacklesId && (
-                      <span className="font-mono text-xs bg-gray-900 text-white px-2 py-1 rounded">{user.shacklesId}</span>
+                      <span className="inline-flex font-mono text-xs bg-gray-900 text-white px-2 py-1 rounded">{user.shacklesId}</span>
                     )}
                   </div>
                 )}

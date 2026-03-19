@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 type EventItem = {
   id: string;
@@ -10,6 +11,7 @@ type EventItem = {
   type: string | null;
   dayLabel: string | null;
   date: string | null;
+  endDate: string | null;
   description: string | null;
   rulesUrl: string | null;
   coordinatorName: string | null;
@@ -18,6 +20,7 @@ type EventItem = {
   contactName: string | null;
   contactPhone: string | null;
   participationMode: "INDIVIDUAL" | "TEAM";
+  isAllDay: boolean;
   teamMinSize: number | null;
   teamMaxSize: number | null;
   maxTeams: number | null;
@@ -60,14 +63,73 @@ const accentStyles = {
   },
 };
 
+function formatSchedule(date: string | null, endDate: string | null) {
+  if (!date) return null;
+
+  const start = new Date(date);
+  if (Number.isNaN(start.getTime())) return null;
+
+  const startText = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(start);
+
+  if (!endDate) return startText;
+
+  const end = new Date(endDate);
+  if (Number.isNaN(end.getTime()) || end.getTime() === start.getTime()) return startText;
+
+  const endText = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(end);
+
+  return `${startText} → ${endText}`;
+}
+
+const PAYMENT_PENDING_POPUP = "Your payment verification is pending by organizers. Please try after sometime.";
+const LOGIN_REQUIRED_POPUP = "Please login to register for events.";
+
+function shouldShowPaymentPendingPopup(status: number, message: string) {
+  const normalized = message.toLowerCase();
+  return status === 403 && (
+    normalized.includes("payment-verified") ||
+    normalized.includes("payment verified") ||
+    normalized.includes("payment")
+  );
+}
+
+function shouldShowLoginPopup(status: number): boolean {
+  return status === 401;
+}
+
 export default function EventCategoryPage({ category, title, subtitle, accent }: Props) {
+  const searchParams = useSearchParams();
   const [events, setEvents] = useState<EventItem[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
   const [teamName, setTeamName] = useState("");
-  const [teamSize, setTeamSize] = useState("");
+  const [teamCode, setTeamCode] = useState("");
+  const [inviteToken, setInviteToken] = useState("");
+  const [latestTeamCode, setLatestTeamCode] = useState("");
   const [registering, setRegistering] = useState(false);
+  const [creatingTeam, setCreatingTeam] = useState(false);
+  const [completingTeam, setCompletingTeam] = useState(false);
   const [feedback, setFeedback] = useState("");
   const styles = accentStyles[accent];
+
+  useEffect(() => {
+    const incomingToken = searchParams.get("inviteToken") || "";
+    const incomingCode = searchParams.get("teamCode") || "";
+
+    if (incomingToken) setInviteToken(incomingToken);
+    if (incomingCode) setTeamCode(incomingCode);
+  }, [searchParams]);
 
   const loadEvents = useCallback(async () => {
     try {
@@ -121,17 +183,19 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
   useEffect(() => {
     if (!selectedEvent) {
       setTeamName("");
-      setTeamSize("");
+      setTeamCode("");
+      setInviteToken("");
+      setLatestTeamCode("");
       return;
     }
 
     if (selectedEvent.participationMode !== "TEAM") {
       setTeamName("");
-      setTeamSize("");
+      setTeamCode("");
+      setInviteToken("");
+      setLatestTeamCode("");
       return;
     }
-
-    setTeamSize(selectedEvent.teamMinSize ? String(selectedEvent.teamMinSize) : "");
   }, [selectedEvent]);
 
   useEffect(() => {
@@ -142,61 +206,139 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
     }
   }, [events, selectedEvent]);
 
-  const activeCount = useMemo(() => events.filter((event) => event.isActive).length, [events]);
-
   async function handleRegister(event: EventItem) {
-    let payloadTeamName: string | undefined;
-    let payloadTeamSize: number | undefined;
+    try {
+      setRegistering(true);
+      setFeedback("");
 
-    if (event.participationMode === "TEAM") {
-      const trimmedTeamName = teamName.trim();
-      const parsedTeamSize = Number(teamSize);
+      const response = await fetch("/api/events/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "joinTeam",
+          eventName: event.name,
+          teamName: teamName.trim() || undefined,
+          teamCode: teamCode.trim() || undefined,
+          inviteToken: inviteToken.trim() || undefined,
+        }),
+      });
 
-      if (!trimmedTeamName) {
-        setFeedback("Team name is required for team events.");
-        return;
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const errorMessage = typeof body.error === "string" ? body.error : "Unable to register now.";
+        setFeedback(errorMessage);
+        if (shouldShowLoginPopup(response.status)) {
+          alert(LOGIN_REQUIRED_POPUP);
+        } else if (shouldShowPaymentPendingPopup(response.status, errorMessage)) {
+          alert(PAYMENT_PENDING_POPUP);
+        }
+      } else {
+        if (body.teamCode) {
+          setLatestTeamCode(String(body.teamCode));
+          setTeamCode(String(body.teamCode));
+        }
+        const message = typeof body.message === "string" ? body.message : "";
+        if (message.toLowerCase().includes("already registered")) {
+          setFeedback(message);
+        } else {
+          setFeedback("Joined team successfully.");
+        }
+        await loadEvents();
       }
+    } finally {
+      setRegistering(false);
+    }
+  }
 
-      if (!Number.isInteger(parsedTeamSize) || parsedTeamSize < 1) {
-        setFeedback("Enter a valid team size.");
-        return;
-      }
-
-      if (event.teamMinSize != null && parsedTeamSize < event.teamMinSize) {
-        setFeedback(`Minimum team size is ${event.teamMinSize}.`);
-        return;
-      }
-
-      if (event.teamMaxSize != null && parsedTeamSize > event.teamMaxSize) {
-        setFeedback(`Maximum team size is ${event.teamMaxSize}.`);
-        return;
-      }
-
-      payloadTeamName = trimmedTeamName;
-      payloadTeamSize = parsedTeamSize;
+  async function handleCreateTeam(event: EventItem) {
+    const trimmedTeamName = teamName.trim();
+    if (!trimmedTeamName) {
+      setFeedback("Team name is required to create a team.");
+      return;
     }
 
     try {
-      setRegistering(true);
+      setCreatingTeam(true);
       setFeedback("");
       const response = await fetch("/api/events/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "createTeam",
           eventName: event.name,
-          teamName: payloadTeamName,
-          teamSize: payloadTeamSize,
+          teamName: trimmedTeamName,
         }),
       });
+
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setFeedback(body.error || "Unable to register now.");
+        const errorMessage = typeof body.error === "string" ? body.error : "Unable to create team right now.";
+        setFeedback(errorMessage);
+        if (shouldShowLoginPopup(response.status)) {
+          alert(LOGIN_REQUIRED_POPUP);
+        } else if (shouldShowPaymentPendingPopup(response.status, errorMessage)) {
+          alert(PAYMENT_PENDING_POPUP);
+        }
       } else {
-        setFeedback(body.message || "Registered successfully.");
+        if (body.teamCode) {
+          setLatestTeamCode(String(body.teamCode));
+          setTeamCode(String(body.teamCode));
+        }
+        const message = typeof body.message === "string" ? body.message : "";
+        if (message.toLowerCase().includes("already registered")) {
+          setFeedback(message);
+        } else {
+          setFeedback("Team created successfully.");
+        }
         await loadEvents();
       }
     } finally {
-      setRegistering(false);
+      setCreatingTeam(false);
+    }
+  }
+
+  async function handleCompleteTeam(event: EventItem) {
+    const trimmedTeamName = teamName.trim();
+    const trimmedTeamCode = teamCode.trim();
+    if (!trimmedTeamName && !trimmedTeamCode) {
+      setFeedback("Provide Team Name or Team Code to complete team registration.");
+      return;
+    }
+
+    try {
+      setCompletingTeam(true);
+      setFeedback("");
+
+      const response = await fetch("/api/events/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "completeTeam",
+          eventName: event.name,
+          teamName: trimmedTeamName || undefined,
+          teamCode: trimmedTeamCode || undefined,
+        }),
+      });
+
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const errorMessage = typeof body.error === "string" ? body.error : "Unable to complete team registration now.";
+        setFeedback(errorMessage);
+        if (shouldShowLoginPopup(response.status)) {
+          alert(LOGIN_REQUIRED_POPUP);
+        } else if (shouldShowPaymentPendingPopup(response.status, errorMessage)) {
+          alert(PAYMENT_PENDING_POPUP);
+        }
+      } else {
+        if (body.teamCode) {
+          setLatestTeamCode(String(body.teamCode));
+          setTeamCode(String(body.teamCode));
+        }
+        setFeedback(body.message || "Team registration completed.");
+        await loadEvents();
+      }
+    } finally {
+      setCompletingTeam(false);
     }
   }
 
@@ -205,7 +347,6 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
       <section className="flex flex-col items-center gap-3 text-center">
         <h1 className="text-4xl font-semibold text-gray-900">{title}</h1>
         <p className="text-lg text-gray-600">{subtitle}</p>
-        <p className="text-sm text-gray-500">{activeCount} active events</p>
         <Link href="/events" className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900">
           <span>←</span>
           <span>Back to events</span>
@@ -224,10 +365,7 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
               <div className="h-4 w-4 rounded-full bg-white/50" />
               <h2 className="text-xl font-semibold text-gray-900 leading-tight">{event.name}</h2>
               <p className="text-sm text-gray-600 leading-relaxed">{(event.description || "No description available").substring(0, 120)}...</p>
-              <p className="text-xs text-gray-500 mt-auto">
-                {isClosed ? "Closed" : "Open"} • Registered {event.registeredCount}
-                {event.spotsLeft != null ? ` • Spots left ${event.spotsLeft}` : ""}
-              </p>
+              <p className="text-xs text-gray-500 mt-auto">{isClosed ? "Closed" : "Open"}</p>
             </button>
           );
         })}
@@ -254,37 +392,67 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
               <h2 className="text-2xl font-bold text-gray-100">{selectedEvent.name}</h2>
             </div>
 
-            <p className="mb-6 text-sm leading-relaxed text-gray-300">{selectedEvent.description || "No description available."}</p>
+            {formatSchedule(selectedEvent.date, selectedEvent.endDate) && (
+              <p className="mb-4 rounded border border-gray-700 bg-gray-800/40 px-3 py-2 text-xs text-gray-200">
+                Schedule: {formatSchedule(selectedEvent.date, selectedEvent.endDate)}
+              </p>
+            )}
 
-            <p className="mb-4 text-xs text-gray-300">
-              Participants: {selectedEvent.registeredCount}
-              {selectedEvent.spotsLeft != null ? ` • Spots left: ${selectedEvent.spotsLeft}` : ""}
-              {selectedEvent.maxTeams != null ? ` • Teams left: ${selectedEvent.teamsLeft ?? 0}` : ""}
-            </p>
+            <p className="mb-6 text-sm leading-relaxed text-gray-300">{selectedEvent.description || "No description available."}</p>
 
             {selectedEvent.participationMode === "TEAM" && (
               <div className="mb-6 rounded border border-gray-700 bg-gray-800/40 p-4">
                 <p className="mb-3 text-sm font-semibold text-gray-100">Team Registration</p>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <input
-                    value={teamName}
-                    onChange={(event) => setTeamName(event.target.value)}
-                    placeholder="Team name"
-                    className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-gray-400"
-                  />
-                  <input
-                    value={teamSize}
-                    onChange={(event) => setTeamSize(event.target.value)}
-                    type="number"
-                    min={selectedEvent.teamMinSize ?? 1}
-                    max={selectedEvent.teamMaxSize ?? undefined}
-                    placeholder="Team size"
-                    className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-gray-400"
-                  />
+                  <div className="rounded border border-gray-700 bg-gray-900/50 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-300">Create Team</p>
+                    <input
+                      value={teamName}
+                      onChange={(event) => setTeamName(event.target.value)}
+                      placeholder="Team name"
+                      className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-gray-400"
+                    />
+                    <button
+                      disabled={creatingTeam || registering || completingTeam || !selectedEvent.isActive}
+                      onClick={() => handleCreateTeam(selectedEvent)}
+                      className="mt-3 w-full rounded-lg border border-emerald-500 bg-emerald-600/20 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-600/30 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {creatingTeam ? "CREATING TEAM..." : "CREATE TEAM (LEADER)"}
+                    </button>
+                  </div>
+                  <div className="rounded border border-gray-700 bg-gray-900/50 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-300">Join Team</p>
+                    <div className="grid gap-2">
+                      <input
+                        value={teamCode}
+                        onChange={(event) => setTeamCode(event.target.value.toUpperCase())}
+                        placeholder="Team code"
+                        className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-gray-400"
+                      />
+                      <input
+                        value={inviteToken}
+                        onChange={(event) => setInviteToken(event.target.value)}
+                        placeholder="Invite token (optional)"
+                        className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-gray-400"
+                      />
+                    </div>
+                    <button
+                      disabled={registering || creatingTeam || completingTeam || !selectedEvent.isActive}
+                      onClick={() => handleRegister(selectedEvent)}
+                      className="mt-3 w-full rounded-lg border border-cyan-500 bg-cyan-600/20 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-600/30 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {registering ? "JOINING TEAM..." : "JOIN TEAM"}
+                    </button>
+                  </div>
                 </div>
+                {latestTeamCode && (
+                  <p className="mt-3 rounded border border-emerald-700 bg-emerald-900/30 px-3 py-2 text-xs text-emerald-200">
+                    Team created. Share this code: <span className="font-mono font-semibold">{latestTeamCode}</span>
+                  </p>
+                )}
                 {(selectedEvent.teamMinSize != null || selectedEvent.teamMaxSize != null) && (
                   <p className="mt-2 text-xs text-gray-400">
-                    Team size allowed: {selectedEvent.teamMinSize ?? 1} - {selectedEvent.teamMaxSize ?? "∞"}
+                    Team size required to complete: {selectedEvent.teamMinSize ?? 2} - {selectedEvent.teamMaxSize ?? 4}. Members should join with Team Code or Invite Token.
                   </p>
                 )}
               </div>
@@ -331,6 +499,8 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
             <button
               disabled={
                 registering ||
+                creatingTeam ||
+                completingTeam ||
                 !selectedEvent.isActive ||
                 (selectedEvent.spotsLeft != null && selectedEvent.spotsLeft <= 0) ||
                 (selectedEvent.teamsLeft != null && selectedEvent.teamsLeft <= 0)
@@ -345,9 +515,22 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
                 : selectedEvent.teamsLeft != null && selectedEvent.teamsLeft <= 0
                 ? "TEAM SLOTS FULL"
                 : registering
-                ? "REGISTERING..."
+                ? selectedEvent.participationMode === "TEAM"
+                  ? "JOINING TEAM..."
+                  : "REGISTERING..."
+                : selectedEvent.participationMode === "TEAM"
+                ? "JOIN TEAM"
                 : "REGISTER FOR THIS EVENT"}
             </button>
+            {selectedEvent.participationMode === "TEAM" && (
+              <button
+                disabled={completingTeam || registering || creatingTeam || !selectedEvent.isActive}
+                onClick={() => handleCompleteTeam(selectedEvent)}
+                className="mt-3 w-full rounded-lg border border-gray-500 py-3 font-semibold text-gray-100 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {completingTeam ? "COMPLETING TEAM..." : "COMPLETE & LOCK TEAM (LEADER)"}
+              </button>
+            )}
             {feedback && <p className="mt-3 text-xs text-gray-300">{feedback}</p>}
           </div>
         </div>

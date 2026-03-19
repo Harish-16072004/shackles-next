@@ -25,6 +25,9 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    serverComponentsExternalPackages: ["sharp", "pdfkit"],
+  },
   images: {
     remotePatterns: [
       {
@@ -39,8 +42,8 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
   swcMinify: true,
   onDemandEntries: {
-    maxInactiveAge: 15 * 1000,
-    pagesBufferLength: 2,
+    maxInactiveAge: 60 * 1000,
+    pagesBufferLength: 8,
   },
 };
 

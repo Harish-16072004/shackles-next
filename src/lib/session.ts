@@ -7,9 +7,14 @@ const secretKey = getRequiredEnv('SESSION_SECRET')
 const encodedKey = new TextEncoder().encode(secretKey)
 
 // 1. Create the Session (Login)
-export async function createSession(userId: string, role: string) {
+export async function createSession(userId: string, role: string, displayName?: string) {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
-  const session = await new SignJWT({ userId, role })
+  const sessionPayload: { userId: string; role: string; displayName?: string } = { userId, role }
+  if (displayName) {
+    sessionPayload.displayName = displayName
+  }
+
+  const session = await new SignJWT(sessionPayload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')

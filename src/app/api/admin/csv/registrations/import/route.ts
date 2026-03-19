@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -16,6 +17,10 @@ function normalizeName(name: string) {
   return name.trim().toUpperCase();
 }
 
+function normalizeTeamName(name: string) {
+  return name.trim().replace(/\s+/g, " ").toUpperCase();
+}
+
 function toTeamSize(value: string) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 1) return 1;
@@ -26,6 +31,18 @@ function toBool(value: string, fallback = false) {
   if (!value) return fallback;
   const normalized = value.toLowerCase();
   return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function parseTeamStatus(value: string): "DRAFT" | "COMPLETED" | "LOCKED" | null {
+  const normalized = value.trim().toUpperCase();
+  if (normalized === "DRAFT" || normalized === "COMPLETED" || normalized === "LOCKED") return normalized;
+  return null;
+}
+
+function parseMemberRole(value: string): "LEADER" | "MEMBER" | null {
+  const normalized = value.trim().toUpperCase();
+  if (normalized === "LEADER" || normalized === "MEMBER") return normalized;
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -49,7 +66,7 @@ export async function POST(request: Request) {
   }
 
   const events = await prisma.event.findMany({ select: { id: true, name: true } });
-  const users = await prisma.user.findMany({ select: { id: true, email: true } });
+  const users = await prisma.user.findMany({ select: { id: true, email: true, phone: true } });
 
   const eventByName = new Map(events.map((event) => [normalizeName(event.name), event.id]));
   const userByEmail = new Map(users.map((user) => [user.email.toLowerCase(), user.id]));
@@ -77,8 +94,52 @@ export async function POST(request: Request) {
 
     const attended = toBool(readCsvField(row, headerMap, "attended"), false);
     const attendedAtRaw = readCsvField(row, headerMap, "attendedAt");
+    const rawTeamName = readCsvField(row, headerMap, "teamName").trim();
+    const rawTeamStatus = parseTeamStatus(readCsvField(row, headerMap, "teamStatus"));
+    const rawMemberRole = parseMemberRole(readCsvField(row, headerMap, "memberRole"));
 
     if (!dryRun) {
+      const event = events.find((item) => item.id === eventId);
+      if (!event) {
+        skipped += 1;
+        continue;
+      }
+
+      let teamId: string | null = null;
+      if (event && eventId && rawTeamName && eventByName.get(normalizeName(event.name)) === eventId) {
+        const teamStatus = rawTeamStatus || "DRAFT";
+        const normalizedTeam = normalizeTeamName(rawTeamName);
+        const userRecord = users.find((u) => u.id === userId);
+
+        const team = await prisma.team.upsert({
+          where: {
+            eventId_nameNormalized: {
+              eventId,
+              nameNormalized: normalizedTeam,
+            },
+          },
+          create: {
+            eventId,
+            name: rawTeamName,
+            nameNormalized: normalizedTeam,
+            teamCode: crypto.randomBytes(4).toString("hex").toUpperCase(),
+            memberCount: 0,
+            status: teamStatus,
+            leaderUserId: rawMemberRole === "LEADER" ? userId : null,
+            leaderContactPhoneSnapshot: rawMemberRole === "LEADER" ? userRecord?.phone || null : null,
+            leaderContactEmailSnapshot: rawMemberRole === "LEADER" ? userRecord?.email || null : null,
+          },
+          update: {
+            status: teamStatus,
+            leaderUserId: rawMemberRole === "LEADER" ? userId : undefined,
+            leaderContactPhoneSnapshot: rawMemberRole === "LEADER" ? userRecord?.phone || null : undefined,
+            leaderContactEmailSnapshot: rawMemberRole === "LEADER" ? userRecord?.email || null : undefined,
+          },
+        });
+
+        teamId = team.id;
+      }
+
       await prisma.eventRegistration.upsert({
         where: {
           userId_eventId: {
@@ -89,13 +150,17 @@ export async function POST(request: Request) {
         create: {
           userId,
           eventId,
-          teamName: readCsvField(row, headerMap, "teamName") || null,
+          teamId,
+          memberRole: rawMemberRole,
+          teamName: rawTeamName || null,
           teamSize: toTeamSize(readCsvField(row, headerMap, "teamSize")),
           attended,
           attendedAt: attendedAtRaw ? new Date(attendedAtRaw) : null,
         },
         update: {
-          teamName: readCsvField(row, headerMap, "teamName") || null,
+          teamId,
+          memberRole: rawMemberRole,
+          teamName: rawTeamName || null,
           teamSize: toTeamSize(readCsvField(row, headerMap, "teamSize")),
           attended,
           attendedAt: attendedAtRaw ? new Date(attendedAtRaw) : null,
@@ -104,6 +169,23 @@ export async function POST(request: Request) {
     }
 
     imported += 1;
+  }
+
+  if (!dryRun) {
+    const teams = await prisma.team.findMany({
+      select: { id: true },
+    });
+
+    for (const team of teams) {
+      const count = await prisma.eventRegistration.count({
+        where: { teamId: team.id },
+      });
+
+      await prisma.team.update({
+        where: { id: team.id },
+        data: { memberCount: count },
+      });
+    }
   }
 
   if (!dryRun) {

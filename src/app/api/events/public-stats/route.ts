@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -19,12 +21,11 @@ export async function GET(request: Request) {
         registrations: {
           select: {
             teamSize: true,
+            teamId: true,
           },
         },
-        _count: {
-          select: {
-            registrations: true,
-          },
+        teams: {
+          select: { id: true },
         },
       },
       orderBy: [{ date: "asc" }, { name: "asc" }],
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
       type: event.type,
       dayLabel: event.dayLabel,
       date: event.date,
+      endDate: event.endDate,
       description: event.description,
       rulesUrl: event.rulesUrl,
       coordinatorName: event.coordinatorName,
@@ -44,22 +46,36 @@ export async function GET(request: Request) {
       contactName: event.contactName,
       contactPhone: event.contactPhone,
       participationMode: event.participationMode,
+      isAllDay: event.isAllDay,
       teamMinSize: event.teamMinSize,
       teamMaxSize: event.teamMaxSize,
       maxTeams: event.maxTeams,
       maxParticipants: event.maxParticipants,
       isActive: event.isActive,
-      registeredTeams: event._count.registrations,
-      registeredCount: event.registrations.reduce((sum, reg) => sum + (reg.teamSize || 1), 0),
+      registeredTeams:
+        event.participationMode === "TEAM"
+          ? event.teams.length
+          : event.registrations.length,
+      registeredCount: event.registrations.reduce(
+        (sum, reg) => sum + (reg.teamId ? 1 : reg.teamSize || 1),
+        0
+      ),
       teamsLeft:
         event.maxTeams == null
           ? null
-          : Math.max(event.maxTeams - event._count.registrations, 0),
+          : Math.max(
+              event.maxTeams -
+                (event.participationMode === "TEAM"
+                  ? event.teams.length
+                  : event.registrations.length),
+              0
+            ),
       spotsLeft:
         event.maxParticipants == null
           ? null
           : Math.max(
-              event.maxParticipants - event.registrations.reduce((sum, reg) => sum + (reg.teamSize || 1), 0),
+              event.maxParticipants -
+                event.registrations.reduce((sum, reg) => sum + (reg.teamId ? 1 : reg.teamSize || 1), 0),
               0
             ),
     }));

@@ -51,8 +51,14 @@ export default async function AdminDashboard() {
     prisma.accommodation.count({ where: { gender: 'FEMALE' } }),
     prisma.event.findMany({
       orderBy: { name: 'asc' },
-      include: { _count: { select: { registrations: true } } }
-    }),
+      include: {
+        registrations: {
+          select: {
+            teamSize: true,
+          },
+        },
+      }
+    }).catch(() => []),
   ]);
 
   const workshopEvents = events.filter((event) => event.name.toLowerCase().includes('workshop'));
@@ -68,7 +74,10 @@ export default async function AdminDashboard() {
     const type = (event.type || '').toUpperCase();
     return type === 'SPECIAL' && !event.name.toLowerCase().includes('workshop');
   });
-  const maxRegistrations = Math.max(1, ...events.map((event) => event._count.registrations));
+  const registrationsPerEvent = events.map((event) =>
+    event.registrations.reduce((sum, registration) => sum + (registration.teamSize || 1), 0)
+  );
+  const maxRegistrations = Math.max(1, ...registrationsPerEvent);
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -222,6 +231,8 @@ export default async function AdminDashboard() {
               </div>
               <p className="text-4xl font-bold text-gray-900">{femaleAccommodations}</p>
             </div>
+
+
           </div>
         </div>
 
@@ -281,7 +292,7 @@ export default async function AdminDashboard() {
             </a>
 
             {/* Contact Messages */}
-            <a href="/admin" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
+            <a href="/admin/audit-logs" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
               <div className="bg-indigo-100 w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
                 <svg className="w-8 h-8 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
@@ -302,13 +313,25 @@ export default async function AdminDashboard() {
             </a>
 
             {/* Kit Distribution */}
-            <a href="/admin" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
+            <a href="/admin/users?kit=ISSUED" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
               <div className="bg-red-100 w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
                 <svg className="w-8 h-8 text-red-600" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M4 4a2 2 0 012-2h4l2 2h4a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"></path>
                 </svg>
               </div>
               <p className="text-gray-900 font-semibold text-sm">Kit Distribution</p>
+            </a>
+
+            {/* ID Card Generator */}
+            <a href="/admin/id-cards" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
+              <div className="bg-rose-100 w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <svg className="w-8 h-8 text-rose-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <circle cx="9" cy="10" r="2" />
+                  <path d="M15 8h2M15 12h2M6 16h12" strokeLinecap="round" />
+                </svg>
+              </div>
+              <p className="text-gray-900 font-semibold text-sm">ID Card Generator</p>
             </a>
 
             {/* Audit Logs */}
@@ -335,7 +358,7 @@ export default async function AdminDashboard() {
                   <p className="text-gray-500 text-sm">No technical events found.</p>
                 )}
                 {technicalEvents.map((event) => {
-                  const count = event._count.registrations;
+                  const count = event.registrations.reduce((sum, registration) => sum + (registration.teamSize || 1), 0);
                   const width = Math.round((count / maxRegistrations) * 100);
                   return (
                     <div key={event.id} className="flex items-center gap-4">
@@ -359,7 +382,7 @@ export default async function AdminDashboard() {
                   <p className="text-gray-500 text-sm">No non-technical events found.</p>
                 )}
                 {nonTechnicalEvents.map((event) => {
-                  const count = event._count.registrations;
+                  const count = event.registrations.reduce((sum, registration) => sum + (registration.teamSize || 1), 0);
                   const width = Math.round((count / maxRegistrations) * 100);
                   return (
                     <div key={event.id} className="flex items-center gap-4">
@@ -383,7 +406,7 @@ export default async function AdminDashboard() {
                   <p className="text-gray-500 text-sm">No special events found.</p>
                 )}
                 {specialEvents.map((event) => {
-                  const count = event._count.registrations;
+                  const count = event.registrations.reduce((sum, registration) => sum + (registration.teamSize || 1), 0);
                   const width = Math.round((count / maxRegistrations) * 100);
                   return (
                     <div key={event.id} className="flex items-center gap-4">
@@ -407,7 +430,7 @@ export default async function AdminDashboard() {
                   <p className="text-gray-500 text-sm">No workshops found.</p>
                 )}
                 {workshopEvents.map((event) => {
-                  const count = event._count.registrations;
+                  const count = event.registrations.reduce((sum, registration) => sum + (registration.teamSize || 1), 0);
                   const width = Math.round((count / maxRegistrations) * 100);
                   return (
                     <div key={event.id} className="flex items-center gap-4">

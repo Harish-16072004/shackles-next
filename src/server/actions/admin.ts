@@ -3,6 +3,7 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getSession } from "@/lib/session";
 import { getStorageProvider, shouldUseDigitalOcean, shouldUseLocal } from "@/lib/storage-provider";
 import { uploadToSpaces } from "@/lib/digitalocean/spaces";
 import { promises as fs } from "fs";
@@ -89,12 +90,32 @@ async function uploadQrImage(qrToken: string, shacklesId: string, registrationTy
 
 export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJECT') {
   try {
+    const session = await getSession();
+    if (!session?.userId) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const reviewer = await prisma.user.findUnique({
+      where: { id: String(session.userId) },
+      select: { role: true, email: true, firstName: true, lastName: true },
+    });
+
+    if (!reviewer || reviewer.role !== "ADMIN") {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const reviewerName = `${reviewer.firstName} ${reviewer.lastName}`.trim();
+    const verifiedBy = reviewerName
+      ? `${reviewerName} (${reviewer.email})`
+      : reviewer.email;
+
     if (action === 'REJECT') {
       await prisma.payment.update({
         where: { userId },
         data: { 
           status: 'REJECTED',
-          rejectedAt: new Date()
+          rejectedAt: new Date(),
+          verifiedBy,
         }
       });
     } else {
@@ -136,7 +157,8 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
           where: { userId },
           data: { 
             status: 'VERIFIED', 
-            verifiedAt: new Date() 
+            verifiedAt: new Date(),
+            verifiedBy,
           }
         }),
         prisma.user.update({

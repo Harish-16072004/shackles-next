@@ -16,6 +16,10 @@ export default function AccommodationForm({ userId }: { userId: string }) {
     );
   };
 
+  const toggleGender = (value: "MALE" | "FEMALE") => {
+    setGender((prev) => (prev === value ? "" : value));
+  };
+
   const handleSubmit = async () => {
     if (!accepted) return alert("Please accept the rules.");
     if (!gender) return alert("Please select your gender.");
@@ -64,8 +68,7 @@ export default function AccommodationForm({ userId }: { userId: string }) {
               </div>
               <h2 className="text-2xl font-bold text-gray-900">Request Confirmed</h2>
               <p className="text-gray-500 mt-2">
-                Your accommodation spot has been reserved. <br/>
-                Please proceed to the desk for payment verification.
+                Your accommodation spot has been reserved.
               </p>
             </div>
           ) : (
@@ -98,7 +101,7 @@ export default function AccommodationForm({ userId }: { userId: string }) {
                 <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Select Gender</label>
                 <div className="flex gap-4">
                   <button 
-                    onClick={() => setGender("MALE")}
+                    onClick={() => toggleGender("MALE")}
                     className={`flex-1 py-3 rounded-lg border font-medium transition-all ${
                       gender === "MALE" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
                     }`}
@@ -106,7 +109,7 @@ export default function AccommodationForm({ userId }: { userId: string }) {
                     Male
                   </button>
                   <button 
-                    onClick={() => setGender("FEMALE")}
+                    onClick={() => toggleGender("FEMALE")}
                     className={`flex-1 py-3 rounded-lg border font-medium transition-all ${
                       gender === "FEMALE" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
                     }`}

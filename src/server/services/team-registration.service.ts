@@ -9,6 +9,7 @@ import {
   TeamStatus,
 } from "@prisma/client";
 import { getEventParticipantCount, isMaxParticipantsExceeded, isMaxTeamsExceeded } from "@/server/services/capacity.service";
+import { getActiveYear } from "@/lib/edition";
 
 export function normalizeTeamName(name: string) {
   return name.trim().replace(/\s+/g, " ").toUpperCase();
@@ -86,6 +87,8 @@ export async function addMemberToTeamEvent(input: {
   clientOperationId?: string;
   syncedAt?: Date;
 }) : Promise<TeamServiceResult> {
+  const activeYear = getActiveYear();
+
   const normalizedTeam = normalizeTeamName(input.teamName);
   if (!normalizedTeam) {
     return { success: false, reason: "INVALID_INPUT", error: "Team name is required." };
@@ -103,7 +106,10 @@ export async function addMemberToTeamEvent(input: {
   const event = await input.db.event.findFirst({
     where: {
       name: { equals: normalizeName(input.eventName), mode: "insensitive" },
+      year: activeYear,
       isActive: true,
+      isArchived: false,
+      isTemplate: false,
     },
   });
   if (!event) {
@@ -214,6 +220,8 @@ export async function bulkRegisterAndLockTeamByShacklesIds(input: {
   operationId?: string;
   syncedAt?: Date;
 }) : Promise<TeamServiceResult> {
+  const activeYear = getActiveYear();
+
   const normalizedTeam = normalizeTeamName(input.teamName || "");
   if (!normalizedTeam) {
     return { success: false, reason: "INVALID_INPUT", error: "Team name is required." };
@@ -236,7 +244,10 @@ export async function bulkRegisterAndLockTeamByShacklesIds(input: {
   const event = await input.db.event.findFirst({
     where: {
       name: { equals: normalizeName(input.eventName), mode: "insensitive" },
+      year: activeYear,
       isActive: true,
+      isArchived: false,
+      isTemplate: false,
     },
   });
   if (!event) {
@@ -449,6 +460,8 @@ export async function completeExistingTeamRegistration(input: {
   teamName: string;
   leaderUserId?: string;
 }) : Promise<TeamServiceResult> {
+  const activeYear = getActiveYear();
+
   const normalizedTeam = normalizeTeamName(input.teamName);
   if (!normalizedTeam) {
     return { success: false, reason: "INVALID_INPUT", error: "Team name is required." };
@@ -457,7 +470,10 @@ export async function completeExistingTeamRegistration(input: {
   const event = await input.db.event.findFirst({
     where: {
       name: { equals: normalizeName(input.eventName), mode: "insensitive" },
+      year: activeYear,
       isActive: true,
+      isArchived: false,
+      isTemplate: false,
     },
   });
   if (!event) {

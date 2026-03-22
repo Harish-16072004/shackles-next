@@ -17,12 +17,12 @@ function assert(condition, message) {
 
 function run() {
   const requiredFiles = [
-    "PHASE6_RELEASE_CHECKLIST.md",
-    "PHASE6_DRILL_RUNBOOK.md",
-    "PHASE6_FREEZE_POLICY.md",
-    "PHASE6_READINESS_SIGNOFF.md",
-    "PHASE5_SLO_BASELINE.md",
-    "PHASE5_CACHE_REVALIDATION_AUDIT.md",
+    "docs/PHASE6_RELEASE_CHECKLIST.md",
+    "docs/PHASE6_DRILL_RUNBOOK.md",
+    "docs/PHASE6_FREEZE_POLICY.md",
+    "docs/PHASE6_READINESS_SIGNOFF.md",
+    "docs/PHASE5_SLO_BASELINE.md",
+    "docs/PHASE5_CACHE_REVALIDATION_AUDIT.md",
   ];
 
   for (const file of requiredFiles) {
@@ -31,16 +31,16 @@ function run() {
 
   assert(exists("prisma/migrations"), "Missing prisma/migrations baseline. Create and commit a baseline migration before release sign-off.");
 
-  const checklist = read("PHASE6_RELEASE_CHECKLIST.md");
+  const checklist = read("docs/PHASE6_RELEASE_CHECKLIST.md");
   assert(checklist.includes("Rollback Verification"), "Release checklist missing rollback verification section.");
 
-  const drill = read("PHASE6_DRILL_RUNBOOK.md");
+  const drill = read("docs/PHASE6_DRILL_RUNBOOK.md");
   assert(drill.includes("RPO") && drill.includes("RTO"), "DR drill runbook must define RPO/RTO targets.");
 
-  const signoff = read("PHASE6_READINESS_SIGNOFF.md");
+  const signoff = read("docs/PHASE6_READINESS_SIGNOFF.md");
   assert(signoff.includes("Release Owner") && signoff.includes("Tech Lead") && signoff.includes("Product Owner"), "Readiness signoff must include all required role approvals.");
 
-  const freezePolicy = read("PHASE6_FREEZE_POLICY.md");
+  const freezePolicy = read("docs/PHASE6_FREEZE_POLICY.md");
   assert(freezePolicy.includes("high-risk-refactor"), "Freeze policy should include high-risk-refactor control guidance.");
 
   console.log("Phase 6 governance check passed.");

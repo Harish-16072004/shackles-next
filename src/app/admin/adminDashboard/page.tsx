@@ -4,8 +4,10 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
+import { getActiveYear } from "@/lib/edition";
 
 export default async function AdminDashboard() {
+  const activeYear = getActiveYear();
   // Get session
   const session = await getSession();
   if (!session || !session.userId) {
@@ -86,7 +88,7 @@ export default async function AdminDashboard() {
         {/* Header */}
         <div className="mb-12">
           <h1 className="text-4xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600 mt-2">SHACKLES 2025 Statistics & Management</p>
+          <p className="text-gray-600 mt-2">SHACKLES {activeYear} Statistics & Management</p>
         </div>
 
         {/* Overview Cards */}

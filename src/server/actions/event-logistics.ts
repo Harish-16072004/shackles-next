@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { getActiveYear } from "@/lib/edition";
 
 function normalizeTeamName(name: string) {
   return name.trim().replace(/\s+/g, " ").toUpperCase();
@@ -99,9 +100,19 @@ export async function updateKitStatus(userId: string) {
 // --- 3. EVENT ATTENDANCE ---
 export async function markEventAttendance(userId: string, eventName: string) {
   try {
+    const activeYear = getActiveYear();
+
     // 1. Find Event ID
-    const event = await prisma.event.findUnique({
-      where: { name: eventName }
+    const event = await prisma.event.findFirst({
+      where: {
+        name: {
+          equals: eventName,
+          mode: "insensitive",
+        },
+        year: activeYear,
+        isArchived: false,
+        isTemplate: false,
+      },
     });
 
     if (!event) return { success: false, error: "Event not found" };
@@ -149,6 +160,8 @@ export async function markEventAttendance(userId: string, eventName: string) {
 // --- 4. QUICK REGISTRATION (On-Spot) ---
 export async function quickRegisterForEvent(userId: string, eventName: string) {
   try {
+    const activeYear = getActiveYear();
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { payment: true },
@@ -161,7 +174,10 @@ export async function quickRegisterForEvent(userId: string, eventName: string) {
     const event = await prisma.event.findFirst({
       where: {
         name: { equals: eventName, mode: "insensitive" },
+        year: activeYear,
         isActive: true,
+        isArchived: false,
+        isTemplate: false,
       },
     });
     if (!event) return { success: false, error: "Event not found" };
@@ -211,8 +227,15 @@ export async function quickRegisterForEvent(userId: string, eventName: string) {
 // --- 5. GET ALL EVENTS ---
 export async function getAvailableEvents() {
   try {
+    const activeYear = getActiveYear();
+
     return await prisma.event.findMany({
-      where: { isActive: true },
+      where: {
+        year: activeYear,
+        isActive: true,
+        isArchived: false,
+        isTemplate: false,
+      },
       select: {
         name: true,
         type: true,
@@ -230,6 +253,8 @@ export async function getAvailableEvents() {
 
 export async function scannerRegisterTeamMember(userId: string, eventName: string, teamName: string) {
   try {
+    const activeYear = getActiveYear();
+
     const normalizedTeam = normalizeTeamName(teamName);
     if (!normalizedTeam) {
       return { success: false, error: "Team name is required." };
@@ -249,7 +274,10 @@ export async function scannerRegisterTeamMember(userId: string, eventName: strin
       const event = await tx.event.findFirst({
         where: {
           name: { equals: eventName, mode: "insensitive" },
+          year: activeYear,
           isActive: true,
+          isArchived: false,
+          isTemplate: false,
         },
       });
       if (!event) return { success: false as const, error: "Event not found." };
@@ -361,6 +389,8 @@ export async function scannerRegisterTeamMember(userId: string, eventName: strin
 
 export async function scannerCompleteTeamRegistration(eventName: string, teamName: string, leaderUserId?: string) {
   try {
+    const activeYear = getActiveYear();
+
     const normalizedTeam = normalizeTeamName(teamName);
     if (!normalizedTeam) {
       return { success: false, error: "Team name is required." };
@@ -370,7 +400,10 @@ export async function scannerCompleteTeamRegistration(eventName: string, teamNam
       const event = await tx.event.findFirst({
         where: {
           name: { equals: eventName, mode: "insensitive" },
+          year: activeYear,
           isActive: true,
+          isArchived: false,
+          isTemplate: false,
         },
       });
 
@@ -491,6 +524,8 @@ export async function scannerCompleteTeamRegistration(eventName: string, teamNam
 
 export async function registerCurrentUserForEvent(eventName: string) {
   try {
+    const activeYear = getActiveYear();
+
     const session = await getSession();
     if (!session?.userId) {
       return { success: false, error: "Please login to continue." };
@@ -512,7 +547,10 @@ export async function registerCurrentUserForEvent(eventName: string) {
     const event = await prisma.event.findFirst({
       where: {
         name: { equals: eventName, mode: "insensitive" },
+        year: activeYear,
         isActive: true,
+        isArchived: false,
+        isTemplate: false,
       },
     });
 

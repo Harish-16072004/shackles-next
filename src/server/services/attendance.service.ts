@@ -1,4 +1,5 @@
 import { TeamStatus } from "@prisma/client";
+import { getActiveYear } from "@/lib/edition";
 
 export type AttendanceRegistrationState = {
   id: string;
@@ -40,7 +41,10 @@ export function evaluateAttendanceState(registration: AttendanceRegistrationStat
 
 type AttendanceDb = {
   event: {
-    findUnique: (args: { where: { name: string }; select: { id: true } }) => Promise<{ id: string } | null>;
+    findFirst: (args: {
+      where: { name: { equals: string; mode: "insensitive" }; year: number; isArchived: false; isTemplate: false };
+      select: { id: true };
+    }) => Promise<{ id: string } | null>;
   };
   eventRegistration: {
     findUnique: (args: {
@@ -71,8 +75,13 @@ export async function applyAttendanceMark(input: {
   alreadyAttendedMessage?: string;
   markedMessage?: string;
 }): Promise<ApplyAttendanceResult> {
-  const event = await input.db.event.findUnique({
-    where: { name: input.eventName },
+  const event = await input.db.event.findFirst({
+    where: {
+      name: { equals: input.eventName, mode: "insensitive" },
+      year: getActiveYear(),
+      isArchived: false,
+      isTemplate: false,
+    },
     select: { id: true },
   });
 

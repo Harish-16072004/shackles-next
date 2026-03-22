@@ -54,8 +54,13 @@ function getDefaultFormData() {
   };
 }
 
-export default function RegistrationForm() {
+type RegistrationFormProps = {
+  yearShort?: string;
+};
+
+export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
   const router = useRouter();
+  const currentYearShort = yearShort || String(new Date().getUTCFullYear() % 100).padStart(2, "0");
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
@@ -337,9 +342,9 @@ export default function RegistrationForm() {
               <label className="block text-sm font-bold mb-4 text-gray-800">Select Pass Type</label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
-                  { id: "GENERAL", label: "General", price: 500, code: "SH26G" },
-                  { id: "WORKSHOP", label: "Workshop", price: 300, code: "SH26W" },
-                  { id: "COMBO", label: "Combo", price: 800, code: "SH26C" },
+                  { id: "GENERAL", label: "General", price: 500, code: `SH${currentYearShort}G` },
+                  { id: "WORKSHOP", label: "Workshop", price: 300, code: `SH${currentYearShort}W` },
+                  { id: "COMBO", label: "Combo", price: 800, code: `SH${currentYearShort}C` },
                 ].map((type) => (
                   <div 
                     key={type.id}

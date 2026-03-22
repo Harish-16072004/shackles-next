@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { csvHeaderMap, parseCsv, readCsvField } from "@/lib/csv";
 import { logAdminAudit } from "@/lib/admin-audit";
+import { getActiveYear } from "@/lib/edition";
 
 async function getAdminContext() {
   const session = await getSession();
@@ -65,7 +66,15 @@ export async function POST(request: Request) {
     return Response.json({ error: "CSV has no data rows." }, { status: 400 });
   }
 
-  const events = await prisma.event.findMany({ select: { id: true, name: true } });
+  const activeYear = getActiveYear();
+  const events = await prisma.event.findMany({
+    where: {
+      year: activeYear,
+      isArchived: false,
+      isTemplate: false,
+    },
+    select: { id: true, name: true },
+  });
   const users = await prisma.user.findMany({ select: { id: true, email: true, phone: true } });
 
   const eventByName = new Map(events.map((event) => [normalizeName(event.name), event.id]));

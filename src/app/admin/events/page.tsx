@@ -4,9 +4,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import type { Prisma } from "@prisma/client";
+import { EventParticipationMode, type Prisma } from "@prisma/client";
 import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
 import { logAdminAudit } from "@/lib/admin-audit";
+import { getActiveYear } from "@/lib/edition";
+import { archiveEventById, restoreEventById } from "@/server/services/event-archive.service";
 
 const EVENT_TYPE_OPTIONS = [
   { value: "TECHNICAL", label: "Technical" },
@@ -111,10 +113,7 @@ async function archiveEventAction(formData: FormData) {
   const eventId = (formData.get("eventId") as string | null)?.trim();
   if (!eventId) return;
 
-  await prisma.event.update({
-    where: { id: eventId },
-    data: { isActive: false },
-  });
+  await archiveEventById(prisma, eventId);
 
   revalidateEventPaths();
   revalidatePath("/admin/event-registrations");
@@ -128,7 +127,35 @@ async function archiveEventAction(formData: FormData) {
     status: "SUCCESS",
   });
 
-  redirect(`/admin/events?formReset=${Date.now()}`);
+  const year = (formData.get("year") as string | null)?.trim();
+  const selectedYear = year || String(getActiveYear());
+  redirect(`/admin/events?year=${encodeURIComponent(selectedYear)}&formReset=${Date.now()}`);
+}
+
+async function restoreEventAction(formData: FormData) {
+  'use server'
+  const admin = await assertAdmin();
+
+  const eventId = (formData.get("eventId") as string | null)?.trim();
+  if (!eventId) return;
+
+  await restoreEventById(prisma, eventId);
+
+  revalidateEventPaths();
+  revalidatePath("/admin/event-registrations");
+  revalidatePath("/admin/adminDashboard");
+
+  await logAdminAudit({
+    action: "EVENT_RESTORE",
+    actorId: admin.id,
+    actorEmail: admin.email,
+    target: eventId,
+    status: "SUCCESS",
+  });
+
+  const year = (formData.get("year") as string | null)?.trim();
+  const selectedYear = year || String(getActiveYear());
+  redirect(`/admin/events?year=${encodeURIComponent(selectedYear)}&showArchived=true&formReset=${Date.now()}`);
 }
 
 async function updateEventAction(formData: FormData) {
@@ -136,6 +163,7 @@ async function updateEventAction(formData: FormData) {
   const admin = await assertAdmin();
 
   const eventId = (formData.get("eventId") as string | null)?.trim();
+  const yearRaw = (formData.get("year") as string | null)?.trim();
   const name = (formData.get("name") as string | null)?.trim();
   const typeRaw = (formData.get("type") as string | null)?.trim();
   const dayLabelRaw = (formData.get("dayLabel") as string | null)?.trim();
@@ -153,7 +181,9 @@ async function updateEventAction(formData: FormData) {
 
   const type = typeRaw ? typeRaw.toUpperCase() : null;
   const dayLabel = dayLabelRaw ? dayLabelRaw.toUpperCase() : null;
-  const participationMode = participationModeRaw === "TEAM" ? "TEAM" : "INDIVIDUAL";
+  const participationMode = participationModeRaw === "TEAM"
+    ? EventParticipationMode.TEAM
+    : EventParticipationMode.INDIVIDUAL;
   const maxParticipants = toOptionalNumber(formData.get("maxParticipants"));
   const maxTeams = toOptionalNumber(formData.get("maxTeams"));
   const teamMinSize = toOptionalNumber(formData.get("teamMinSize"));
@@ -162,9 +192,11 @@ async function updateEventAction(formData: FormData) {
   const endDate = endDateRaw ? new Date(endDateRaw) : null;
   const isActive = isActiveRaw === "on";
   const isAllDay = isAllDayRaw === "on";
+  const year = Number(yearRaw);
 
   if ((date && Number.isNaN(date.getTime())) || (endDate && Number.isNaN(endDate.getTime()))) return;
   if (date && endDate && endDate < date) return;
+  if (!Number.isInteger(year) || year < 2000 || year > 3000) return;
 
   if (maxParticipants != null && maxParticipants < 1) return;
   if (maxTeams != null && maxTeams < 1) return;
@@ -179,6 +211,7 @@ async function updateEventAction(formData: FormData) {
     where: { id: eventId },
     data: {
       name,
+      year,
       type,
       dayLabel,
       date,
@@ -217,7 +250,7 @@ async function updateEventAction(formData: FormData) {
     },
   });
 
-  redirect("/admin/events");
+  redirect(`/admin/events?year=${encodeURIComponent(String(year))}`);
 }
 
 async function createEventAction(formData: FormData) {
@@ -225,6 +258,7 @@ async function createEventAction(formData: FormData) {
   const user = await assertAdmin();
 
   const name = (formData.get("name") as string | null)?.trim();
+  const yearRaw = (formData.get("year") as string | null)?.trim();
   const typeRaw = (formData.get("type") as string | null)?.trim();
   const dayLabelRaw = (formData.get("dayLabel") as string | null)?.trim();
   const type = typeRaw ? typeRaw.toUpperCase() : null;
@@ -235,7 +269,9 @@ async function createEventAction(formData: FormData) {
   const rulesUrl = (formData.get("rulesUrl") as string | null)?.trim() || null;
   const coordinatorDetails = parseCoordinators(formData);
   const participationModeRaw = (formData.get("participationMode") as string | null)?.trim();
-  const participationMode = participationModeRaw === "TEAM" ? "TEAM" : "INDIVIDUAL";
+  const participationMode = participationModeRaw === "TEAM"
+    ? EventParticipationMode.TEAM
+    : EventParticipationMode.INDIVIDUAL;
   const maxParticipantsRaw = (formData.get("maxParticipants") as string | null)?.trim();
   const maxTeamsRaw = (formData.get("maxTeams") as string | null)?.trim();
   const teamMinSizeRaw = (formData.get("teamMinSize") as string | null)?.trim();
@@ -250,8 +286,13 @@ async function createEventAction(formData: FormData) {
   const isActive = isActiveRaw === "on";
   const isAllDay = isAllDayRaw === "on";
   const endDate = endDateRaw ? new Date(endDateRaw) : null;
+  const year = Number(yearRaw);
 
   if (!name) {
+    return;
+  }
+
+  if (!Number.isInteger(year) || year < 2000 || year > 3000) {
     return;
   }
 
@@ -287,50 +328,52 @@ async function createEventAction(formData: FormData) {
     }
   }
 
-  await prisma.event.upsert({
-    where: { name },
-    update: {
-      type,
-      dayLabel,
-      date,
-      endDate,
-      description,
-      rulesUrl,
-      coordinatorName: coordinatorDetails.coordinatorName,
-      coordinatorPhone: coordinatorDetails.coordinatorPhone,
-      trainerName: null,
-      contactName: null,
-      contactPhone: null,
-      participationMode,
-      isAllDay,
-      teamMinSize: participationMode === "TEAM" ? teamMinSize : null,
-      teamMaxSize: participationMode === "TEAM" ? teamMaxSize : null,
-      maxTeams,
-      maxParticipants,
-      isActive,
-    },
-    create: {
+  const existingEvent = await prisma.event.findFirst({
+    where: {
       name,
-      type,
-      dayLabel,
-      date,
-      endDate,
-      description,
-      rulesUrl,
-      coordinatorName: coordinatorDetails.coordinatorName,
-      coordinatorPhone: coordinatorDetails.coordinatorPhone,
-      trainerName: null,
-      contactName: null,
-      contactPhone: null,
-      participationMode,
-      isAllDay,
-      teamMinSize: participationMode === "TEAM" ? teamMinSize : null,
-      teamMaxSize: participationMode === "TEAM" ? teamMaxSize : null,
-      maxTeams,
-      maxParticipants,
-      isActive,
+      year,
     },
+    select: { id: true },
   });
+
+  const eventData = {
+    year,
+    type,
+    dayLabel,
+    date,
+    endDate,
+    description,
+    rulesUrl,
+    coordinatorName: coordinatorDetails.coordinatorName,
+    coordinatorPhone: coordinatorDetails.coordinatorPhone,
+    trainerName: null,
+    contactName: null,
+    contactPhone: null,
+    participationMode,
+    isAllDay,
+    teamMinSize: participationMode === "TEAM" ? teamMinSize : null,
+    teamMaxSize: participationMode === "TEAM" ? teamMaxSize : null,
+    maxTeams,
+    maxParticipants,
+    isActive,
+    isArchived: false,
+    isTemplate: false,
+    templateSourceId: null,
+  };
+
+  if (existingEvent) {
+    await prisma.event.update({
+      where: { id: existingEvent.id },
+      data: eventData,
+    });
+  } else {
+    await prisma.event.create({
+      data: {
+        name,
+        ...eventData,
+      },
+    });
+  }
 
   revalidatePath("/admin/events");
   revalidatePath("/events");
@@ -353,7 +396,7 @@ async function createEventAction(formData: FormData) {
     },
   });
 
-  redirect(`/admin/events?formReset=${Date.now()}`);
+  redirect(`/admin/events?year=${encodeURIComponent(String(year))}&formReset=${Date.now()}`);
 }
 
 export default async function AdminEventsPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
@@ -366,9 +409,14 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
   const q = typeof searchParams?.q === "string" ? searchParams.q.trim() : "";
   const editId = typeof searchParams?.edit === "string" ? searchParams.edit.trim() : "";
   const formReset = typeof searchParams?.formReset === "string" ? searchParams.formReset : "base";
+  const activeYear = getActiveYear();
+  const yearParam = typeof searchParams?.year === "string" ? Number(searchParams.year) : activeYear;
+  const selectedYear = Number.isInteger(yearParam) && yearParam >= 2000 && yearParam <= 3000 ? yearParam : activeYear;
+  const showArchived = typeof searchParams?.showArchived === "string" && searchParams.showArchived === "true";
 
-  const where: Prisma.EventWhereInput = {};
+  const where: Prisma.EventWhereInput = { year: selectedYear };
   if (q) where.name = { contains: q, mode: "insensitive" };
+  if (!showArchived) where.isArchived = false;
 
   const events = await prisma.event.findMany({
     where,
@@ -451,12 +499,24 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
           <form className="flex flex-col md:flex-row gap-3 md:items-center" method="get">
             <input
+              type="number"
+              min={2000}
+              max={3000}
+              name="year"
+              defaultValue={selectedYear}
+              className="w-full md:w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+            <input
               type="text"
               name="q"
               defaultValue={q}
               placeholder="Search events"
               className="w-full md:flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
             />
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="showArchived" value="true" defaultChecked={showArchived} />
+              Show archived
+            </label>
             <button
               type="submit"
               className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800"
@@ -464,6 +524,9 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
               Apply
             </button>
           </form>
+          <p className="mt-3 text-xs text-gray-500">
+            Archive is reversible and non-destructive. It keeps registrations and logs intact.
+          </p>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
@@ -539,24 +602,40 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-700">{event.isActive ? "Active" : "Inactive"}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {event.isArchived ? "Archived" : event.isActive ? "Active" : "Inactive"}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <a
-                            href={`/admin/events?edit=${event.id}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                            href={`/admin/events?year=${selectedYear}&edit=${event.id}${q ? `&q=${encodeURIComponent(q)}` : ""}${showArchived ? "&showArchived=true" : ""}`}
                             className="rounded border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-100"
                           >
                             Edit
                           </a>
-                          <form action={archiveEventAction}>
-                            <input type="hidden" name="eventId" value={event.id} />
-                            <button
-                              type="submit"
-                              className="rounded border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
-                            >
-                              Archive
-                            </button>
-                          </form>
+                          {event.isArchived ? (
+                            <form action={restoreEventAction}>
+                              <input type="hidden" name="eventId" value={event.id} />
+                              <input type="hidden" name="year" value={selectedYear} />
+                              <button
+                                type="submit"
+                                className="rounded border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                              >
+                                Restore
+                              </button>
+                            </form>
+                          ) : (
+                            <form action={archiveEventAction}>
+                              <input type="hidden" name="eventId" value={event.id} />
+                              <input type="hidden" name="year" value={selectedYear} />
+                              <button
+                                type="submit"
+                                className="rounded border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                              >
+                                Archive
+                              </button>
+                            </form>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -583,6 +662,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
             </div>
             <form action={updateEventAction} className="space-y-3">
               <input type="hidden" name="eventId" value={editingEvent.id} />
+              <input type="hidden" name="year" value={editingEvent.year} />
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Event Name*
@@ -702,6 +782,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900 mb-3">Create Event</h2>
           <form key={formReset} action={createEventAction} className="space-y-3" autoComplete="off">
+            <input type="hidden" name="year" value={selectedYear} />
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Event Name*

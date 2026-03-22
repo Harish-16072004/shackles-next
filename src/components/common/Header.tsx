@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { deleteSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { getActiveYear, getActiveYearShort } from "@/lib/edition";
 
 const publicNavItems = [
   { label: "Home", href: "/" },
@@ -13,6 +14,9 @@ const publicNavItems = [
 ];
 
 export default async function Header() {
+  const activeYear = getActiveYear();
+  const activeYearShort = getActiveYearShort();
+  const previousYearShort = String((activeYear - 1) % 100).padStart(2, "0");
   const session = await getSession();
   const sessionRole = typeof session?.role === "string" ? session.role : null;
   const sessionDisplayName =
@@ -49,7 +53,7 @@ export default async function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
             <span className="text-2xl font-black tracking-tight text-pink-600">
-              SHACKLES 25-26
+              SHACKLES {previousYearShort}-{activeYearShort}
             </span>
           </Link>
 

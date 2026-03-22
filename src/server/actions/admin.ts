@@ -6,9 +6,10 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getStorageProvider, shouldUseDigitalOcean, shouldUseLocal } from "@/lib/storage-provider";
 import { uploadToSpaces } from "@/lib/digitalocean/spaces";
-import { getActiveYear, getActiveYearShort } from "@/lib/edition";
+import { getActiveYear } from "@/lib/edition";
 import { promises as fs } from "fs";
 import path from "path";
+import { allocateShacklesId } from "@/server/services/shackles-id.service";
 
 type QrUploadResult = {
   qrImageUrl: string | null;
@@ -104,40 +105,35 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) return { success: false, error: "User not found" };
 
-      const yearShort = getActiveYearShort();
-      const typeSegment = user.registrationType === 'WORKSHOP' ? 'W' : user.registrationType === 'COMBO' ? 'C' : 'G';
-      const prefix = `SH${yearShort}${typeSegment}`;
+      const activeYear = getActiveYear();
 
       const maxRetries = 5;
       let approved = false;
 
       for (let attempt = 0; attempt < maxRetries && !approved; attempt += 1) {
-        const count = await prisma.user.count({
-          where: {
-            role: 'PARTICIPANT',
-            registrationType: user.registrationType,
-            shacklesId: { startsWith: prefix },
-          },
-        });
-
-        const nextId = (count + 1).toString().padStart(3, '0');
-        const shacklesId = `${prefix}${nextId}`;
-
         const qrToken = crypto.randomBytes(32).toString('hex');
         const qrTokenExpiry = new Date();
         qrTokenExpiry.setDate(qrTokenExpiry.getDate() + 30);
-        const qrUpload = await uploadQrImage(qrToken, shacklesId, user.registrationType);
 
         try {
-          await prisma.$transaction([
-            prisma.payment.update({
+          await prisma.$transaction(async (tx) => {
+            const shacklesId = await allocateShacklesId({
+              tx,
+              year: activeYear,
+              registrationType: user.registrationType,
+            });
+
+            const qrUpload = await uploadQrImage(qrToken, shacklesId, user.registrationType);
+
+            await tx.payment.update({
               where: { userId },
               data: {
                 status: 'VERIFIED',
                 verifiedAt: new Date(),
               },
-            }),
-            prisma.user.update({
+            });
+
+            await tx.user.update({
               where: { id: userId },
               data: {
                 role: 'PARTICIPANT',
@@ -147,8 +143,8 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
                 qrPath: qrUpload.qrPath,
                 qrTokenExpiry,
               },
-            }),
-          ]);
+            });
+          }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
           approved = true;
         } catch (error) {

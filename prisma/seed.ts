@@ -4,6 +4,7 @@ import { hash } from 'bcryptjs'
 const prisma = new PrismaClient()
 
 async function main() {
+  const activeYear = Number(process.env.ACTIVE_YEAR) || new Date().getUTCFullYear()
   const password = await hash('admin123', 10) // Default password
 
   const admin = await prisma.user.upsert({
@@ -37,16 +38,27 @@ async function main() {
 
   for (const evt of events) {
     await prisma.event.upsert({
-      where: { name: evt.name },
-      update: {},
+      where: { year_name: { year: activeYear, name: evt.name } },
+      update: {
+        type: evt.type,
+        isTemplate: true,
+        isArchived: false,
+        isActive: false,
+        templateSourceId: null,
+      },
       create: {
-         name: evt.name,
-         type: evt.type,
-         date: new Date() // Set to today for now
-      }
+        name: evt.name,
+        year: activeYear,
+        type: evt.type,
+        date: new Date(),
+        isTemplate: true,
+        isArchived: false,
+        isActive: false,
+        templateSourceId: null,
+      },
     })
   }
-  console.log("Events Seeded")
+  console.log("Template events seeded")
 }
 
 main()

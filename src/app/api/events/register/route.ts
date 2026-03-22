@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { TeamMemberRole, TeamStatus } from "@prisma/client";
 import { sendTeamInviteEmail } from "@/lib/email";
+import { getActiveYear } from "@/lib/edition";
 
 function normalizeName(name: string) {
   return name.trim().toUpperCase();
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
     }
 
     const normalizedEventName = normalizeName(eventName);
+    const activeYear = getActiveYear();
 
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({
@@ -122,10 +124,14 @@ export async function POST(request: Request) {
             equals: normalizedEventName,
             mode: "insensitive",
           },
+          year: activeYear,
+          isArchived: false,
+          isTemplate: false,
+          isActive: true,
         },
       });
 
-      if (!event || !event.isActive) {
+      if (!event) {
         return { ok: false as const, code: 404, error: "Event is not available." };
       }
 
@@ -139,6 +145,9 @@ export async function POST(request: Request) {
             userId: user.id,
             eventId: { not: event.id },
             event: {
+              year: activeYear,
+              isArchived: false,
+              isTemplate: false,
               isAllDay: false,
               date: { not: null },
             },

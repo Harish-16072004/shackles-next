@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient, RegistrationSource, RegistrationSyncStatus } from "@prisma/client";
 import { getEventParticipantCount, isMaxParticipantsExceeded, isMaxTeamsExceeded } from "@/server/services/capacity.service";
 import { normalizeName } from "@/server/services/team-registration.service";
+import { getActiveYear } from "@/lib/edition";
 
 type DbClient = Prisma.TransactionClient | PrismaClient;
 
@@ -18,6 +19,8 @@ export async function quickRegisterAndMarkAttendance(input: {
   teamEventMessage?: string;
   successMessage?: string;
 }): Promise<EventRegistrationServiceResult> {
+  const activeYear = getActiveYear();
+
   const user = await input.db.user.findUnique({
     where: { id: input.userId },
     include: { payment: true },
@@ -38,7 +41,10 @@ export async function quickRegisterAndMarkAttendance(input: {
   const event = await input.db.event.findFirst({
     where: {
       name: { equals: normalizeName(input.eventName), mode: "insensitive" },
+      year: activeYear,
       isActive: true,
+      isArchived: false,
+      isTemplate: false,
     },
   });
 

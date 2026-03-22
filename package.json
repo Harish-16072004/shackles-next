@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "bootstrap:year": "tsx scripts/bootstrap-year.ts",
+    "archive:year:export": "tsx scripts/archive-year-export.ts",
+    "archive:year:restore-drill": "tsx scripts/archive-year-restore-drill.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.888.0",

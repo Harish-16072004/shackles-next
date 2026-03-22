@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { stringifyCsvRow } from "@/lib/csv";
 import { logAdminAudit } from "@/lib/admin-audit";
+import { getActiveYear } from "@/lib/edition";
 
 async function getAdminContext() {
   const session = await getSession();
@@ -17,13 +18,18 @@ export async function GET() {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  const activeYear = getActiveYear();
   const events = await prisma.event.findMany({
+    where: {
+      year: activeYear,
+    },
     orderBy: [{ name: "asc" }],
   });
 
   const lines = [
     stringifyCsvRow([
       "name",
+      "year",
       "type",
       "dayLabel",
       "date",
@@ -44,6 +50,7 @@ export async function GET() {
     ...events.map((event) =>
       stringifyCsvRow([
         event.name,
+        event.year,
         event.type,
         event.dayLabel,
         event.date ? event.date.toISOString().slice(0, 10) : "",

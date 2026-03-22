@@ -20,6 +20,76 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Yearly Edition Bootstrap
+
+This project supports multi-year operation with one database.
+
+### Seed template events
+
+Template events are seeded with `isTemplate=true` for `ACTIVE_YEAR`.
+
+```bash
+npm run prisma db seed
+```
+
+### Clone templates to a target year
+
+Create active, non-template events for a new year from template rows:
+
+```bash
+npm run bootstrap:year -- 2027 --from=2026
+```
+
+Dry run mode:
+
+```bash
+npm run bootstrap:year -- 2027 --from=2026 --dry-run
+```
+
+Notes:
+- The command is idempotent for already-cloned template sets.
+- Existing target-year events are not deleted.
+- Historical years remain in the same DB and can be archived without hard deletion.
+
+### Year switch configuration
+
+Set yearly controls through environment variables:
+
+- `ACTIVE_YEAR`: active public year scope
+- `ACTIVE_THEME_KEY`: visual theme key (`default`, `classic`, `future`)
+- `ACTIVE_PUBLIC_DOMAIN`: public domain for metadata and deployment context
+
+At yearly rollover:
+
+1. Seed/verify template rows for source year.
+2. Run `npm run bootstrap:year -- <targetYear> --from=<sourceYear>`.
+3. Update `ACTIVE_YEAR`, `ACTIVE_THEME_KEY`, `ACTIVE_PUBLIC_DOMAIN`.
+4. Archive previous year events in admin events page.
+
+Validate with tests:
+
+```bash
+npx vitest run tests/unit/edition.test.ts tests/unit/shackles-id.service.test.ts tests/integration/year-visibility.routes.test.ts tests/integration/event-archive.service.test.ts tests/integration/shackles-id.sequence.test.ts tests/integration/year-bootstrap.service.test.ts
+```
+
+### Archive operations
+
+Export yearly archive snapshot:
+
+```bash
+npm run archive:year:export -- 2026
+```
+
+Run restore drill for one archived event in a year:
+
+```bash
+npm run archive:year:restore-drill -- 2026
+```
+
+Operational checklist and rollback workflow:
+
+- `docs/YEARLY_ROLLOVER_RUNBOOK.md`
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { csvHeaderMap, parseCsv, readCsvField } from "@/lib/csv";
 import { logAdminAudit } from "@/lib/admin-audit";
+import { getActiveYear } from "@/lib/edition";
+import { EventParticipationMode } from "@prisma/client";
 
 async function getAdminContext() {
   const session = await getSession();
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
   }
 
   const headerMap = csvHeaderMap(rows[0]);
+  const activeYear = getActiveYear();
   let imported = 0;
   let skipped = 0;
 
@@ -59,7 +62,14 @@ export async function POST(request: Request) {
     const dayLabel = readCsvField(row, headerMap, "dayLabel").toUpperCase() || null;
     const dateRaw = readCsvField(row, headerMap, "date");
     const modeRaw = readCsvField(row, headerMap, "participationMode").toUpperCase();
-    const participationMode = modeRaw === "TEAM" ? "TEAM" : "INDIVIDUAL";
+    const yearRaw = readCsvField(row, headerMap, "year");
+    const parsedYear = Number(yearRaw);
+    const year = Number.isInteger(parsedYear) && parsedYear >= 2000 && parsedYear <= 3000
+      ? parsedYear
+      : activeYear;
+    const participationMode = modeRaw === "TEAM"
+      ? EventParticipationMode.TEAM
+      : EventParticipationMode.INDIVIDUAL;
 
     const teamMinSize = toInt(readCsvField(row, headerMap, "teamMinSize"));
     const teamMaxSize = toInt(readCsvField(row, headerMap, "teamMaxSize"));
@@ -67,46 +77,47 @@ export async function POST(request: Request) {
     const maxParticipants = toInt(readCsvField(row, headerMap, "maxParticipants"));
 
     if (!dryRun) {
-      await prisma.event.upsert({
-        where: { name },
-        create: {
-          name,
-          type,
-          dayLabel,
-          date: dateRaw ? new Date(dateRaw) : null,
-          description: readCsvField(row, headerMap, "description") || null,
-          rulesUrl: readCsvField(row, headerMap, "rulesUrl") || null,
-          coordinatorName: readCsvField(row, headerMap, "coordinatorName") || null,
-          coordinatorPhone: readCsvField(row, headerMap, "coordinatorPhone") || null,
-          trainerName: readCsvField(row, headerMap, "trainerName") || null,
-          contactName: readCsvField(row, headerMap, "contactName") || null,
-          contactPhone: readCsvField(row, headerMap, "contactPhone") || null,
-          participationMode,
-          teamMinSize: participationMode === "TEAM" ? teamMinSize : null,
-          teamMaxSize: participationMode === "TEAM" ? teamMaxSize : null,
-          maxTeams,
-          maxParticipants,
-          isActive: toBool(readCsvField(row, headerMap, "isActive"), true),
-        },
-        update: {
-          type,
-          dayLabel,
-          date: dateRaw ? new Date(dateRaw) : null,
-          description: readCsvField(row, headerMap, "description") || null,
-          rulesUrl: readCsvField(row, headerMap, "rulesUrl") || null,
-          coordinatorName: readCsvField(row, headerMap, "coordinatorName") || null,
-          coordinatorPhone: readCsvField(row, headerMap, "coordinatorPhone") || null,
-          trainerName: readCsvField(row, headerMap, "trainerName") || null,
-          contactName: readCsvField(row, headerMap, "contactName") || null,
-          contactPhone: readCsvField(row, headerMap, "contactPhone") || null,
-          participationMode,
-          teamMinSize: participationMode === "TEAM" ? teamMinSize : null,
-          teamMaxSize: participationMode === "TEAM" ? teamMaxSize : null,
-          maxTeams,
-          maxParticipants,
-          isActive: toBool(readCsvField(row, headerMap, "isActive"), true),
-        },
+      const eventData = {
+        year,
+        type,
+        dayLabel,
+        date: dateRaw ? new Date(dateRaw) : null,
+        description: readCsvField(row, headerMap, "description") || null,
+        rulesUrl: readCsvField(row, headerMap, "rulesUrl") || null,
+        coordinatorName: readCsvField(row, headerMap, "coordinatorName") || null,
+        coordinatorPhone: readCsvField(row, headerMap, "coordinatorPhone") || null,
+        trainerName: readCsvField(row, headerMap, "trainerName") || null,
+        contactName: readCsvField(row, headerMap, "contactName") || null,
+        contactPhone: readCsvField(row, headerMap, "contactPhone") || null,
+        participationMode,
+        teamMinSize: participationMode === "TEAM" ? teamMinSize : null,
+        teamMaxSize: participationMode === "TEAM" ? teamMaxSize : null,
+        maxTeams,
+        maxParticipants,
+        isActive: toBool(readCsvField(row, headerMap, "isActive"), true),
+        isArchived: false,
+        isTemplate: false,
+        templateSourceId: null,
+      };
+
+      const existingEvent = await prisma.event.findFirst({
+        where: { name, year },
+        select: { id: true },
       });
+
+      if (existingEvent) {
+        await prisma.event.update({
+          where: { id: existingEvent.id },
+          data: eventData,
+        });
+      } else {
+        await prisma.event.create({
+          data: {
+            name,
+            ...eventData,
+          },
+        });
+      }
     }
 
     imported += 1;

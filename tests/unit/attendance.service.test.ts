@@ -42,7 +42,7 @@ describe("attendance.service applyAttendanceMark", () => {
 
     const db = {
       event: {
-        findUnique: vi.fn().mockResolvedValue({ id: "event-1" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "event-1" }),
       },
       eventRegistration: {
         findUnique: vi.fn().mockResolvedValue({
@@ -70,7 +70,7 @@ describe("attendance.service applyAttendanceMark", () => {
 
     const db = {
       event: {
-        findUnique: vi.fn().mockResolvedValue({ id: "event-1" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "event-1" }),
       },
       eventRegistration: {
         findUnique: vi.fn().mockResolvedValue({

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { stringifyCsvRow } from "@/lib/csv";
 import { logAdminAudit } from "@/lib/admin-audit";
+import { getActiveYear } from "@/lib/edition";
 
 async function getAdminContext() {
   const session = await getSession();
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const eventId = searchParams.get("eventId")?.trim() || "";
+  const activeYear = getActiveYear();
 
   const eventFilter = eventId
     ? await prisma.event.findUnique({ where: { id: eventId }, select: { id: true, name: true } })
@@ -37,7 +39,15 @@ export async function GET(request: Request) {
   }
 
   const registrations = await prisma.eventRegistration.findMany({
-    where: eventFilter ? { eventId: eventFilter.id } : undefined,
+    where: eventFilter
+      ? { eventId: eventFilter.id }
+      : {
+          event: {
+            year: activeYear,
+            isArchived: false,
+            isTemplate: false,
+          },
+        },
     include: {
       event: true,
       user: true,

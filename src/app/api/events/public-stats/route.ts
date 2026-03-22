@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getActiveYear } from "@/lib/edition";
 
 export const dynamic = "force-dynamic";
 
@@ -7,22 +8,30 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const rawCategory = searchParams.get("category")?.trim();
+    const activeYear = getActiveYear();
 
     const events = await prisma.event.findMany({
       where: rawCategory
         ? {
+            year: activeYear,
             isActive: true,
+            isArchived: false,
+            isTemplate: false,
             type: {
               equals: rawCategory,
               mode: "insensitive",
             },
           }
         : {
+            year: activeYear,
             isActive: true,
+            isArchived: false,
+            isTemplate: false,
           },
       select: {
         id: true,
         name: true,
+        year: true,
         type: true,
         dayLabel: true,
         date: true,
@@ -86,6 +95,7 @@ export async function GET(request: Request) {
     const payload = events.map((event) => ({
       id: event.id,
       name: event.name,
+      year: event.year,
       type: event.type,
       dayLabel: event.dayLabel,
       date: event.date,

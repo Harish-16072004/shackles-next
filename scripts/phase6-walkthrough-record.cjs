@@ -12,10 +12,10 @@ function run() {
     `- Method: tabletop walkthrough\n` +
     `- Participants (role-based): Release Owner, Tech Lead, Product Owner\n\n` +
     `## Artifacts Walked Through\n` +
-    `- PHASE6_RELEASE_CHECKLIST.md\n` +
-    `- PHASE6_DRILL_RUNBOOK.md\n` +
-    `- PHASE6_FREEZE_POLICY.md\n` +
-    `- PHASE6_READINESS_SIGNOFF.md\n\n` +
+    `- docs/PHASE6_RELEASE_CHECKLIST.md\n` +
+    `- docs/PHASE6_DRILL_RUNBOOK.md\n` +
+    `- docs/PHASE6_FREEZE_POLICY.md\n` +
+    `- docs/PHASE6_READINESS_SIGNOFF.md\n\n` +
     `## Outcomes\n` +
     `- [x] Release checklist flow reviewed\n` +
     `- [x] Rollback verification steps reviewed\n` +

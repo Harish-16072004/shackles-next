@@ -29,6 +29,27 @@ enum PaymentStatus {
   REJECTED
 }
 
+enum RegistrationSource {
+  ONLINE
+  ON_SPOT
+  CSV_IMPORT
+}
+
+enum RegistrationSyncStatus {
+  PENDING
+  APPLIED
+  CONFLICT
+  FAILED
+}
+
+enum RegistrationOperationType {
+  KIT
+  ATTENDANCE
+  QUICK_REGISTER
+  TEAM_ADD
+  TEAM_COMPLETE
+}
+
 enum KitStatus {
   PENDING
   ISSUED
@@ -157,7 +178,8 @@ model Accommodation {
 
 model Event {
   id          String   @id @default(cuid())
-  name        String   @unique // 'Paper Presentation', 'Aqua Missile'
+  name        String   // 'Paper Presentation', 'Aqua Missile'
+  year        Int      @default(dbgenerated("EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER"))
   type        String?  // 'TECHNICAL', 'NON-TECHNICAL', 'SPECIAL', 'WORKSHOP'
   dayLabel    String?
   date        DateTime?
@@ -176,10 +198,19 @@ model Event {
   maxTeams    Int?
   maxParticipants Int?
   isActive    Boolean  @default(true)
+  isArchived  Boolean  @default(false)
+  isTemplate  Boolean  @default(false)
+  templateSourceId String?
+  templateSource Event? @relation("EventTemplateSource", fields: [templateSourceId], references: [id])
+  templateCopies Event[] @relation("EventTemplateSource")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   registrations EventRegistration[]
   teams       Team[]
+
+  @@unique([year, name])
+  @@index([year, isArchived, isActive])
+  @@index([year, isTemplate])
 }
 
 model Team {
@@ -243,6 +274,52 @@ model EventRegistration {
   
   attended  Boolean  @default(false)
   attendedAt DateTime?
+  source    RegistrationSource @default(ONLINE)
+  syncStatus RegistrationSyncStatus @default(APPLIED)
+  stationId String?
+  clientOperationId String? @unique
+  syncError String?
+  syncedAt  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime?
+  year      Int?
 
   @@unique([userId, eventId]) // Prevent duplicate registration
+  @@index([year, eventId])
+  @@index([eventId, source])
+}
+
+model RegistrationOperation {
+  id               String                    @id @default(cuid())
+  operationId      String                    @unique
+  stationId        String
+  operationType    RegistrationOperationType
+  actorUserId      String?
+  participantId    String?
+  eventName        String?
+  teamName         String?
+  teamLeaderUserId String?
+  payload          Json?
+  payloadHash      String?
+  status           RegistrationSyncStatus    @default(PENDING)
+  conflictReason   String?
+  errorMessage     String?
+  processedAt      DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  @@index([stationId, createdAt])
+  @@index([status, createdAt])
+  @@index([participantId])
+}
+
+model ShacklesIdSequence {
+  id               String           @id @default(cuid())
+  year             Int
+  registrationType RegistrationType
+  lastIssued       Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([year, registrationType])
 }

@@ -1,6 +1,25 @@
 import withPWAInit from "next-pwa";
 import defaultRuntimeCaching from "next-pwa/cache.js";
 
+const activePublicDomain = process.env.ACTIVE_PUBLIC_DOMAIN?.trim() || "";
+const doSpacesEndpointHost = process.env.DO_SPACES_ENDPOINT
+  ? (() => {
+      try {
+        return new URL(process.env.DO_SPACES_ENDPOINT).hostname;
+      } catch {
+        return "";
+      }
+    })()
+  : "";
+
+const remoteHosts = Array.from(
+  new Set([
+    "shackles-dev.sgp1.cdn.digitaloceanspaces.com",
+    activePublicDomain,
+    doSpacesEndpointHost,
+  ].filter(Boolean))
+);
+
 const withPWA = withPWAInit({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
@@ -29,13 +48,11 @@ const nextConfig = {
     serverComponentsExternalPackages: ["sharp", "pdfkit"],
   },
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "shackles-dev.sgp1.cdn.digitaloceanspaces.com",
-        pathname: "/**",
-      }
-    ],
+    remotePatterns: remoteHosts.map((hostname) => ({
+      protocol: "https",
+      hostname,
+      pathname: "/**",
+    })),
   },
   compress: true,
   poweredByHeader: false,

@@ -1,0 +1,23 @@
+﻿ .vscode/settings.json                              |    3 +-
+ MIGRATION_TODO.md                                  |   10 +
+ eslint.config.mjs                                  |    6 +
+ package-lock.json                                  | 1058 +++++++++++++++++++-
+ package.json                                       |   24 +-
+ prisma/schema.prisma                               |   55 +-
+ public/sw.js                                       |    2 +-
+ src/app/admin/event-registrations/page.tsx         |    3 +
+ src/app/admin/events/page.tsx                      |   16 +-
+ src/app/admin/scanner/page.tsx                     |  645 ++++++++++--
+ .../api/admin/csv/registrations/export/route.ts    |    8 +
+ .../api/admin/csv/registrations/import/route.ts    |    5 +
+ src/app/api/events/public-stats/route.ts           |   90 +-
+ src/app/api/events/register/route.ts               |    6 +-
+ src/app/api/offline/participants/route.ts          |   14 +-
+ src/app/layout.tsx                                 |   10 +-
+ src/lib/env.ts                                     |   17 +
+ src/lib/safe-log.ts                                |   34 +-
+ src/middleware.ts                                  |    8 +-
+ src/server/actions/admin.ts                        |  135 ++-
+ src/server/actions/event-logistics.ts              |  600 +++++------
+ src/server/actions/register-full.ts                |    9 +
+ 22 files changed, 2182 insertions(+), 576 deletions(-)

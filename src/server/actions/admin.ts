@@ -1,11 +1,12 @@
 'use server'
 
 import crypto from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/session";
 import { getStorageProvider, shouldUseDigitalOcean, shouldUseLocal } from "@/lib/storage-provider";
 import { uploadToSpaces } from "@/lib/digitalocean/spaces";
+import { getActiveYear, getActiveYearShort } from "@/lib/edition";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -38,10 +39,10 @@ async function generateQrImageBuffer(qrToken: string) {
 async function uploadQrToStorage(
   qrImageBuffer: ArrayBuffer,
   shacklesId: string,
-  registrationType: string
+  registrationType: string,
+  year: number
 ) {
   const now = new Date();
-  const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
   const typeSegment = registrationType.toLowerCase();
   const spacesKey = `qr-codes/${year}/${month}/${typeSegment}/${shacklesId}.png`;
@@ -80,7 +81,7 @@ async function uploadQrToStorage(
 
 async function uploadQrImage(qrToken: string, shacklesId: string, registrationType: string): Promise<QrUploadResult> {
   const qrImageBuffer = await generateQrImageBuffer(qrToken);
-  const uploadResult = await uploadQrToStorage(qrImageBuffer, shacklesId, registrationType);
+  const uploadResult = await uploadQrToStorage(qrImageBuffer, shacklesId, registrationType, getActiveYear());
 
   return {
     qrImageUrl: null,
@@ -90,32 +91,12 @@ async function uploadQrImage(qrToken: string, shacklesId: string, registrationTy
 
 export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJECT') {
   try {
-    const session = await getSession();
-    if (!session?.userId) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const reviewer = await prisma.user.findUnique({
-      where: { id: String(session.userId) },
-      select: { role: true, email: true, firstName: true, lastName: true },
-    });
-
-    if (!reviewer || reviewer.role !== "ADMIN") {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const reviewerName = `${reviewer.firstName} ${reviewer.lastName}`.trim();
-    const verifiedBy = reviewerName
-      ? `${reviewerName} (${reviewer.email})`
-      : reviewer.email;
-
     if (action === 'REJECT') {
       await prisma.payment.update({
         where: { userId },
         data: { 
           status: 'REJECTED',
-          rejectedAt: new Date(),
-          verifiedBy,
+          rejectedAt: new Date()
         }
       });
     } else {
@@ -123,56 +104,66 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) return { success: false, error: "User not found" };
 
-      // 2. Determine Prefix based on Type
-      // General -> SH26G...
-      // Workshop -> SH26W...
-      // Combo -> SH26C...
-      let prefix = "SH26G"; 
-      if (user.registrationType === 'WORKSHOP') prefix = "SH26W";
-      if (user.registrationType === 'COMBO')    prefix = "SH26C";
+      const yearShort = getActiveYearShort();
+      const typeSegment = user.registrationType === 'WORKSHOP' ? 'W' : user.registrationType === 'COMBO' ? 'C' : 'G';
+      const prefix = `SH${yearShort}${typeSegment}`;
 
-      // 3. Count ONLY verified users in this specific category
-      // This ensures SH26G001 and SH26W001 are separate counters
-      const count = await prisma.user.count({ 
-        where: { 
-          role: 'PARTICIPANT', 
-          registrationType: user.registrationType 
-        } 
-      });
+      const maxRetries = 5;
+      let approved = false;
 
-      // 4. Generate the ID (Prefix + 3-digit number)
-      // Example: SH26C + 001 = SH26C001
-      const nextId = (count + 1).toString().padStart(3,'0');
-      const shacklesId = `${prefix}${nextId}`;
-
-      // Generate QR token only after successful payment verification
-      const qrToken = crypto.randomBytes(32).toString('hex');
-      const qrTokenExpiry = new Date();
-      qrTokenExpiry.setDate(qrTokenExpiry.getDate() + 30);
-      const qrUpload = await uploadQrImage(qrToken, shacklesId, user.registrationType);
-
-      // 5. Update Database
-      await prisma.$transaction([
-        prisma.payment.update({
-          where: { userId },
-          data: { 
-            status: 'VERIFIED', 
-            verifiedAt: new Date(),
-            verifiedBy,
-          }
-        }),
-        prisma.user.update({
-          where: { id: userId },
-          data: {
+      for (let attempt = 0; attempt < maxRetries && !approved; attempt += 1) {
+        const count = await prisma.user.count({
+          where: {
             role: 'PARTICIPANT',
-            shacklesId: shacklesId,
-            qrToken,
-            qrImageUrl: qrUpload.qrImageUrl,
-            qrPath: qrUpload.qrPath,
-            qrTokenExpiry
+            registrationType: user.registrationType,
+            shacklesId: { startsWith: prefix },
+          },
+        });
+
+        const nextId = (count + 1).toString().padStart(3, '0');
+        const shacklesId = `${prefix}${nextId}`;
+
+        const qrToken = crypto.randomBytes(32).toString('hex');
+        const qrTokenExpiry = new Date();
+        qrTokenExpiry.setDate(qrTokenExpiry.getDate() + 30);
+        const qrUpload = await uploadQrImage(qrToken, shacklesId, user.registrationType);
+
+        try {
+          await prisma.$transaction([
+            prisma.payment.update({
+              where: { userId },
+              data: {
+                status: 'VERIFIED',
+                verifiedAt: new Date(),
+              },
+            }),
+            prisma.user.update({
+              where: { id: userId },
+              data: {
+                role: 'PARTICIPANT',
+                shacklesId,
+                qrToken,
+                qrImageUrl: qrUpload.qrImageUrl,
+                qrPath: qrUpload.qrPath,
+                qrTokenExpiry,
+              },
+            }),
+          ]);
+
+          approved = true;
+        } catch (error) {
+          const prismaError = error as Prisma.PrismaClientKnownRequestError;
+          const isUniqueConflict = prismaError?.code === 'P2002';
+
+          if (!isUniqueConflict || attempt === maxRetries - 1) {
+            throw error;
           }
-        })
-      ]);
+        }
+      }
+
+      if (!approved) {
+        throw new Error('Could not allocate a unique Shackles ID for this year.');
+      }
     }
 
     revalidatePath('/admin');

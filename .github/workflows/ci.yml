@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Ensure Prisma migrations folder exists
+        run: |
+          if [ ! -d prisma/migrations ]; then
+            echo "Missing prisma/migrations. Create and commit a baseline migration using 'npx prisma migrate dev --name baseline'."
+            exit 1
+          fi
+
+      - name: Migration drift check
+        run: npm run db:drift:check
+
+      - name: Phase 6 governance artifact check
+        run: npm run phase6:governance:check
+
+      - name: Phase 6 freeze policy check
+        env:
+          RELEASE_FREEZE_ACTIVE: ${{ vars.RELEASE_FREEZE_ACTIVE }}
+          PHASE6_FREEZE_EXCEPTION: ${{ vars.PHASE6_FREEZE_EXCEPTION }}
+        run: npm run phase6:freeze:check

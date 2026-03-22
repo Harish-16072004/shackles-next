@@ -104,16 +104,16 @@ function revalidateEventPaths() {
   revalidatePath("/workshops");
 }
 
-async function deleteEventAction(formData: FormData) {
+async function archiveEventAction(formData: FormData) {
   'use server'
   const admin = await assertAdmin();
 
   const eventId = (formData.get("eventId") as string | null)?.trim();
   if (!eventId) return;
 
-  await prisma.$transaction(async (tx) => {
-    await tx.eventRegistration.deleteMany({ where: { eventId } });
-    await tx.event.delete({ where: { id: eventId } });
+  await prisma.event.update({
+    where: { id: eventId },
+    data: { isActive: false },
   });
 
   revalidateEventPaths();
@@ -121,7 +121,7 @@ async function deleteEventAction(formData: FormData) {
   revalidatePath("/admin/adminDashboard");
 
   await logAdminAudit({
-    action: "EVENT_DELETE",
+    action: "EVENT_ARCHIVE",
     actorId: admin.id,
     actorEmail: admin.email,
     target: eventId,
@@ -548,13 +548,13 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                           >
                             Edit
                           </a>
-                          <form action={deleteEventAction}>
+                          <form action={archiveEventAction}>
                             <input type="hidden" name="eventId" value={event.id} />
                             <button
                               type="submit"
-                              className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                              className="rounded border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
                             >
-                              Delete
+                              Archive
                             </button>
                           </form>
                         </div>

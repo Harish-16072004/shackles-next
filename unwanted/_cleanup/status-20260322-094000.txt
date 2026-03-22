@@ -1,0 +1,55 @@
+﻿ M .vscode/settings.json
+ M MIGRATION_TODO.md
+ M eslint.config.mjs
+ M package-lock.json
+ M package.json
+ M prisma/schema.prisma
+ M public/sw.js
+ M src/app/admin/event-registrations/page.tsx
+ M src/app/admin/events/page.tsx
+ M src/app/admin/scanner/page.tsx
+ M src/app/api/admin/csv/registrations/export/route.ts
+ M src/app/api/admin/csv/registrations/import/route.ts
+ M src/app/api/events/public-stats/route.ts
+ M src/app/api/events/register/route.ts
+ M src/app/api/offline/participants/route.ts
+ M src/app/layout.tsx
+ M src/lib/env.ts
+ M src/lib/safe-log.ts
+ M src/middleware.ts
+ M src/server/actions/admin.ts
+ M src/server/actions/event-logistics.ts
+ M src/server/actions/register-full.ts
+?? .github/
+?? ARCHITECTURE_BOUNDARIES.md
+?? MATURITY_UPGRADE_GUIDELINES.md
+?? PHASE3_CONCURRENCY_AUDIT.md
+?? PHASE3_VERIFICATION_RUNBOOK.md
+?? PHASE5_CACHE_REVALIDATION_AUDIT.md
+?? PHASE5_SLO_BASELINE.md
+?? PHASE6_DRILL_RUNBOOK.md
+?? PHASE6_FREEZE_POLICY.md
+?? PHASE6_READINESS_SIGNOFF.md
+?? PHASE6_RELEASE_CHECKLIST.md
+?? logs/release-evidence/
+?? playwright.config.ts
+?? prisma/migrations/
+?? scripts/db-drift-check.cjs
+?? scripts/phase3-regression.ts
+?? scripts/phase3-verify.cjs
+?? scripts/phase5-latency-baseline.ts
+?? scripts/phase6-drill-run.cjs
+?? scripts/phase6-evidence-init.cjs
+?? scripts/phase6-freeze-check.cjs
+?? scripts/phase6-governance-check.cjs
+?? scripts/phase6-signoff-record.cjs
+?? scripts/phase6-walkthrough-record.cjs
+?? src/app/api/admin/scanner/
+?? src/app/api/offline/operations/
+?? src/lib/edition.ts
+?? src/lib/error-contract.ts
+?? src/server/services/
+?? test-results/
+?? tests/
+?? unwanted/
+?? vitest.config.ts

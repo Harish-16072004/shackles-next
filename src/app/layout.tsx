@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Header from "@/components/common/Header";
-import { validateServerEnv } from "@/lib/env";
+import { getActiveYear } from "@/lib/edition";
 import "./globals.css";
-
-validateServerEnv();
 
 const inter = Inter({ 
   subsets: ["latin"],
@@ -13,9 +11,11 @@ const inter = Inter({
   preload: true,
 });
 
+const activeYear = getActiveYear();
+
 export const metadata: Metadata = {
-  title: "Shackles 2025 | Symposium Registration",
-  description: "Official registration portal for Shackles 2025.",
+  title: `Shackles ${activeYear} | Symposium Registration`,
+  description: `Official registration portal for Shackles ${activeYear}.`,
   manifest: "/manifest.json",
   themeColor: "#111827",
 };

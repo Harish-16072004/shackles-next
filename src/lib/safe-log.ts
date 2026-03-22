@@ -6,6 +6,26 @@ const SENSITIVE_ENV_KEYS = [
   "SMTP_PASS",
 ] as const;
 
+export type LogMeta = Record<string, unknown>;
+
+function sanitizeMeta(meta: LogMeta) {
+  try {
+    return JSON.parse(redactSensitiveValues(JSON.stringify(meta))) as LogMeta;
+  } catch {
+    return { note: "Unable to serialize log metadata safely" };
+  }
+}
+
+export function createRequestId(prefix = "req") {
+  const random = Math.random().toString(36).slice(2, 10);
+  return `${prefix}_${Date.now()}_${random}`;
+}
+
+export function resolveRequestId(candidate?: string | null) {
+  const normalized = (candidate || "").trim();
+  return normalized.length > 0 ? normalized : createRequestId();
+}
+
 function redactSensitiveValues(input: string) {
   let output = input;
 
@@ -37,7 +57,7 @@ function normalizeError(error: unknown) {
 export function safeLogError(context: string, error: unknown, meta?: Record<string, unknown>) {
   const normalized = normalizeError(error);
   if (meta) {
-    const sanitizedMeta = redactSensitiveValues(JSON.stringify(meta));
+    const sanitizedMeta = sanitizeMeta(meta);
     console.error(context, {
       error: normalized,
       meta: sanitizedMeta,
@@ -45,4 +65,16 @@ export function safeLogError(context: string, error: unknown, meta?: Record<stri
     return;
   }
   console.error(context, normalized);
+}
+
+export function safeLogInfo(context: string, message: string, meta?: LogMeta) {
+  if (!meta) {
+    console.info(context, { message: redactSensitiveValues(message) });
+    return;
+  }
+
+  console.info(context, {
+    message: redactSensitiveValues(message),
+    meta: sanitizeMeta(meta),
+  });
 }

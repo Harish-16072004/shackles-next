@@ -5,6 +5,12 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    files: ["**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -15,6 +21,8 @@ const eslintConfig = defineConfig([
     // Generated PWA artifacts:
     "public/sw.js",
     "public/workbox-*.js",
+    // Archived files moved out of active codebase:
+    "unwanted/**",
   ]),
 ]);
 

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
+import { MemberDeleteForm, TeamDeleteForm } from "@/components/features/admin/EventRegistrationDeleteForms";
 
 export default async function AdminEventRegistrationsPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const session = await getSession();
@@ -262,22 +263,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
                                     {teamsInEvent.map((team) => (
                                       <li key={team.id} className="flex items-center justify-between gap-2">
                                         <span className="font-semibold text-gray-900">{team.name} ({team.memberCount})</span>
-                                        <form
-                                          action="/api/admin/event-registrations/delete-team"
-                                          method="post"
-                                          onSubmit={(event) => {
-                                            const ok = globalThis.confirm(`Delete team \"${team.name}\" and all its members from this event?`);
-                                            if (!ok) event.preventDefault();
-                                          }}
-                                        >
-                                          <input type="hidden" name="teamId" value={team.id} />
-                                          <button
-                                            type="submit"
-                                            className="rounded border border-red-300 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
-                                          >
-                                            Delete Team
-                                          </button>
-                                        </form>
+                                        <TeamDeleteForm teamId={team.id} teamName={team.name} />
                                       </li>
                                     ))}
                                   </ul>
@@ -294,23 +280,11 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
                                         {reg.memberRole === "LEADER" || reg.team?.leaderUserId === reg.userId ? "Leader" : "Member"}
                                       </p>
                                     </div>
-                                    <form
-                                      action="/api/admin/event-registrations/delete-member"
-                                      method="post"
-                                      onSubmit={(event) => {
-                                        const fullName = `${reg.user.firstName} ${reg.user.lastName}`;
-                                        const ok = globalThis.confirm(`Delete ${fullName} from this event registration?`);
-                                        if (!ok) event.preventDefault();
-                                      }}
-                                    >
-                                      <input type="hidden" name="registrationId" value={reg.id} />
-                                      <button
-                                        type="submit"
-                                        className="rounded border border-red-300 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
-                                      >
-                                        {reg.teamId ? "Delete Member" : "Delete Participant"}
-                                      </button>
-                                    </form>
+                                    <MemberDeleteForm
+                                      registrationId={reg.id}
+                                      fullName={`${reg.user.firstName} ${reg.user.lastName}`}
+                                      hasTeam={Boolean(reg.teamId)}
+                                    />
                                   </li>
                                 ))}
                               </ul>

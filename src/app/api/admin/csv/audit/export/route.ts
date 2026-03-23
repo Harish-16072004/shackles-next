@@ -18,11 +18,12 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action") || "";
+  const status = searchParams.get("status") || "";
   const dateFrom = searchParams.get("dateFrom") || "";
   const dateTo = searchParams.get("dateTo") || "";
   const q = searchParams.get("q") || "";
 
-  const records = await readAdminAuditLogs({ action, dateFrom, dateTo, q, limit: 10000 });
+  const records = await readAdminAuditLogs({ action, status, dateFrom, dateTo, q, limit: 10000 });
 
   const lines = [
     stringifyCsvRow(["timestamp", "action", "actorEmail", "actorId", "target", "status", "details"]),

@@ -73,3 +73,8 @@ export function validateServerEnv() {
 
   validated = true;
 }
+
+export function isScannerBulkTeamFlowEnabled() {
+  const raw = process.env.ENABLE_SCANNER_BULK_TEAM_FLOW?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}

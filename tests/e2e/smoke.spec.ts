@@ -124,7 +124,7 @@ test.describe("Phase 4 E2E smoke", () => {
   });
 
   test("redirects unauthenticated scanner page to login", async ({ page }) => {
-    await page.goto("/admin/scanner");
+    await page.goto("/admin/scanner-v2");
     await expect(page).toHaveURL(/\/login/);
     await expect(page.getByRole("heading", { name: "Welcome Back" })).toBeVisible();
   });

@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { allocateShacklesId } from "../../src/server/services/shackles-id.service";
+import { runSerializableTransaction } from "../../src/server/services/transaction.service";
 
 const prisma = new PrismaClient();
 let databaseAvailable = true;
@@ -29,9 +30,10 @@ describe("integration: yearly shackles id sequence", () => {
     try {
       const parallel = await Promise.all(
         Array.from({ length: 10 }).map(() =>
-          prisma.$transaction(
+          runSerializableTransaction(
+            prisma,
             async (tx) => allocateShacklesId({ tx, year: yearA, registrationType: "GENERAL" }),
-            { isolationLevel: "Serializable" }
+            { maxRetries: 5 }
           )
         )
       );
@@ -41,16 +43,18 @@ describe("integration: yearly shackles id sequence", () => {
       expect(parallel.includes("SH27G001")).toBe(true);
       expect(parallel.includes("SH27G010")).toBe(true);
 
-      const firstNextYear = await prisma.$transaction(
+      const firstNextYear = await runSerializableTransaction(
+        prisma,
         async (tx) => allocateShacklesId({ tx, year: yearB, registrationType: "GENERAL" }),
-        { isolationLevel: "Serializable" }
+        { maxRetries: 5 }
       );
 
       expect(firstNextYear).toBe("SH28G001");
 
-      const firstWorkshop = await prisma.$transaction(
+      const firstWorkshop = await runSerializableTransaction(
+        prisma,
         async (tx) => allocateShacklesId({ tx, year: yearA, registrationType: "WORKSHOP" }),
-        { isolationLevel: "Serializable" }
+        { maxRetries: 5 }
       );
 
       expect(firstWorkshop).toBe("SH27W001");

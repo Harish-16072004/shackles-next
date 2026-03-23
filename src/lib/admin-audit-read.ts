@@ -13,6 +13,7 @@ export type AdminAuditRecord = {
 
 type FilterOptions = {
   action?: string;
+  status?: string;
   dateFrom?: string;
   dateTo?: string;
   q?: string;
@@ -56,19 +57,21 @@ export async function readAdminAuditLogs(options: FilterOptions = {}) {
     .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
 
   const actionFilter = options.action?.trim().toUpperCase();
+  const statusFilter = options.status?.trim().toUpperCase();
   const dateFrom = options.dateFrom?.trim() ? startOfDay(options.dateFrom.trim()) : null;
   const dateTo = options.dateTo?.trim() ? endOfDay(options.dateTo.trim()) : null;
   const query = options.q?.trim().toLowerCase();
 
   const filtered = records.filter((record) => {
     if (actionFilter && record.action.toUpperCase() !== actionFilter) return false;
+    if (statusFilter && (record.status || "").toUpperCase() !== statusFilter) return false;
 
     const timestamp = new Date(record.timestamp);
     if (dateFrom && timestamp < dateFrom) return false;
     if (dateTo && timestamp > dateTo) return false;
 
     if (query) {
-      const haystack = `${record.action} ${record.actorEmail || ""} ${record.actorId} ${record.target || ""} ${JSON.stringify(record.details || {})}`.toLowerCase();
+      const haystack = `${record.action} ${record.status || ""} ${record.actorEmail || ""} ${record.actorId} ${record.target || ""} ${JSON.stringify(record.details || {})}`.toLowerCase();
       if (!haystack.includes(query)) return false;
     }
 

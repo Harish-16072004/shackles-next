@@ -220,7 +220,28 @@ export async function bulkRegisterAndLockTeamByShacklesIds(input: {
   operationId?: string;
   syncedAt?: Date;
 }) : Promise<TeamServiceResult> {
+  return bulkRegisterTeamByShacklesIds({
+    ...input,
+    lockTeam: true,
+    markAttended: true,
+  });
+}
+
+export async function bulkRegisterTeamByShacklesIds(input: {
+  db: DbClient;
+  eventName: string;
+  teamName: string;
+  shacklesIds: string[];
+  leaderShacklesId: string;
+  stationId: string;
+  operationId?: string;
+  syncedAt?: Date;
+  lockTeam?: boolean;
+  markAttended?: boolean;
+}) : Promise<TeamServiceResult> {
   const activeYear = getActiveYear();
+  const shouldLockTeam = input.lockTeam ?? false;
+  const shouldMarkAttended = input.markAttended ?? false;
 
   const normalizedTeam = normalizeTeamName(input.teamName || "");
   if (!normalizedTeam) {
@@ -259,14 +280,6 @@ export async function bulkRegisterAndLockTeamByShacklesIds(input: {
 
   const teamMinSize = event.teamMinSize ?? 2;
   const teamMaxSize = event.teamMaxSize ?? 4;
-
-  if (normalizedIds.length < teamMinSize) {
-    return {
-      success: false,
-      reason: "TEAM_BELOW_MIN_SIZE",
-      error: `At least ${teamMinSize} members are required for this event.`,
-    };
-  }
 
   if (normalizedIds.length > teamMaxSize) {
     return {
@@ -393,13 +406,6 @@ export async function bulkRegisterAndLockTeamByShacklesIds(input: {
   const existingTeamMembers = await input.db.eventRegistration.count({ where: { teamId: team.id } });
   const finalMemberCount = existingTeamMembers + normalizedIds.length;
 
-  if (finalMemberCount < teamMinSize) {
-    return {
-      success: false,
-      reason: "TEAM_BELOW_MIN_SIZE",
-      error: `At least ${teamMinSize} members are required to complete team registration.`,
-    };
-  }
   if (finalMemberCount > teamMaxSize) {
     return {
       success: false,
@@ -420,8 +426,8 @@ export async function bulkRegisterAndLockTeamByShacklesIds(input: {
         teamName: team.name,
         teamSize: 1,
         memberRole: shacklesId === leaderShacklesId ? TeamMemberRole.LEADER : TeamMemberRole.MEMBER,
-        attended: true,
-        attendedAt: new Date(),
+        attended: shouldMarkAttended,
+        ...(shouldMarkAttended ? { attendedAt: new Date() } : {}),
         source: RegistrationSource.ON_SPOT,
         syncStatus: RegistrationSyncStatus.APPLIED,
         stationId: input.stationId,
@@ -436,17 +442,50 @@ export async function bulkRegisterAndLockTeamByShacklesIds(input: {
     return { success: false, reason: "INVALID_LEADER", error: "Selected leader not found." };
   }
 
+  await input.db.eventRegistration.updateMany({
+    where: { teamId: team.id },
+    data: { memberRole: TeamMemberRole.MEMBER },
+  });
+
+  await input.db.eventRegistration.updateMany({
+    where: {
+      teamId: team.id,
+      userId: leaderUser.id,
+    },
+    data: { memberRole: TeamMemberRole.LEADER },
+  });
+
+  const teamData: Prisma.TeamUpdateInput = {
+    memberCount: finalMemberCount,
+    leaderUserId: leaderUser.id,
+    leaderContactPhoneSnapshot: leaderUser.phone,
+    leaderContactEmailSnapshot: leaderUser.email,
+  };
+
+  if (shouldLockTeam) {
+    if (finalMemberCount < teamMinSize) {
+      return {
+        success: false,
+        reason: "TEAM_BELOW_MIN_SIZE",
+        error: `At least ${teamMinSize} members are required to complete team registration.`,
+      };
+    }
+
+    teamData.status = TeamStatus.LOCKED;
+    teamData.lockedAt = new Date();
+  }
+
   await input.db.team.update({
     where: { id: team.id },
-    data: {
-      memberCount: finalMemberCount,
-      leaderUserId: leaderUser.id,
-      leaderContactPhoneSnapshot: leaderUser.phone,
-      leaderContactEmailSnapshot: leaderUser.email,
-      status: TeamStatus.LOCKED,
-      lockedAt: new Date(),
-    },
+    data: teamData,
   });
+
+  if (!shouldLockTeam) {
+    return {
+      success: true,
+      message: `Team ${team.name} updated with ${finalMemberCount} members. Attendance can be marked separately.`,
+    };
+  }
 
   return {
     success: true,

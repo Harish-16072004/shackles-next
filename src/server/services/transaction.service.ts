@@ -4,6 +4,8 @@ type SerializableRetryOptions = {
   maxRetries?: number;
   baseDelayMs?: number;
   maxDelayMs?: number;
+  transactionTimeoutMs?: number;
+  maxWaitMs?: number;
 };
 
 function sleep(ms: number) {
@@ -13,6 +15,7 @@ function sleep(ms: number) {
 function isSerializableRetryableError(error: unknown) {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === "P2034") return true;
+    if (error.code === "P2028") return true;
   }
 
   if (error instanceof Error) {
@@ -35,6 +38,8 @@ export async function runSerializableTransaction<T>(
   const maxRetries = options?.maxRetries ?? 3;
   const baseDelayMs = options?.baseDelayMs ?? 40;
   const maxDelayMs = options?.maxDelayMs ?? 400;
+  const transactionTimeoutMs = options?.transactionTimeoutMs ?? 15000;
+  const maxWaitMs = options?.maxWaitMs ?? 10000;
 
   let attempt = 0;
 
@@ -42,6 +47,8 @@ export async function runSerializableTransaction<T>(
     try {
       return await prisma.$transaction(callback, {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        timeout: transactionTimeoutMs,
+        maxWait: maxWaitMs,
       });
     } catch (error) {
       if (!isSerializableRetryableError(error) || attempt >= maxRetries) {

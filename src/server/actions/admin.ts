@@ -10,6 +10,7 @@ import { getActiveYear } from "@/lib/edition";
 import { promises as fs } from "fs";
 import path from "path";
 import { allocateShacklesId } from "@/server/services/shackles-id.service";
+import { runSerializableTransaction } from "@/server/services/transaction.service";
 
 type QrUploadResult = {
   qrImageUrl: string | null;
@@ -109,6 +110,7 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
 
       const maxRetries = 5;
       let approved = false;
+      let qrUploadContext: { shacklesId: string; qrToken: string; registrationType: string } | null = null;
 
       for (let attempt = 0; attempt < maxRetries && !approved; attempt += 1) {
         const qrToken = crypto.randomBytes(32).toString('hex');
@@ -116,14 +118,12 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
         qrTokenExpiry.setDate(qrTokenExpiry.getDate() + 30);
 
         try {
-          await prisma.$transaction(async (tx) => {
+          await runSerializableTransaction(prisma, async (tx) => {
             const shacklesId = await allocateShacklesId({
               tx,
               year: activeYear,
               registrationType: user.registrationType,
             });
-
-            const qrUpload = await uploadQrImage(qrToken, shacklesId, user.registrationType);
 
             await tx.payment.update({
               where: { userId },
@@ -139,14 +139,40 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
                 role: 'PARTICIPANT',
                 shacklesId,
                 qrToken,
-                qrImageUrl: qrUpload.qrImageUrl,
-                qrPath: qrUpload.qrPath,
+                qrImageUrl: null,
+                qrPath: null,
                 qrTokenExpiry,
               },
             });
-          }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+            qrUploadContext = {
+              shacklesId,
+              qrToken,
+              registrationType: user.registrationType,
+            };
+          });
 
           approved = true;
+
+          if (qrUploadContext) {
+            try {
+              const qrUpload = await uploadQrImage(
+                qrUploadContext.qrToken,
+                qrUploadContext.shacklesId,
+                qrUploadContext.registrationType
+              );
+
+              await prisma.user.update({
+                where: { id: userId },
+                data: {
+                  qrImageUrl: qrUpload.qrImageUrl,
+                  qrPath: qrUpload.qrPath,
+                },
+              });
+            } catch (uploadError) {
+              console.warn('QR upload failed after verification. Continuing with token-only QR access.', uploadError);
+            }
+          }
         } catch (error) {
           const prismaError = error as Prisma.PrismaClientKnownRequestError;
           const isUniqueConflict = prismaError?.code === 'P2002';

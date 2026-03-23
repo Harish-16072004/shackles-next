@@ -76,12 +76,20 @@ export default async function PaymentVerificationPage({ searchParams }: { search
             <h1 className="text-3xl font-bold text-gray-900">Payment Verification</h1>
             <p className="text-gray-600">Review payment proofs and approve participant IDs.</p>
           </div>
-          <a
-            href={`/api/admin/payments/export?status=${activeStatus.toLowerCase()}`}
-            className="inline-flex items-center px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            Download {activeStatus.toLowerCase()} CSV
-          </a>
+          <div className="flex items-center gap-2">
+            <a
+              href="/admin/onspot-registration"
+              className="inline-flex items-center px-4 py-2 rounded-lg border border-emerald-300 bg-emerald-50 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+            >
+              Open On-Spot Console
+            </a>
+            <a
+              href={`/api/admin/payments/export?status=${activeStatus.toLowerCase()}`}
+              className="inline-flex items-center px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Download {activeStatus.toLowerCase()} CSV
+            </a>
+          </div>
         </div>
 
         {/* Stats */}

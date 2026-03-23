@@ -2,7 +2,7 @@
   "name": "Shackles Symposium",
   "short_name": "Shackles",
   "description": "Offline-enabled tools for Shackles 25-26 registrations and logistics.",
-  "start_url": "/admin/scanner",
+  "start_url": "/admin/scanner-v2",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#111827",

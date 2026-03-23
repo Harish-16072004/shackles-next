@@ -283,6 +283,16 @@ export default async function AdminDashboard() {
               <p className="text-gray-900 font-semibold text-sm">Verify Payments</p>
             </a>
 
+            {/* On-Spot Console */}
+            <a href="/admin/onspot-registration" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
+              <div className="bg-emerald-100 w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <svg className="w-8 h-8 text-emerald-700" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 2a6 6 0 00-6 6v2H3a1 1 0 000 2h14a1 1 0 100-2h-1V8a6 6 0 00-6-6zm-3 8V8a3 3 0 116 0v2H7zm-1 3a1 1 0 011-1h6a1 1 0 011 1v2H6v-2z"></path>
+                </svg>
+              </div>
+              <p className="text-gray-900 font-semibold text-sm">On-Spot Console</p>
+            </a>
+
             {/* Accommodations */}
             <a href="/admin/accommodations" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
               <div className="bg-pink-100 w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
@@ -305,7 +315,7 @@ export default async function AdminDashboard() {
             </a>
 
             {/* QR Scanner */}
-            <a href="/admin/scanner" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
+            <a href="/admin/scanner-v2" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
               <div className="bg-cyan-100 w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
                 <svg className="w-8 h-8 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 11-2 0V5H4a1 1 0 01-1-1zm11-1a1 1 0 100 2h1v2a1 1 0 102 0V4a1 1 0 00-1-1h-2zM3 14a1 1 0 00-1 1v2a1 1 0 001 1h2a1 1 0 100-2H4v-1a1 1 0 00-1-1zm14 0a1 1 0 00-1 1v1h-1a1 1 0 100 2h2a1 1 0 001-1v-2a1 1 0 00-1-1z"></path>

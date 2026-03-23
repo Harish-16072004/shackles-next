@@ -28,10 +28,10 @@ const withPWA = withPWAInit({
   runtimeCaching: [
     ...defaultRuntimeCaching,
     {
-      urlPattern: ({ url }) => url.pathname.startsWith("/admin/scanner"),
+      urlPattern: ({ url }) => url.pathname.startsWith("/admin/scanner-v2"),
       handler: "NetworkFirst",
       options: {
-        cacheName: "scanner-route",
+        cacheName: "scanner-v2-route",
         networkTimeoutSeconds: 5,
         expiration: {
           maxEntries: 20,

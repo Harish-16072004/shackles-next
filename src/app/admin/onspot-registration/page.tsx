@@ -88,6 +88,7 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
     : { total: 0, pending: 0, verified: 0, rejected: 0, cash: 0, online: 0 };
 
   const participants = participantsResult.success ? participantsResult.data : [];
+  const showActionsColumn = participants.some((participant) => participant.payment?.status === 'PENDING');
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -295,13 +296,13 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                     <th className="text-left px-3 py-2">Payment</th>
                     <th className="text-left px-3 py-2">Shackles ID</th>
                     <th className="text-left px-3 py-2">Recent Events</th>
-                    <th className="text-left px-3 py-2">Actions</th>
+                    {showActionsColumn && <th className="text-left px-3 py-2">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {participants.length === 0 && (
                     <tr>
-                      <td className="px-3 py-4 text-gray-500" colSpan={5}>No on-spot participants for selected filters.</td>
+                      <td className="px-3 py-4 text-gray-500" colSpan={showActionsColumn ? 5 : 4}>No on-spot participants for selected filters.</td>
                     </tr>
                   )}
                   {participants.map((user) => (
@@ -342,52 +343,47 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                           </ul>
                         )}
                       </td>
-                      <td className="px-3 py-3 space-y-2 min-w-56">
-                        {user.payment?.status === 'PENDING' && (
-                          <>
-                            <form
-                              action={async (formData) => {
-                                'use server';
-                                const userId = String(formData.get('userId') || '');
-                                const note = String(formData.get('note') || '');
-                                const deviceId = String(formData.get('deviceId') || '');
-                                const result = await approveOnSpotPayment({ userId, note, deviceId });
-                                const state = result.success ? 'Payment verified.' : (result.error || 'Failed to verify payment.');
-                                redirect(`/admin/onspot-registration?tab=verify&state=${encodeURIComponent(state)}`);
-                              }}
-                              className="space-y-1"
-                            >
-                              <input type="hidden" name="userId" value={user.id} />
-                              <input name="deviceId" placeholder="Device ID (optional)" className="w-full border rounded px-2 py-1 text-xs" />
-                              <input name="note" placeholder="Verification note (optional)" className="w-full border rounded px-2 py-1 text-xs" />
-                              <button className="w-full bg-green-600 text-white px-2 py-1.5 rounded text-xs font-semibold hover:bg-green-700">Verify Payment</button>
-                            </form>
+                      {showActionsColumn && (
+                        <td className="px-3 py-3 space-y-2 min-w-56">
+                          {user.payment?.status === 'PENDING' && (
+                            <>
+                              <form
+                                action={async (formData) => {
+                                  'use server';
+                                  const userId = String(formData.get('userId') || '');
+                                  const note = String(formData.get('note') || '');
+                                  const deviceId = String(formData.get('deviceId') || '');
+                                  const result = await approveOnSpotPayment({ userId, note, deviceId });
+                                  const state = result.success ? 'Payment verified.' : (result.error || 'Failed to verify payment.');
+                                  redirect(`/admin/onspot-registration?tab=verify&state=${encodeURIComponent(state)}`);
+                                }}
+                                className="space-y-1"
+                              >
+                                <input type="hidden" name="userId" value={user.id} />
+                                <input name="deviceId" placeholder="Device ID (optional)" className="w-full border rounded px-2 py-1 text-xs" />
+                                <input name="note" placeholder="Verification note (optional)" className="w-full border rounded px-2 py-1 text-xs" />
+                                <button className="w-full bg-green-600 text-white px-2 py-1.5 rounded text-xs font-semibold hover:bg-green-700">Verify Payment</button>
+                              </form>
 
-                            <form
-                              action={async (formData) => {
-                                'use server';
-                                const userId = String(formData.get('userId') || '');
-                                const reason = String(formData.get('reason') || '');
-                                const result = await rejectOnSpotPayment({ userId, reason });
-                                const state = result.success ? 'Payment rejected.' : (result.error || 'Failed to reject payment.');
-                                redirect(`/admin/onspot-registration?tab=verify&state=${encodeURIComponent(state)}`);
-                              }}
-                              className="space-y-1"
-                            >
-                              <input type="hidden" name="userId" value={user.id} />
-                              <input name="reason" placeholder="Rejection reason" className="w-full border rounded px-2 py-1 text-xs" />
-                              <button className="w-full bg-red-600 text-white px-2 py-1.5 rounded text-xs font-semibold hover:bg-red-700">Reject Payment</button>
-                            </form>
-                          </>
-                        )}
-
-                        <a
-                          href={user.shacklesId ? `/admin/scanner-v2?step=1&sid=${encodeURIComponent(user.shacklesId)}` : '/admin/scanner-v2'}
-                          className="inline-flex w-full justify-center bg-cyan-600 text-white px-2 py-1.5 rounded text-xs font-semibold hover:bg-cyan-700"
-                        >
-                          {user.shacklesId ? 'Open in Scanner (Prefill)' : 'Open Scanner'}
-                        </a>
-                      </td>
+                              <form
+                                action={async (formData) => {
+                                  'use server';
+                                  const userId = String(formData.get('userId') || '');
+                                  const reason = String(formData.get('reason') || '');
+                                  const result = await rejectOnSpotPayment({ userId, reason });
+                                  const state = result.success ? 'Payment rejected.' : (result.error || 'Failed to reject payment.');
+                                  redirect(`/admin/onspot-registration?tab=verify&state=${encodeURIComponent(state)}`);
+                                }}
+                                className="space-y-1"
+                              >
+                                <input type="hidden" name="userId" value={user.id} />
+                                <input name="reason" placeholder="Rejection reason" className="w-full border rounded px-2 py-1 text-xs" />
+                                <button className="w-full bg-red-600 text-white px-2 py-1.5 rounded text-xs font-semibold hover:bg-red-700">Reject Payment</button>
+                              </form>
+                            </>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

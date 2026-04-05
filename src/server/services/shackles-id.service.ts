@@ -15,8 +15,11 @@ export async function allocateShacklesId(input: {
   tx: Prisma.TransactionClient;
   year: number;
   registrationType: RegistrationType;
+  startFrom?: number;
 }) {
-  const sequence = await input.tx.shacklesIdSequence.upsert({
+  const requestedStart = Number.isFinite(input.startFrom) ? Math.max(1, Math.trunc(input.startFrom as number)) : 1;
+
+  let sequence = await input.tx.shacklesIdSequence.upsert({
     where: {
       year_registrationType: {
         year: input.year,
@@ -31,12 +34,31 @@ export async function allocateShacklesId(input: {
     create: {
       year: input.year,
       registrationType: input.registrationType,
-      lastIssued: 1,
+      lastIssued: requestedStart,
     },
     select: {
       lastIssued: true,
     },
   });
+
+  // When switching to a higher floor (e.g. on-spot should begin at 500),
+  // bump current sequence only if it is still below that floor.
+  if (sequence.lastIssued < requestedStart) {
+    sequence = await input.tx.shacklesIdSequence.update({
+      where: {
+        year_registrationType: {
+          year: input.year,
+          registrationType: input.registrationType,
+        },
+      },
+      data: {
+        lastIssued: requestedStart,
+      },
+      select: {
+        lastIssued: true,
+      },
+    });
+  }
 
   const prefix = getShacklesPrefix({
     year: input.year,

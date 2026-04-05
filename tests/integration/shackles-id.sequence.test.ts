@@ -87,4 +87,51 @@ describe("integration: yearly shackles id sequence", () => {
       });
     }
   }, 30000);
+
+  it("supports on-spot floor at 500 while preserving type prefix", async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      databaseAvailable = false;
+    }
+
+    if (!databaseAvailable) {
+      console.warn("Skipping shackles-id.sequence integration test: database is not reachable.");
+      return;
+    }
+
+    const year = 2029;
+
+    try {
+      const firstGeneral = await runSerializableTransaction(
+        prisma,
+        async (tx) => allocateShacklesId({ tx, year, registrationType: "GENERAL", startFrom: 500 }),
+        { maxRetries: 5 }
+      );
+      const secondGeneral = await runSerializableTransaction(
+        prisma,
+        async (tx) => allocateShacklesId({ tx, year, registrationType: "GENERAL", startFrom: 500 }),
+        { maxRetries: 5 }
+      );
+      const firstWorkshop = await runSerializableTransaction(
+        prisma,
+        async (tx) => allocateShacklesId({ tx, year, registrationType: "WORKSHOP", startFrom: 500 }),
+        { maxRetries: 5 }
+      );
+      const firstCombo = await runSerializableTransaction(
+        prisma,
+        async (tx) => allocateShacklesId({ tx, year, registrationType: "COMBO", startFrom: 500 }),
+        { maxRetries: 5 }
+      );
+
+      expect(firstGeneral).toBe("SH29G500");
+      expect(secondGeneral).toBe("SH29G501");
+      expect(firstWorkshop).toBe("SH29W500");
+      expect(firstCombo).toBe("SH29C500");
+    } finally {
+      await prisma.shacklesIdSequence.deleteMany({
+        where: { year },
+      });
+    }
+  }, 30000);
 });

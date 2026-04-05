@@ -103,8 +103,24 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
       });
     } else {
       // 1. Fetch the user to check their Registration Type
-      const user = await prisma.user.findUnique({ where: { id: userId } });
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          registrationType: true,
+          onSpotProfile: {
+            select: { id: true },
+          },
+          payment: {
+            select: { captureSource: true },
+          },
+        },
+      });
       if (!user) return { success: false, error: "User not found" };
+
+      const isOnSpotParticipant =
+        user.payment?.captureSource === 'ON_SPOT' || Boolean(user.onSpotProfile);
+      const sequenceStart = isOnSpotParticipant ? 500 : 1;
 
       const activeYear = getActiveYear();
 
@@ -123,6 +139,7 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
               tx,
               year: activeYear,
               registrationType: user.registrationType,
+              startFrom: sequenceStart,
             });
 
             await tx.payment.update({

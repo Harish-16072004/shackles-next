@@ -16,6 +16,7 @@ export default async function UserDashboardPage() {
     where: { id: String(session.userId) },
     include: {
       payment: true,
+      onSpotProfile: true,
       registrations: {
         include: { event: true },
         orderBy: { event: { name: "asc" } },
@@ -29,6 +30,7 @@ export default async function UserDashboardPage() {
 
   const userName = `${user.firstName} ${user.lastName}`.trim();
   const isPaymentVerified = user.payment?.status === "VERIFIED";
+  const isOnSpotUser = user.payment?.captureSource === "ON_SPOT" || Boolean(user.onSpotProfile);
 
   const workshops = user.registrations.filter((registration) => {
     const eventName = registration.event.name.toLowerCase();
@@ -55,12 +57,24 @@ export default async function UserDashboardPage() {
       <section className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
         <p className="text-xs uppercase tracking-[0.2em] text-gray-500">User Dashboard</p>
         <h1 className="mt-2 text-3xl font-bold text-gray-900 md:text-4xl">Welcome {userName},</h1>
+        {isOnSpotUser && (
+          <span className="mt-3 inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-700">
+            On-Spot Participant
+          </span>
+        )}
         <p className="mt-2 text-gray-600">Your registration details, QR pass, and enrolled activities.</p>
       </section>
 
       <div className="grid gap-6 md:grid-cols-2">
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Your Shackles ID</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-gray-900">Your Shackles ID</h2>
+            {isOnSpotUser && (
+              <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-orange-700">
+                On-Spot
+              </span>
+            )}
+          </div>
           <p className="mt-3 inline-block rounded-md bg-gray-900 px-3 py-2 font-mono text-sm tracking-wider text-white">
             {user.shacklesId || "Pending verification"}
           </p>

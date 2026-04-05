@@ -13,4 +13,8 @@ describe("shackles id prefix", () => {
   it("formats COMBO prefix by year", () => {
     expect(getShacklesPrefix({ year: 2030, registrationType: "COMBO" })).toBe("SH30C");
   });
+
+  it("keeps 2-digit year formatting", () => {
+    expect(getShacklesPrefix({ year: 2101, registrationType: "GENERAL" })).toBe("SH01G");
+  });
 });

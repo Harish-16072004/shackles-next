@@ -141,6 +141,13 @@ model User {
 
   // Contact Messages
   contactMessages ContactMessage[]
+
+  @@index([email])
+  @@index([shacklesId])
+  @@index([qrToken])
+  @@index([role])
+  @@index([createdAt])
+  @@index([registrationType, role])
 }
 
 model ContactMessage {

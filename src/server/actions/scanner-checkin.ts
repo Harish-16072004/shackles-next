@@ -1,19 +1,17 @@
 'use server';
 
-import { type Session } from 'next-auth';
+import { getSession } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 interface CheckinParams {
   eventId: string;
-  personId: string;
+  userId: string;
 }
 
 export async function checkinParticipant(params: CheckinParams) {
-  const session = (await getServerSession(authOptions)) as Session | null;
+  const session = await getSession();
 
-  if (!session?.user?.email) {
+  if (!session?.email) {
     return {
       success: false,
       error: 'Unauthorized',
@@ -21,7 +19,6 @@ export async function checkinParticipant(params: CheckinParams) {
   }
 
   try {
-    // Verify event exists
     const event = await prisma.event.findUnique({
       where: { id: params.eventId },
     });
@@ -33,70 +30,71 @@ export async function checkinParticipant(params: CheckinParams) {
       };
     }
 
-    // Verify person exists
-    const person = await prisma.person.findUnique({
-      where: { id: params.personId },
+    const user = await prisma.user.findUnique({
+      where: { id: params.userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+      },
     });
 
-    if (!person) {
+    if (!user) {
       return {
         success: false,
-        error: 'Person not found',
+        error: 'User not found',
       };
     }
 
-    // Check if person is registered for this event
-    const team = await prisma.team.findFirst({
+    const registration = await prisma.eventRegistration.findUnique({
       where: {
-        eventId: params.eventId,
-        members: {
-          some: {
-            personId: params.personId,
-          },
+        userId_eventId: {
+          userId: params.userId,
+          eventId: params.eventId,
         },
       },
       include: {
-        members: {
-          where: {
-            personId: params.personId,
-          },
-        },
+        event: true,
       },
     });
 
-    if (!team || !team.members.length) {
+    if (!registration) {
       return {
         success: false,
-        error: 'Person is not registered for this event',
+        error: 'User is not registered for this event',
       };
     }
 
-    // Update check-in status
-    const updatedMember = await prisma.teamMember.update({
+    const updatedRegistration = await prisma.eventRegistration.update({
       where: {
-        id: team.members[0].id,
+        userId_eventId: {
+          userId: params.userId,
+          eventId: params.eventId,
+        },
       },
       data: {
-        checkedInAt: new Date(),
+        attended: true,
+        attendedAt: new Date(),
       },
       include: {
-        person: true,
-        team: {
-          include: {
-            event: true,
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
           },
         },
+        event: true,
       },
     });
 
     return {
       success: true,
       data: {
-        personId: updatedMember.personId,
-        personName: updatedMember.person.fullName,
-        eventId: updatedMember.team.eventId,
-        eventName: updatedMember.team.event.name,
-        checkedInAt: updatedMember.checkedInAt,
+        userId: updatedRegistration.userId,
+        userName: `${updatedRegistration.user.firstName} ${updatedRegistration.user.lastName}`,
+        eventId: updatedRegistration.eventId,
+        eventName: updatedRegistration.event.name,
+        checkedInAt: updatedRegistration.attendedAt,
       },
     };
   } catch (error) {
@@ -108,10 +106,10 @@ export async function checkinParticipant(params: CheckinParams) {
   }
 }
 
-export async function getParticipantCheckinStatus(eventId: string, personId: string) {
-  const session = (await getServerSession(authOptions)) as Session | null;
+export async function getParticipantCheckinStatus(eventId: string, userId: string) {
+  const session = await getSession();
 
-  if (!session?.user?.email) {
+  if (!session?.email) {
     return {
       success: false,
       error: 'Unauthorized',
@@ -119,24 +117,25 @@ export async function getParticipantCheckinStatus(eventId: string, personId: str
   }
 
   try {
-    const teamMember = await prisma.teamMember.findFirst({
+    const registration = await prisma.eventRegistration.findUnique({
       where: {
-        personId: personId,
-        team: {
+        userId_eventId: {
+          userId: userId,
           eventId: eventId,
         },
       },
       include: {
-        person: true,
-        team: {
-          include: {
-            event: true,
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
           },
         },
+        event: true,
       },
     });
 
-    if (!teamMember) {
+    if (!registration) {
       return {
         success: false,
         error: 'Participant not found',
@@ -146,17 +145,17 @@ export async function getParticipantCheckinStatus(eventId: string, personId: str
     return {
       success: true,
       data: {
-        personName: teamMember.person.fullName,
-        eventName: teamMember.team.event.name,
-        checkedInAt: teamMember.checkedInAt,
-        isCheckedIn: !!teamMember.checkedInAt,
+        userName: `${registration.user.firstName} ${registration.user.lastName}`,
+        eventName: registration.event.name,
+        checkedInAt: registration.attendedAt,
+        isCheckedIn: !!registration.attendedAt,
       },
     };
   } catch (error) {
-    console.error('Status check error:', error);
+    console.error('Check-in status error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Status check failed',
+      error: error instanceof Error ? error.message : 'Failed to get check-in status',
     };
   }
 }

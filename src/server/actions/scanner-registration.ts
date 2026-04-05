@@ -1,36 +1,33 @@
 'use server';
 
-import { type Session } from 'next-auth';
+import { getSession } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 interface RegisterTeamMemberParams {
   eventId: string;
-  personId: string;
+  userId: string;
   teamName: string;
-  role: 'LEAD' | 'MEMBER';
+  role: 'LEADER' | 'MEMBER';
 }
 
 interface CreateBulkTeamParams {
   eventId: string;
-  leadPersonId: string;
+  leadUserId: string;
 }
 
 interface AddTeamMemberParams {
   eventId: string;
-  personId: string;
+  userId: string;
 }
 
 export async function registerTeamMember(params: RegisterTeamMemberParams) {
-  const session = (await getServerSession(authOptions)) as Session | null;
+  const session = await getSession();
 
-  if (!session?.user?.email) {
+  if (!session?.email) {
     throw new Error('Unauthorized');
   }
 
   try {
-    // Verify event exists and user has access
     const event = await prisma.event.findUnique({
       where: { id: params.eventId },
     });
@@ -39,56 +36,55 @@ export async function registerTeamMember(params: RegisterTeamMemberParams) {
       throw new Error('Event not found');
     }
 
-    // Verify person exists
-    const person = await prisma.person.findUnique({
-      where: { id: params.personId },
+    const user = await prisma.user.findUnique({
+      where: { id: params.userId },
     });
 
-    if (!person) {
-      throw new Error('Person not found');
+    if (!user) {
+      throw new Error('User not found');
     }
 
-    // Check if person is already registered for this event
-    const existingTeam = await prisma.team.findFirst({
+    const existingRegistration = await prisma.eventRegistration.findFirst({
       where: {
         eventId: params.eventId,
-        members: {
-          some: {
-            personId: params.personId,
-          },
-        },
+        userId: params.userId,
       },
     });
 
-    if (existingTeam) {
-      throw new Error('Person is already registered for this event');
+    if (existingRegistration) {
+      throw new Error('User is already registered for this event');
     }
 
-    // Create new team
     const team = await prisma.team.create({
       data: {
         eventId: params.eventId,
         name: params.teamName,
+        nameNormalized: params.teamName.toLowerCase().replace(/\s+/g, '_'),
+        teamCode: `TEAM_${Date.now()}`,
+        leaderUserId: params.userId,
         members: {
           create: {
-            personId: params.personId,
-            role: params.role,
+            userId: params.userId,
+            eventId: params.eventId,
+            memberRole: params.role,
           },
         },
       },
       include: {
         members: {
           include: {
-            person: true,
+            user: true,
           },
         },
       },
     });
 
+    const fullName = `${user.firstName} ${user.lastName}`;
+
     return {
       success: true,
       teamId: team.id,
-      message: `Successfully registered ${person.fullName} as a ${params.role}`,
+      message: `Successfully registered ${fullName} as a ${params.role}`,
     };
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Failed to register team member');
@@ -96,14 +92,13 @@ export async function registerTeamMember(params: RegisterTeamMemberParams) {
 }
 
 export async function createBulkTeam(params: CreateBulkTeamParams) {
-  const session = (await getServerSession(authOptions)) as Session | null;
+  const session = await getSession();
 
-  if (!session?.user?.email) {
+  if (!session?.email) {
     throw new Error('Unauthorized');
   }
 
   try {
-    // Verify event exists
     const event = await prisma.event.findUnique({
       where: { id: params.eventId },
     });
@@ -112,41 +107,44 @@ export async function createBulkTeam(params: CreateBulkTeamParams) {
       throw new Error('Event not found');
     }
 
-    // Verify person exists
-    const person = await prisma.person.findUnique({
-      where: { id: params.leadPersonId },
+    const user = await prisma.user.findUnique({
+      where: { id: params.leadUserId },
     });
 
-    if (!person) {
-      throw new Error('Lead person not found');
+    if (!user) {
+      throw new Error('Lead user not found');
     }
 
-    // Create team in bulk mode
     const team = await prisma.team.create({
       data: {
         eventId: params.eventId,
-        name: `${person.fullName}'s Team`,
-        bulkRegistrationMode: true,
+        name: `${user.firstName} ${user.lastName}'s Team`,
+        nameNormalized: `${user.firstName} ${user.lastName}'s team`.toLowerCase().replace(/\s+/g, '_'),
+        teamCode: `TEAM_${Date.now()}`,
+        leaderUserId: params.leadUserId,
         members: {
           create: {
-            personId: params.leadPersonId,
-            role: 'LEAD',
+            userId: params.leadUserId,
+            eventId: params.eventId,
+            memberRole: 'LEADER',
           },
         },
       },
       include: {
         members: {
           include: {
-            person: true,
+            user: true,
           },
         },
       },
     });
 
+    const fullName = `${user.firstName} ${user.lastName}`;
+
     return {
       success: true,
       teamId: team.id,
-      message: `Bulk team created for ${person.fullName}. Ready to add members.`,
+      message: `Bulk team created for ${fullName}. Ready to add members.`,
     };
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Failed to create bulk team');
@@ -154,14 +152,13 @@ export async function createBulkTeam(params: CreateBulkTeamParams) {
 }
 
 export async function addTeamMember(params: AddTeamMemberParams) {
-  const session = (await getServerSession(authOptions)) as Session | null;
+  const session = await getSession();
 
-  if (!session?.user?.email) {
+  if (!session?.email) {
     throw new Error('Unauthorized');
   }
 
   try {
-    // Verify event exists
     const event = await prisma.event.findUnique({
       where: { id: params.eventId },
     });
@@ -170,33 +167,25 @@ export async function addTeamMember(params: AddTeamMemberParams) {
       throw new Error('Event not found');
     }
 
-    // Verify person exists
-    const person = await prisma.person.findUnique({
-      where: { id: params.personId },
+    const user = await prisma.user.findUnique({
+      where: { id: params.userId },
     });
 
-    if (!person) {
-      throw new Error('Person not found');
+    if (!user) {
+      throw new Error('User not found');
     }
 
-    // Check if person is already registered for this event
-    const existingTeam = await prisma.team.findFirst({
+    const existingRegistration = await prisma.eventRegistration.findFirst({
       where: {
         eventId: params.eventId,
-        members: {
-          some: {
-            personId: params.personId,
-          },
-        },
+        userId: params.userId,
       },
     });
 
-    if (existingTeam) {
-      throw new Error('Person is already registered for this event');
+    if (existingRegistration) {
+      throw new Error('User is already registered for this event');
     }
 
-    // TODO: Implement logic to find and add to an existing team
-    // For now, we'll need a team selection step before this is called
     throw new Error('Team selection not yet implemented in this mode');
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Failed to add team member');
@@ -204,14 +193,12 @@ export async function addTeamMember(params: AddTeamMemberParams) {
 }
 
 export async function getScannerBulkTeamFlowStatus() {
-  const session = (await getServerSession(authOptions)) as Session | null;
+  const session = await getSession();
 
-  if (!session?.user?.email) {
+  if (!session?.email) {
     throw new Error('Unauthorized');
   }
 
-  // This would typically check configuration or feature flags
-  // For now, we'll return a default status
   return {
     enabled: true,
     reason: 'Bulk flow is enabled',

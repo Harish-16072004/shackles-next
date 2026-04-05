@@ -126,15 +126,14 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
 
       const maxRetries = 5;
       let approved = false;
-      let qrUploadContext: { shacklesId: string; qrToken: string; registrationType: string } | null = null;
 
-      for (let attempt = 0; attempt < maxRetries && !approved; attempt += 1) {
+      for (let attempt = 0; attempt < maxRetries && !approved; attempt += 1) { 
         const qrToken = crypto.randomBytes(32).toString('hex');
         const qrTokenExpiry = new Date();
         qrTokenExpiry.setDate(qrTokenExpiry.getDate() + 30);
 
         try {
-          await runSerializableTransaction(prisma, async (tx) => {
+          const qrUploadContext = await runSerializableTransaction(prisma, async (tx) => {
             const shacklesId = await allocateShacklesId({
               tx,
               year: activeYear,
@@ -162,7 +161,7 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
               },
             });
 
-            qrUploadContext = {
+            return {
               shacklesId,
               qrToken,
               registrationType: user.registrationType,

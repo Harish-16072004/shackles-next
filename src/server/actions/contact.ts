@@ -18,7 +18,7 @@ export async function submitContactForm(data: unknown) {
 
   if (!result.success) {
     // Return the first error message
-    return { success: false, error: result.error.errors[0].message };
+    return { success: false, error: result.error.issues[0].message };
   }
 
   const { name, email, mobile, message } = result.data;

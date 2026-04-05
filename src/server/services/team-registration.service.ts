@@ -455,8 +455,7 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     data: { memberRole: TeamMemberRole.LEADER },
   });
 
-  const teamData: Prisma.TeamUpdateInput = {
-    memberCount: finalMemberCount,
+  const teamData: any = {
     leaderUserId: leaderUser.id,
     leaderContactPhoneSnapshot: leaderUser.phone,
     leaderContactEmailSnapshot: leaderUser.email,

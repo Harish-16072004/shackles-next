@@ -17,7 +17,7 @@ export const registrationStep1Schema = z.object({
 });
 
 export const registrationStep2Schema = z.object({
-  registrationType: z.enum(['GENERAL', 'WORKSHOP', 'COMBO'], { required_error: 'Select a pass type' }),
+  registrationType: z.enum(['GENERAL', 'WORKSHOP', 'COMBO'], { message: 'Select a pass type' }),
   amount: z.number().min(0).default(500),
   transactionId: z.string().min(4, 'Transaction ID must be at least 4 characters').default(''),
   proofUrl: z.string().min(1, 'Payment proof is required').default(''),

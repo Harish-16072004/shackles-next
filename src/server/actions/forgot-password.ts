@@ -83,9 +83,9 @@ export async function resetPassword(prevState: unknown, formData: FormData) {
   const validation = passwordResetSchema.safeParse(rawData);
 
   if (!validation.success) {
-    return { 
+    return {
       success: false,
-      error: validation.error.errors.map(e => e.message).join(", "),
+      error: validation.error.issues.map(e => e.message).join(", "),
       message: ""
     };
   }

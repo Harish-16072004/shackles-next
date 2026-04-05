@@ -218,11 +218,7 @@ export function Step1Scan() {
         </div>
       )}
 
-      <div className="mt-6 p-4 bg-gray-100 rounded text-center">
-        <p className="text-xs text-gray-600">
-          📱 Use front camera mode for best results
-        </p>
-      </div>
+
     </div>
   );
 }

@@ -1,10 +1,14 @@
 'use client'
 
-import { type ChangeEvent, type FormEvent, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { registerFullUser } from "@/server/actions/register-full";
 import Autocomplete from "@/components/ui/Autocomplete";
+import { compressImage } from "@/lib/compress-image";
+import { fullRegistrationSchema, type FullRegistrationData } from "@/lib/schemas/registration-schema";
 
 type PaymentUploadResponse = {
   proofUrl?: string;
@@ -15,44 +19,9 @@ type PaymentUploadResponse = {
 // Lists for Dropdowns
 const COLLEGES = ["ACGCET", "PSG Tech", "CIT", "GCE Salem", "Anna University"];
 const DEPARTMENTS = ["Mechanical", "CSE", "ECE", "EEE", "Civil"];
-const YEARS = ["I", "II", "III", "IV"];
+const YEARS = ["I", "II", "III", "IV"] as const;
 
 const STORAGE_KEY = "registration_form_data";
-
-function isValidIndianMobile(value: string) {
-  const normalized = value.replace(/[\s-]/g, "");
-  return /^(?:\+91|91)?[6-9]\d{9}$/.test(normalized);
-}
-
-type PersistedFormData = Omit<
-  ReturnType<typeof getDefaultFormData>,
-  "password" | "confirmPassword"
->;
-
-function getDefaultFormData() {
-  return {
-    firstName: "", 
-    lastName: "", 
-    email: "", 
-    phone: "",
-    collegeName: "", 
-    collegeNameOther: "", // Keeping for compatibility but unused
-    collegeLoc: "", 
-    department: "", 
-    departmentOther: "", // Keeping for compatibility but unused
-    yearOfStudy: "I",
-    password: "", 
-    confirmPassword: "",
-    
-    registrationType: "",
-    amount: 0,
-    
-    transactionId: "", 
-    proofUrl: "", 
-    proofPath: "",
-    acceptedTerms: false
-  };
-}
 
 type RegistrationFormProps = {
   yearShort?: string;
@@ -64,67 +33,90 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
+  const [compressingProof, setCompressingProof] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Form State
-  const [formData, setFormData] = useState(getDefaultFormData());
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    trigger,
+    formState: { errors },
+    reset,
+  } = useForm<FullRegistrationData>({
+    resolver: zodResolver(fullRegistrationSchema) as any,
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      collegeName: "",
+      collegeLoc: "",
+      department: "",
+      yearOfStudy: "I",
+      password: "",
+      confirmPassword: "",
+      registrationType: "GENERAL",
+      amount: 500,
+      transactionId: "",
+      proofUrl: "",
+      proofPath: "",
+      acceptedTerms: false,
+    },
+  });
+
+  const formValues = watch();
 
   // Load form data from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const parsedData = JSON.parse(saved) as Partial<PersistedFormData>;
-        setFormData(prev => ({
-          ...prev,
-          ...parsedData,
-          password: "",
-          confirmPassword: "",
-        }));
+        const parsedData = JSON.parse(saved);
+        // We don't restore passwords for security
+        const { password, confirmPassword, ...rest } = parsedData;
+        void password;
+        void confirmPassword;
+        reset({ ...rest });
       }
     } catch (error) {
       console.warn("Failed to load form data from storage:", error);
     }
-  }, []);
+  }, [reset]);
 
   // Save form data to localStorage whenever it changes
   useEffect(() => {
-    try {
-      const { password, confirmPassword, ...persistable } = formData;
-      void password;
-      void confirmPassword;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
-    } catch (error) {
-      console.warn("Failed to save form data to storage:", error);
-    }
-  }, [formData]);
+    const subscription = watch((value) => {
+      try {
+        const { password, confirmPassword, ...persistable } = value;
+        void password;
+        void confirmPassword;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
+      } catch (error) {
+        console.warn("Failed to save form data to storage:", error);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
 
-  // Handle standard input changes
-  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    const nextValue = e.target instanceof HTMLInputElement && e.target.type === 'checkbox'
-      ? e.target.checked
-      : value;
-    setFormData(prev => ({
-      ...prev,
-      [name]: nextValue
-    }));
-  };
-
-  // Handle Autocomplete changes
   const handleAutocompleteChange = (name: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setValue(name as keyof FullRegistrationData, value, { shouldValidate: true });
   };
 
-  const handleProofUpload = async (file: File) => {
+  const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     try {
+      setCompressingProof(true);
+      const compressed = await compressImage(file);
+      setCompressingProof(false);
+
       setUploadingProof(true);
       const payload = new FormData();
-      payload.append("file", file);
+      payload.append("file", compressed);
 
       const response = await fetch("/api/upload/payment-proof", {
         method: "POST",
@@ -137,79 +129,57 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
       }
 
       const body = (await response.json()) as PaymentUploadResponse;
-      setFormData(prev => ({
-        ...prev,
-        proofUrl: body.proofUrl || "",
-        proofPath: body.proofPath || "",
-      }));
+      setValue("proofUrl", body.proofUrl || "", { shouldValidate: true });
+      setValue("proofPath", body.proofPath || "", { shouldValidate: true });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown error";
       alert(`Upload Failed: ${message}`);
     } finally {
+      setCompressingProof(false);
       setUploadingProof(false);
     }
   };
 
   // Step 1 Validation
-  const handleNext = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!isValidIndianMobile(formData.phone)) {
-      alert("Please enter a valid Indian mobile number (10 digits starting with 6-9, optional +91). ");
-      return;
+  const handleNext = async () => {
+    const fieldsToValidate: (keyof FullRegistrationData)[] = [
+      "firstName",
+      "lastName",
+      "email",
+      "phone",
+      "collegeName",
+      "collegeLoc",
+      "department",
+      "yearOfStudy",
+      "password",
+      "confirmPassword",
+    ];
+    const isStep1Valid = await trigger(fieldsToValidate);
+    if (isStep1Valid) {
+      setStep(2);
     }
-    if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match!");
-      return;
-    }
-    setStep(2);
   };
 
-  // Step 2 Submission
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!formData.registrationType) {
-      alert("Please select a Pass Type to proceed.");
-      return;
-    }
-
-    if (!formData.acceptedTerms) {
-      alert("You must accept the Terms and Conditions.");
-      return;
-    }
-    
-    if (!formData.proofUrl && !formData.proofPath) {
-      alert("Please upload the payment screenshot first!");
-      return;
-    }
-    
+  // Final Submission
+  const onValidSubmit = async (data: FullRegistrationData) => {
     setLoading(true);
 
     try {
-       // Since Autocomplete sets the value directly, we don't need "Other" logic
-       const finalCollege = formData.collegeName;
-       const finalDepartment = formData.department;
+      const res = await registerFullUser({
+        ...data,
+        amount: Number(data.amount),
+      });
 
-       const payload = { 
-         ...formData, 
-         amount: Number(formData.amount),
-         collegeName: finalCollege,
-         department: finalDepartment
-       };
-
-       
-       const res = await registerFullUser(payload);
-       
-       if(res.success) {
-         // Clear saved form data on successful registration
-         try {
-           localStorage.removeItem(STORAGE_KEY);
-         } catch (e) {
-           console.warn("Failed to clear form data:", e);
-         }
-         router.push('/userDashboard'); 
-       } else {
-         alert(res.error || "Registration Failed");
-       }
+      if (res.success) {
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch (e) {
+          console.warn("Failed to clear form data:", e);
+        }
+        router.push('/userDashboard');
+      } else {
+        alert(res.error || "Registration Failed");
+      }
     } catch {
       alert("Something went wrong");
     } finally {
@@ -219,7 +189,7 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
 
   return (
     <div className="card max-w-2xl mx-auto p-8 bg-white shadow-xl rounded-2xl">
-      
+
       {/* Progress Bar */}
       <div className="flex mb-8 text-sm font-medium text-gray-400">
         <span className={step === 1 ? "text-black font-bold" : ""}>1. Personal Details</span>
@@ -227,75 +197,82 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
         <span className={step === 2 ? "text-black font-bold" : ""}>2. Payment & Verify</span>
       </div>
 
-      <form onSubmit={step === 1 ? handleNext : handleSubmit}>
-        
+      <form onSubmit={handleSubmit(onValidSubmit)}>
+
         {/* SECTION 1: DETAILS */}
         {step === 1 && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <input name="firstName" placeholder="First Name" className="input-field" value={formData.firstName} onChange={handleChange} required />
-              <input name="lastName" placeholder="Last Name" className="input-field" value={formData.lastName} onChange={handleChange} required />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <input {...register("firstName")} placeholder="First Name" className="input-field" />
+                {errors.firstName && <p className="mt-1 text-xs text-red-500">{errors.firstName.message}</p>}
+              </div>
+              <div>
+                <input {...register("lastName")} placeholder="Last Name" className="input-field" />
+                {errors.lastName && <p className="mt-1 text-xs text-red-500">{errors.lastName.message}</p>}
+              </div>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <input name="email" type="email" placeholder="Email ID" className="input-field" value={formData.email} onChange={handleChange} required />
-              <input
-                name="phone"
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel"
-                placeholder="Mobile (+91XXXXXXXXXX)"
-                className="input-field"
-                value={formData.phone}
-                onChange={handleChange}
-                pattern="^(?:\+91|91)?[6-9]\d{9}$"
-                title="Enter a valid Indian mobile number"
-                required
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <input {...register("email")} type="email" placeholder="Email ID" className="input-field" />
+                {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
+              </div>
+              <div>
+                <input
+                  {...register("phone")}
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="Mobile (+91XXXXXXXXXX)"
+                  className="input-field"
+                />
+                {errors.phone && <p className="mt-1 text-xs text-red-500">{errors.phone.message}</p>}
+              </div>
+            </div>
+
+            <div>
+              <Autocomplete
+                name="collegeName"
+                value={formValues.collegeName}
+                onChange={handleAutocompleteChange}
+                suggestions={COLLEGES}
+                placeholder="Select or Type College Name"
               />
+              {errors.collegeName && <p className="mt-1 text-xs text-red-500">{errors.collegeName.message}</p>}
             </div>
 
-            {/* --- COLLEGE SECTION --- */}
-            <Autocomplete 
-              name="collegeName"
-              value={formData.collegeName}
-              onChange={handleAutocompleteChange}
-              suggestions={COLLEGES}
-              placeholder="Select or Type College Name"
-              required
-            />
+            <div>
+              <input {...register("collegeLoc")} placeholder="College Location" className="input-field" />
+              {errors.collegeLoc && <p className="mt-1 text-xs text-red-500">{errors.collegeLoc.message}</p>}
+            </div>
 
-            <input name="collegeLoc" placeholder="College Location" className="input-field" value={formData.collegeLoc} onChange={handleChange} required />
-
-            {/* --- DEPARTMENT SECTION --- */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
                 <Autocomplete
                   name="department"
-                  value={formData.department}
+                  value={formValues.department}
                   onChange={handleAutocompleteChange}
                   suggestions={DEPARTMENTS}
                   placeholder="Department"
-                  required
                 />
+                {errors.department && <p className="mt-1 text-xs text-red-500">{errors.department.message}</p>}
               </div>
-              
-              <div className="w-full">
-                <select name="yearOfStudy" className="input-field" value={formData.yearOfStudy} onChange={handleChange} required>
+
+              <div>
+                <select {...register("yearOfStudy")} className="input-field">
                   {YEARS.map(y => <option key={y} value={y}>Year {y}</option>)}
                 </select>
+                {errors.yearOfStudy && <p className="mt-1 text-xs text-red-500">{errors.yearOfStudy.message}</p>}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="relative">
                 <input
-                  name="password"
+                  {...register("password")}
                   type={showPassword ? "text" : "password"}
                   placeholder="Password"
                   className="input-field pr-10"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
                 />
                 <button
                   type="button"
@@ -303,18 +280,16 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
                   onClick={() => setShowPassword((v) => !v)}
                   className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="h-4 w-4" />}
                 </button>
+                {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
               </div>
               <div className="relative">
                 <input
-                  name="confirmPassword"
+                  {...register("confirmPassword")}
                   type={showConfirmPassword ? "text" : "password"}
                   placeholder="Re-Enter Password"
                   className="input-field pr-10"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  required
                 />
                 <button
                   type="button"
@@ -322,12 +297,13 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
                   onClick={() => setShowConfirmPassword((v) => !v)}
                   className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
                 >
-                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="h-4 w-4" />}
                 </button>
+                {errors.confirmPassword && <p className="mt-1 text-xs text-red-500">{errors.confirmPassword.message}</p>}
               </div>
             </div>
 
-            <button type="submit" className="w-full bg-black text-white py-3 rounded-lg font-bold hover:bg-gray-800 transition">
+            <button type="button" onClick={handleNext} className="w-full bg-black text-white py-3 rounded-lg font-bold hover:bg-gray-800 transition">
               Proceed to Payment →
             </button>
           </div>
@@ -336,7 +312,7 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
         {/* SECTION 2: PAYMENT */}
         {step === 2 && (
           <div className="space-y-6">
-            
+
             {/* --- REGISTRATION TYPE CARDS --- */}
             <div>
               <label className="block text-sm font-bold mb-4 text-gray-800">Select Pass Type</label>
@@ -346,58 +322,53 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
                   { id: "WORKSHOP", label: "Workshop", price: 300, code: `SH${currentYearShort}W` },
                   { id: "COMBO", label: "Combo", price: 800, code: `SH${currentYearShort}C` },
                 ].map((type) => (
-                  <div 
+                  <div
                     key={type.id}
-                    onClick={() => setFormData(prev => {
-                      // If already selected, deselect it
-                      if (prev.registrationType === type.id) {
-                        return { ...prev, registrationType: "", amount: 0 };
-                      }
-                      // Otherwise select it
-                      return { ...prev, registrationType: type.id, amount: type.price };
-                    })}
-                    className={`cursor-pointer p-4 rounded-xl border-2 transition-all duration-200 flex flex-col justify-between ${
-                      formData.registrationType === type.id 
-                        ? 'border-black bg-black text-white shadow-lg scale-105' 
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400 hover:bg-gray-50'
-                    }`}
+                    onClick={() => {
+                      setValue("registrationType", type.id as any, { shouldValidate: true });
+                      setValue("amount", type.price, { shouldValidate: true });
+                    }}
+                    className={`cursor-pointer p-4 rounded-xl border-2 transition-all duration-200 flex flex-col justify-between ${formValues.registrationType === type.id
+                      ? 'border-black bg-black text-white shadow-lg scale-105'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400 hover:bg-gray-50'
+                      }`}
                   >
                     <div>
                       <p className="text-xs font-mono opacity-70 mb-1">{type.code}</p>
                       <h3 className="font-bold text-lg leading-tight">{type.label}</h3>
                     </div>
                     <div className="mt-4 text-right">
-                      <p className={`text-xl font-black ${formData.registrationType === type.id ? 'text-green-400' : 'text-black'}`}>
+                      <p className={`text-xl font-black ${formValues.registrationType === type.id ? 'text-green-400' : 'text-black'}`}>
                         ₹{type.price}
                       </p>
                     </div>
                   </div>
                 ))}
               </div>
+              {errors.registrationType && <p className="mt-1 text-xs text-red-500">{errors.registrationType.message}</p>}
             </div>
 
-            <div className={`transition-all duration-300 ${!formData.registrationType ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+            <div className={`transition-all duration-300 ${!formValues.registrationType ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
               <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 text-center">
                 <p className="text-sm text-gray-500 mb-2">Scan QR to Pay</p>
                 <div className="w-40 h-40 bg-white border-2 border-gray-200 mx-auto mb-3 flex items-center justify-center rounded-lg">
-                  {/* Replace this span with your actual QR Image */}
                   <span className="text-xs text-gray-400 font-mono">PAYMENT QR CODE</span>
                 </div>
                 <p className="text-3xl font-black text-green-600">
-                  {formData.amount > 0 ? `₹ ${formData.amount}` : "--"}
+                  {formValues.amount > 0 ? `₹ ${formValues.amount}` : "--"}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">Wait for payment to complete before uploading</p>
               </div>
 
               <div className="space-y-3 mt-6">
                 <label className="block text-sm font-medium mb-1">Upload Proof (Screenshot)</label>
-                
-                {formData.proofUrl ? (
+
+                {formValues.proofUrl ? (
                   <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center relative group">
                     <p className="text-green-700 font-bold text-sm">✅ Upload Successful!</p>
-                    <a 
-                      href={formData.proofUrl} 
-                      target="_blank" 
+                    <a
+                      href={formValues.proofUrl}
+                      target="_blank"
                       rel="noreferrer"
                       className="text-xs text-blue-600 underline mt-1 block"
                     >
@@ -405,7 +376,10 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
                     </a>
                     <button
                       type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, proofUrl: "", proofPath: "" }))}
+                      onClick={() => {
+                        setValue("proofUrl", "", { shouldValidate: true });
+                        setValue("proofPath", "", { shouldValidate: true });
+                      }}
                       className="text-xs text-red-500 mt-2 hover:underline"
                     >
                       Remove & Upload Again
@@ -417,46 +391,47 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            void handleProofUpload(file);
-                          }
-                        }}
+                        onChange={handleProofUpload}
                         className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-gray-800"
                       />
                       <p className="mt-2 text-xs text-gray-500">Accepted: image files up to 4MB</p>
+                      {compressingProof ? <p className="mt-2 text-xs text-gray-600">Compressing image...</p> : null}
                       {uploadingProof ? <p className="mt-2 text-xs text-gray-600">Uploading...</p> : null}
                     </div>
                   </div>
                 )}
-                
-                <input name="transactionId" placeholder="Enter Transaction ID / UTR" className="input-field mt-4" value={formData.transactionId} onChange={handleChange} required />
+                {errors.proofUrl && <p className="mt-1 text-xs text-red-500">{errors.proofUrl.message}</p>}
+
+                <div>
+                  <input {...register("transactionId")} placeholder="Enter Transaction ID / UTR" className="input-field mt-4" />
+                  {errors.transactionId && <p className="mt-1 text-xs text-red-500">{errors.transactionId.message}</p>}
+                </div>
               </div>
 
-              {/* --- FIXED SECTION START --- */}
-              <div className="flex items-center gap-2 mt-4 bg-gray-50 p-3 rounded">
-                <input name="acceptedTerms" type="checkbox" id="terms" className="w-4 h-4" checked={formData.acceptedTerms} onChange={handleChange} />
-                <label htmlFor="terms" className="text-sm text-gray-600">
-                  I accept the <a 
-                    href="/terms" 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="underline text-black font-semibold hover:text-gray-800"
-                  >
-                    Terms & Conditions
-                  </a>
-                </label>
+              <div className="space-y-1 mt-4">
+                <div className="flex items-center gap-2 bg-gray-50 p-3 rounded">
+                  <input {...register("acceptedTerms")} type="checkbox" id="terms" className="w-4 h-4" />
+                  <label htmlFor="terms" className="text-sm text-gray-600">
+                    I accept the <a
+                      href="/terms-and-conditions"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline text-black font-semibold hover:text-gray-800"
+                    >
+                      Terms & Conditions
+                    </a>
+                  </label>
+                </div>
+                {errors.acceptedTerms && <p className="mt-1 text-xs text-red-500">{errors.acceptedTerms.message}</p>}
               </div>
-              {/* --- FIXED SECTION END --- */}
             </div>
 
             <div className="flex gap-4 mt-6">
               <button type="button" onClick={() => setStep(1)} className="w-1/3 py-3 rounded-lg border border-gray-300 font-medium hover:bg-gray-50 transition">Back</button>
-              <button 
-                type="submit" 
-                className={`w-2/3 bg-black text-white py-3 rounded-lg font-bold transition shadow-lg ${!formData.registrationType ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-800'}`} 
-                disabled={loading || !formData.registrationType}
+              <button
+                type="submit"
+                className={`w-2/3 bg-black text-white py-3 rounded-lg font-bold transition shadow-lg ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-800'}`}
+                disabled={loading}
               >
                 {loading ? "Registering..." : "Complete Registration"}
               </button>

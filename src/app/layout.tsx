@@ -21,6 +21,9 @@ export const metadata: Metadata = {
   title: `Shackles ${activeYear} | ${activeTheme.titleSuffix}`,
   description: `${activeTheme.description} ${activeYear} edition on ${activeDomain}.`,
   manifest: `/manifest.webmanifest?v=${encodeURIComponent(manifestVersion)}`,
+};
+
+export const viewport = {
   themeColor: activeTheme.themeColor,
 };
 

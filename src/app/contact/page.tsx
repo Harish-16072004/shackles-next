@@ -53,6 +53,18 @@ export default function ContactPage() {
     setLoading(true);
     setError("");
 
+    if (!/^\d{10}$/.test(formData.mobile)) {
+      setError("Please enter a valid 10-digit mobile number.");
+      setLoading(false);
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      setError("Please enter a valid email address.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await submitContactForm(formData); 
       
@@ -71,7 +83,19 @@ export default function ContactPage() {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    let value = e.target.value;
+    
+    // Auto-format mobile to digits only, max 10 chars
+    if (e.target.name === "mobile") {
+      value = value.replace(/\D/g, "").slice(0, 10);
+    }
+
+    // Auto-format email: remove all whitespaces dynamically
+    if (e.target.name === "email") {
+      value = value.replace(/\s/g, "");
+    }
+    
+    setFormData(prev => ({ ...prev, [e.target.name]: value }));
   };
 
   return (

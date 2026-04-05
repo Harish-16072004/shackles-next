@@ -5,9 +5,10 @@ import {
   approveOnSpotPayment,
   createOnSpotParticipant,
   getOnSpotParticipants,
-  getOnSpotSummary,
   rejectOnSpotPayment,
 } from '@/server/actions/onspot-registration';
+import { getCachedOnSpotSummary } from '@/lib/cached-queries';
+import Pagination from '@/components/ui/Pagination';
 
 type SearchParams = {
   tab?: string;
@@ -15,6 +16,7 @@ type SearchParams = {
   channel?: string;
   q?: string;
   state?: string;
+  page?: string;
 };
 
 type PaymentChannelFilter = 'CASH' | 'ONLINE' | 'ALL';
@@ -68,27 +70,38 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
     redirect('/login');
   }
 
-  const tab = searchParams?.tab === 'verify' || searchParams?.tab === 'users' ? searchParams.tab : 'register';
+  const tab = searchParams?.tab === 'users' ? searchParams.tab : 'verify';
   const selectedStatus = asStatus(searchParams?.status);
   const selectedChannel = asChannel(searchParams?.channel);
   const search = (searchParams?.q || '').trim();
   const stateMessage = searchParams?.state || '';
+  const currentPage = Math.max(1, parseInt(searchParams?.page || '1', 10) || 1);
 
-  const [summaryResult, participantsResult] = await Promise.all([
-    getOnSpotSummary(),
+  const [summary, participantsResult] = await Promise.all([
+    getCachedOnSpotSummary(),
     getOnSpotParticipants({
       status: selectedStatus,
       paymentChannel: selectedChannel,
       search,
+      page: currentPage,
+      pageSize: 25,
     }),
   ]);
 
-  const summary = summaryResult.success
-    ? summaryResult.data
-    : { total: 0, pending: 0, verified: 0, rejected: 0, cash: 0, online: 0 };
-
   const participants = participantsResult.success ? participantsResult.data : [];
+  const totalParticipants = participantsResult.success ? participantsResult.total : 0;
+  const totalPages = Math.ceil(totalParticipants / 25);
   const showActionsColumn = participants.some((participant) => participant.payment?.status === 'PENDING');
+
+  // Build pagination base URL preserving filters
+  const paginationBaseUrl = (() => {
+    const params = new URLSearchParams();
+    if (selectedStatus !== 'ALL') params.set('status', selectedStatus);
+    if (selectedChannel !== 'ALL') params.set('channel', selectedChannel);
+    if (search) params.set('q', search);
+    const qs = params.toString();
+    return `/admin/onspot-registration${qs ? `?${qs}` : ''}`;
+  })();
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -98,12 +111,6 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
             <h1 className="text-3xl font-bold text-gray-900">On-Spot Registration Console</h1>
             <p className="text-sm text-gray-600 mt-1">Create on-spot users, verify payments, and manage on-spot participant lifecycle.</p>
           </div>
-          <a
-            href="/admin/scanner-v2"
-            className="inline-flex items-center px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold hover:bg-cyan-700"
-          >
-            Open Scanner v2
-          </a>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -133,28 +140,6 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
           </div>
         </div>
 
-        <div className="flex gap-2">
-          {[
-            { key: 'register', label: 'Register' },
-            { key: 'verify', label: 'Verify Payments' },
-            { key: 'users', label: 'On-Spot Users' },
-          ].map((item) => {
-            const active = tab === item.key;
-            return (
-              <a
-                key={item.key}
-                href={`/admin/onspot-registration?tab=${item.key}`}
-                className={`px-4 py-2 rounded-full text-sm font-semibold border ${
-                  active
-                    ? 'bg-gray-900 text-white border-gray-900'
-                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                {item.label}
-              </a>
-            );
-          })}
-        </div>
 
         {stateMessage && (
           <div className="rounded-lg border border-blue-200 bg-blue-50 text-blue-800 px-4 py-3 text-sm">
@@ -162,9 +147,12 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
           </div>
         )}
 
-        {tab === 'register' && (
-          <div className="bg-white rounded-xl border p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Create On-Spot Participant</h2>
+        <details className="bg-white rounded-xl border mb-4 group [&_summary::-webkit-details-marker]:hidden">
+          <summary className="text-lg font-semibold text-gray-900 p-4 cursor-pointer hover:bg-gray-50 flex justify-between items-center list-none outline-none">
+            Create On-Spot Participant
+            <span className="text-3xl font-light leading-none group-open:rotate-45 transition-transform duration-300 relative -top-0.5">+</span>
+          </summary>
+          <div className="p-6 border-t border-gray-200">
             <form
               action={async (formData) => {
                 'use server';
@@ -194,7 +182,7 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                 const state = result.success
                   ? 'On-spot user created. Verify payment to activate.'
                   : (result.error || 'Failed to create on-spot user.');
-                redirect(`/admin/onspot-registration?tab=register&state=${encodeURIComponent(state)}`);
+                redirect(`/admin/onspot-registration?tab=${tab}&state=${encodeURIComponent(state)}`);
               }}
               className="grid grid-cols-1 md:grid-cols-2 gap-4"
             >
@@ -228,10 +216,11 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
               </div>
             </form>
           </div>
-        )}
+        </details>
 
-        {(tab === 'verify' || tab === 'users') && (
+        {true && (
           <div className="bg-white rounded-xl border p-6 space-y-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Verify On-Spot Payments</h2>
             <div className="flex flex-wrap gap-2 items-center">
               <a
                 href={`/admin/onspot-registration?tab=${tab}&status=ALL&channel=${selectedChannel}&q=${encodeURIComponent(search)}`}
@@ -316,13 +305,12 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                       <td className="px-3 py-3">
                         <p className="text-xs text-gray-600">{formatINR(user.payment?.amount ?? 0)}</p>
                         <p className="text-xs text-gray-600">{(user.payment as { paymentChannel?: string } | null)?.paymentChannel || '--'}</p>
-                        <p className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          user.payment?.status === 'VERIFIED'
+                        <p className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-xs font-semibold ${user.payment?.status === 'VERIFIED'
                             ? 'bg-green-100 text-green-700'
                             : user.payment?.status === 'REJECTED'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-amber-100 text-amber-700'
-                        }`}>
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}>
                           {user.payment?.status || '--'}
                         </p>
                       </td>
@@ -389,6 +377,7 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                 </tbody>
               </table>
             </div>
+            <Pagination currentPage={currentPage} totalPages={totalPages} baseUrl={paginationBaseUrl} />
           </div>
         )}
       </div>

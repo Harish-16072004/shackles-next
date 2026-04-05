@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
 import { getActiveYear } from "@/lib/edition";
+import { getCachedDashboardStats } from "@/lib/cached-queries";
 
 export default async function AdminDashboard() {
   const activeYear = getActiveYear();
@@ -27,8 +28,8 @@ export default async function AdminDashboard() {
     redirect('/login');
   }
 
-  // Fetch dashboard statistics
-  const [
+  // Fetch cached dashboard statistics (revalidates every 30s)
+  const {
     totalRegistrations,
     verifiedPayments,
     pendingPayments,
@@ -40,28 +41,7 @@ export default async function AdminDashboard() {
     maleAccommodations,
     femaleAccommodations,
     events,
-  ] = await Promise.all([
-    prisma.user.count(),
-    prisma.payment.count({ where: { status: 'VERIFIED' } }),
-    prisma.payment.count({ where: { status: 'PENDING' } }),
-    prisma.user.count({ where: { registrationType: 'GENERAL' } }),
-    prisma.user.count({ where: { registrationType: 'WORKSHOP' } }),
-    prisma.user.count({ where: { registrationType: 'COMBO' } }),
-    prisma.user.count({ where: { kitStatus: 'ISSUED' } }),
-    prisma.accommodation.count(),
-    prisma.accommodation.count({ where: { gender: 'MALE' } }),
-    prisma.accommodation.count({ where: { gender: 'FEMALE' } }),
-    prisma.event.findMany({
-      orderBy: { name: 'asc' },
-      include: {
-        registrations: {
-          select: {
-            teamSize: true,
-          },
-        },
-      }
-    }).catch(() => []),
-  ]);
+  } = await getCachedDashboardStats();
 
   const workshopEvents = events.filter((event) => event.name.toLowerCase().includes('workshop'));
   const technicalEvents = events.filter((event) => {
@@ -304,7 +284,7 @@ export default async function AdminDashboard() {
             </a>
 
             {/* Contact Messages */}
-            <a href="/admin/audit-logs" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
+            <a href="/admin/messages" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
               <div className="bg-indigo-100 w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
                 <svg className="w-8 h-8 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>

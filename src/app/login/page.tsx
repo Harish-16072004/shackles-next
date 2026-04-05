@@ -2,6 +2,8 @@
 
 import { useFormState } from "react-dom";
 import { loginUser } from "@/server/actions/login";
+import { useEffect, useState } from "react";
+import { REGISTRATION_TARGET_TIME } from "@/components/features/CountdownOptimized";
 
 const initialState = {
   error: "",
@@ -9,6 +11,11 @@ const initialState = {
 
 export default function LoginPage() {
   const [state, formAction] = useFormState(loginUser, initialState);
+  const [isExpired, setIsExpired] = useState(false);
+
+  useEffect(() => {
+    setIsExpired(Date.now() >= REGISTRATION_TARGET_TIME);
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -40,8 +47,10 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-4 text-center text-sm">
-          <a href="/register" className="text-gray-500 hover:text-black">Need an account? Register</a>
+        <div className="mt-4 text-center text-sm flex gap-2 justify-center items-center">
+          <a href={isExpired ? "/onspot-registration" : "/register"} className="text-gray-500 hover:text-black">
+            Need an account? {isExpired ? "On-Spot Register" : "Register"}
+          </a>
           <span className="mx-2">|</span>
           <a href="/forgot-password" className="text-gray-500 hover:text-black">Forgot Password?</a>
         </div>

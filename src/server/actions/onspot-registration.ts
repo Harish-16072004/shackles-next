@@ -35,6 +35,8 @@ type OnSpotListFilters = {
 	search?: string;
 	status?: PaymentStatus | 'ALL';
 	paymentChannel?: PaymentChannel | 'ALL';
+	page?: number;
+	pageSize?: number;
 };
 
 type OnSpotParticipantRow = Prisma.UserGetPayload<{
@@ -210,51 +212,59 @@ export async function rejectOnSpotPayment(input: { userId: string; reason?: stri
 export async function getOnSpotParticipants(filters: OnSpotListFilters = {}) {
 	const actorResult = await requireAdminActor();
 	if (!actorResult.ok) {
-		return { success: false as const, error: actorResult.error, data: [] as OnSpotParticipantRow[] };
+		return { success: false as const, error: actorResult.error, data: [] as OnSpotParticipantRow[], total: 0 };
 	}
 
 	const search = (filters.search || '').trim();
 	const status = filters.status || 'ALL';
 	const paymentChannel = filters.paymentChannel || 'ALL';
+	const page = Math.max(1, filters.page || 1);
+	const pageSize = filters.pageSize || 25;
 
-	const users = await prisma.user.findMany({
-		where: {
-			onSpotProfile: { isNot: null },
-			...(search
-				? {
-						OR: [
-							{ firstName: { contains: search, mode: 'insensitive' } },
-							{ lastName: { contains: search, mode: 'insensitive' } },
-							{ email: { contains: search, mode: 'insensitive' } },
-							{ phone: { contains: search, mode: 'insensitive' } },
-							{ shacklesId: { contains: search, mode: 'insensitive' } },
-						],
-					}
-				: {}),
-			payment: {
-				...(status !== 'ALL' ? { status } : {}),
-				...(paymentChannel !== 'ALL' ? { paymentChannel } : {}),
-				captureSource: PaymentCaptureSource.ON_SPOT,
-			},
+	const where = {
+		onSpotProfile: { isNot: null },
+		...(search
+			? {
+					OR: [
+						{ firstName: { contains: search, mode: 'insensitive' as const } },
+						{ lastName: { contains: search, mode: 'insensitive' as const } },
+						{ email: { contains: search, mode: 'insensitive' as const } },
+						{ phone: { contains: search, mode: 'insensitive' as const } },
+						{ shacklesId: { contains: search, mode: 'insensitive' as const } },
+					],
+				}
+			: {}),
+		payment: {
+			...(status !== 'ALL' ? { status } : {}),
+			...(paymentChannel !== 'ALL' ? { paymentChannel } : {}),
+			captureSource: PaymentCaptureSource.ON_SPOT,
 		},
-		include: {
-			payment: true,
-			onSpotProfile: true,
-			registrations: {
-				include: {
-					event: {
-						select: { name: true },
+	};
+
+	const [users, total] = await Promise.all([
+		prisma.user.findMany({
+			where,
+			include: {
+				payment: true,
+				onSpotProfile: true,
+				registrations: {
+					include: {
+						event: {
+							select: { name: true },
+						},
 					},
+					orderBy: { createdAt: 'desc' },
+					take: 5,
 				},
-				orderBy: { createdAt: 'desc' },
-				take: 5,
 			},
-		},
-		orderBy: { createdAt: 'desc' },
-		take: 200,
-	});
+			orderBy: { createdAt: 'desc' },
+			skip: (page - 1) * pageSize,
+			take: pageSize,
+		}),
+		prisma.user.count({ where }),
+	]);
 
-	return { success: true as const, data: users };
+	return { success: true as const, data: users, total };
 }
 
 export async function getOnSpotSummary() {

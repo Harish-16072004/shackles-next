@@ -17,6 +17,13 @@ import {
   scannerRegisterTeamMember,
   updateKitStatus,
 } from '@/server/actions/event-logistics';
+import {
+  readOfflineQueue,
+  appendOfflineAction,
+  writeOfflineQueue,
+  removeOfflineAction,
+  type OfflineAction,
+} from '@/lib/offline-queue-db';
 
 type JoinableTeam = {
   id: string;
@@ -27,38 +34,7 @@ type JoinableTeam = {
   hasCapacity: boolean;
 };
 
-type OfflineAction = {
-  id: string;
-  type:
-    | 'MARK_ATTENDANCE'
-    | 'ISSUE_KIT'
-    | 'QUICK_REGISTER'
-    | 'TEAM_BULK_REGISTER'
-    | 'TEAM_REGISTER_MEMBER'
-    | 'TEAM_LOCK';
-  payload: Record<string, unknown>;
-  createdAt: string;
-};
-
-const QUEUE_KEY = 'scanner-v2-offline-actions';
-
-function readQueue(): OfflineAction[] {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const raw = window.localStorage.getItem(QUEUE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as OfflineAction[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeQueue(actions: OfflineAction[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(QUEUE_KEY, JSON.stringify(actions));
-}
+// Removed localStorage helpers in favor of IndexedDB logic from offline-queue-db.ts
 
 export function Step6ReviewExecute() {
   const {
@@ -122,18 +98,15 @@ export function Step6ReviewExecute() {
     };
   }, [joinSearch, selectedEvent, selectedTeamMode]);
 
-  const enqueueAction = useCallback((action: Omit<OfflineAction, 'id' | 'createdAt'>) => {
-    const current = readQueue();
-    const next = [
-      ...current,
-      {
-        id: generateActionId(),
-        createdAt: new Date().toISOString(),
-        ...action,
-      },
-    ];
-    writeQueue(next);
-    setQueuedCount(next.length);
+  const enqueueAction = useCallback(async (action: Omit<OfflineAction, 'id' | 'createdAt'>) => {
+    const newAction: OfflineAction = {
+      id: generateActionId(),
+      createdAt: new Date().toISOString(),
+      ...action,
+    };
+    await appendOfflineAction(newAction);
+    const current = await readOfflineQueue();
+    setQueuedCount(current.length);
   }, []);
 
   const replayAction = useCallback(async (action: OfflineAction) => {
@@ -190,7 +163,7 @@ export function Step6ReviewExecute() {
 
   const flushQueue = useCallback(async () => {
     if (isSyncingQueue) return;
-    const current = readQueue();
+    const current = await readOfflineQueue();
     if (current.length === 0) {
       setQueuedCount(0);
       return;
@@ -201,12 +174,13 @@ export function Step6ReviewExecute() {
       const remaining: OfflineAction[] = [];
       for (const action of current) {
         const ok = await replayAction(action);
-        if (!ok) {
+        if (ok) {
+          await removeOfflineAction(action.id);
+        } else {
           remaining.push(action);
         }
       }
 
-      writeQueue(remaining);
       setQueuedCount(remaining.length);
 
       if (remaining.length === 0) {
@@ -222,10 +196,14 @@ export function Step6ReviewExecute() {
   }, [isSyncingQueue, replayAction, setActionState]);
 
   useEffect(() => {
-    setQueuedCount(readQueue().length);
-    if (typeof navigator !== 'undefined' && navigator.onLine) {
-      void flushQueue();
-    }
+    const init = async () => {
+      const queue = await readOfflineQueue();
+      setQueuedCount(queue.length);
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        void flushQueue();
+      }
+    };
+    init();
 
     const onOnline = () => {
       void flushQueue();
@@ -252,7 +230,7 @@ export function Step6ReviewExecute() {
 
     if (isOffline) {
       if (selectedFunction === 'MARK_ATTENDANCE') {
-        enqueueAction({
+        await enqueueAction({
           type: 'MARK_ATTENDANCE',
           payload: { userId: participant.id, eventName: selectedEvent.name },
         });
@@ -261,13 +239,13 @@ export function Step6ReviewExecute() {
       }
 
       if (selectedFunction === 'ISSUE_KIT') {
-        enqueueAction({ type: 'ISSUE_KIT', payload: { userId: participant.id } });
+        await enqueueAction({ type: 'ISSUE_KIT', payload: { userId: participant.id } });
         setActionState({ status: 'success', message: 'Queued kit issue action for sync.', error: null });
         return;
       }
 
       if (selectedFunction === 'QUICK_REGISTER') {
-        enqueueAction({
+        await enqueueAction({
           type: 'QUICK_REGISTER',
           payload: { userId: participant.id, eventName: selectedEvent.name },
         });
@@ -276,7 +254,7 @@ export function Step6ReviewExecute() {
       }
 
       if (selectedFunction === 'TEAM_REGISTRATION' && selectedTeamMode === 'CREATE_BULK' && bulkTeamDraft) {
-        enqueueAction({
+        await enqueueAction({
           type: 'TEAM_BULK_REGISTER',
           payload: {
             eventName: selectedEvent.name,
@@ -291,7 +269,7 @@ export function Step6ReviewExecute() {
       }
 
       if (selectedFunction === 'TEAM_REGISTRATION' && resolvedTeamName) {
-        enqueueAction({
+        await enqueueAction({
           type: 'TEAM_REGISTER_MEMBER',
           payload: {
             userId: participant.id,

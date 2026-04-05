@@ -1,8 +1,15 @@
 import RegistrationForm from "@/components/features/RegistrationForm";
 import { getActiveYearShort } from "@/lib/edition";
+import { redirect } from "next/navigation";
+import { REGISTRATION_TARGET_TIME } from "@/components/features/CountdownOptimized";
 
 export default function RegisterPage() {
   const activeYearShort = getActiveYearShort();
+
+  // Hard server-side enforcement
+  if (Date.now() >= REGISTRATION_TARGET_TIME) {
+    redirect("/onspot-registration");
+  }
 
   return (
     <div className="min-h-screen py-10 bg-gray-50 flex items-center justify-center">

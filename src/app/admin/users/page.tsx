@@ -4,6 +4,9 @@ import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProofSignedUrl } from "@/lib/storage/signed-urls";
 import type { Prisma } from "@prisma/client";
+import Pagination from "@/components/ui/Pagination";
+
+const PAGE_SIZE = 25;
 
 function parseFilter<T extends string>(value: string | undefined, allowed: readonly T[], fallback: T | undefined) {
   if (!value) return fallback;
@@ -38,6 +41,7 @@ export default async function UserManagementPage({ searchParams }: { searchParam
   const paymentStatus = parseFilter<PaymentStatus>(typeof searchParams?.payment === "string" ? searchParams.payment : undefined, ["PENDING", "VERIFIED", "REJECTED"], undefined);
   const kitStatus = parseFilter<KitStatus>(typeof searchParams?.kit === "string" ? searchParams.kit : undefined, ["PENDING", "ISSUED"], undefined);
   const sort = typeof searchParams?.sort === "string" ? searchParams.sort : "date-desc";
+  const currentPage = Math.max(1, parseInt(typeof searchParams?.page === "string" ? searchParams.page : "1", 10) || 1);
 
   const where: Prisma.UserWhereInput = {
     role: { in: ["APPLICANT", "PARTICIPANT"] },
@@ -78,12 +82,15 @@ export default async function UserManagementPage({ searchParams }: { searchParam
     }
   })();
 
-  const [users, totalRegistered, verifiedPayments, pendingPayments, rejectedPayments, generalOnly, workshopOnly, combo, kitsIssued] = await Promise.all([
+  const [users, totalFiltered, totalRegistered, verifiedPayments, pendingPayments, rejectedPayments, generalOnly, workshopOnly, combo, kitsIssued] = await Promise.all([
     prisma.user.findMany({
       where,
       include: { payment: true },
       orderBy,
+      skip: (currentPage - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
+    prisma.user.count({ where }),
     prisma.user.count({ where: { role: { in: ["APPLICANT", "PARTICIPANT"] } } }),
     prisma.payment.count({ where: { status: "VERIFIED" } }),
     prisma.payment.count({ where: { status: "PENDING" } }),
@@ -93,6 +100,20 @@ export default async function UserManagementPage({ searchParams }: { searchParam
     prisma.user.count({ where: { role: { in: ["APPLICANT", "PARTICIPANT"] }, registrationType: "COMBO" } }),
     prisma.user.count({ where: { kitStatus: "ISSUED" } }),
   ]);
+
+  const totalPages = Math.ceil(totalFiltered / PAGE_SIZE);
+
+  // Build the base URL for pagination (preserving existing filters)
+  const paginationBaseUrl = (() => {
+    const params = new URLSearchParams();
+    if (search) params.set('q', search);
+    if (regType) params.set('type', regType);
+    if (paymentStatus) params.set('payment', paymentStatus);
+    if (kitStatus) params.set('kit', kitStatus);
+    if (sort !== 'date-desc') params.set('sort', sort);
+    const qs = params.toString();
+    return `/admin/users${qs ? `?${qs}` : ''}`;
+  })();
 
   const summaryCards = [
     { label: "Total Registered", value: totalRegistered },
@@ -278,6 +299,7 @@ export default async function UserManagementPage({ searchParams }: { searchParam
               </tbody>
             </table>
           </div>
+          <Pagination currentPage={currentPage} totalPages={totalPages} baseUrl={paginationBaseUrl} />
         </div>
       </div>
     </div>

@@ -5,39 +5,14 @@ import { AlertTriangle, CheckCircle2, Loader2, Unlock } from 'lucide-react';
 import { useScannerContext } from './ScannerContext';
 import { lockTeamAfterRegistration } from '@/server/actions/event-logistics';
 import { generateActionId } from './scanner-steps-lib';
+import {
+  readOfflineQueue,
+  appendOfflineAction,
+  removeOfflineAction,
+  type OfflineAction,
+} from '@/lib/offline-queue-db';
 
-type OfflineAction = {
-  id: string;
-  type:
-    | 'MARK_ATTENDANCE'
-    | 'ISSUE_KIT'
-    | 'QUICK_REGISTER'
-    | 'TEAM_BULK_REGISTER'
-    | 'TEAM_REGISTER_MEMBER'
-    | 'TEAM_LOCK';
-  payload: Record<string, unknown>;
-  createdAt: string;
-};
-
-const QUEUE_KEY = 'scanner-v2-offline-actions';
-
-function readQueue(): OfflineAction[] {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const raw = window.localStorage.getItem(QUEUE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as OfflineAction[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeQueue(actions: OfflineAction[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(QUEUE_KEY, JSON.stringify(actions));
-}
+// Removed localStorage helpers in favor of IndexedDB logic from offline-queue-db.ts
 
 export function Step7LockConfirm() {
   const {
@@ -51,25 +26,22 @@ export function Step7LockConfirm() {
   const [queuedLockCount, setQueuedLockCount] = useState(0);
   const [isSyncingQueue, setIsSyncingQueue] = useState(false);
 
-  const enqueueTeamLock = useCallback((payload: Record<string, unknown>) => {
-    const current = readQueue();
-    const next: OfflineAction[] = [
-      ...current,
-      {
-        id: generateActionId(),
-        type: 'TEAM_LOCK',
-        payload,
-        createdAt: new Date().toISOString(),
-      },
-    ];
-    writeQueue(next);
-    setQueuedLockCount(next.filter((item) => item.type === 'TEAM_LOCK').length);
+  const enqueueTeamLock = useCallback(async (payload: Record<string, unknown>) => {
+    const newAction: OfflineAction = {
+      id: generateActionId(),
+      type: 'TEAM_LOCK',
+      payload,
+      createdAt: new Date().toISOString(),
+    };
+    await appendOfflineAction(newAction);
+    const current = await readOfflineQueue();
+    setQueuedLockCount(current.filter((item) => item.type === 'TEAM_LOCK').length);
   }, []);
 
   const flushLockQueue = useCallback(async () => {
     if (isSyncingQueue) return;
 
-    const current = readQueue();
+    const current = await readOfflineQueue();
     if (current.length === 0) {
       setQueuedLockCount(0);
       return;
@@ -92,12 +64,13 @@ export function Step7LockConfirm() {
             typeof action.payload.leaderUserId === 'string' ? String(action.payload.leaderUserId) : undefined,
         });
 
-        if (!result.success) {
+        if (result.success) {
+          await removeOfflineAction(action.id);
+        } else {
           remaining.push(action);
         }
       }
 
-      writeQueue(remaining);
       setQueuedLockCount(remaining.filter((item) => item.type === 'TEAM_LOCK').length);
 
       if (remaining.every((item) => item.type !== 'TEAM_LOCK')) {
@@ -113,12 +86,15 @@ export function Step7LockConfirm() {
   }, [isSyncingQueue, setActionState]);
 
   useEffect(() => {
-    const current = readQueue();
-    setQueuedLockCount(current.filter((item) => item.type === 'TEAM_LOCK').length);
+    const init = async () => {
+      const current = await readOfflineQueue();
+      setQueuedLockCount(current.filter((item) => item.type === 'TEAM_LOCK').length);
 
-    if (typeof navigator !== 'undefined' && navigator.onLine) {
-      void flushLockQueue();
-    }
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        void flushLockQueue();
+      }
+    };
+    init();
 
     const onOnline = () => {
       void flushLockQueue();
@@ -152,7 +128,7 @@ export function Step7LockConfirm() {
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
     if (isOffline) {
-      enqueueTeamLock({
+      await enqueueTeamLock({
         eventName: pendingTeamLock.eventName,
         teamName: pendingTeamLock.teamName,
         leaderUserId: participant?.id,

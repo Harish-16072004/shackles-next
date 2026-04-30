@@ -1,53 +1,59 @@
 import 'server-only'
-import { SignJWT, jwtVerify } from 'jose'
-import { cookies } from 'next/headers'
-import { getRequiredEnv } from '@/lib/env'
+import { auth, signOut } from '@/auth'
+import { redirect } from 'next/navigation'
 
-const secretKey = getRequiredEnv('SESSION_SECRET')
-const encodedKey = new TextEncoder().encode(secretKey)
+/**
+ * Auth.js v5 compatible session wrapper
+ * Provides backward-compatible interface for existing code
+ */
 
-// 1. Create the Session (Login)
-export async function createSession(userId: string, role: string, displayName?: string) {
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
-  const sessionPayload: { userId: string; role: string; displayName?: string } = { userId, role }
-  if (displayName) {
-    sessionPayload.displayName = displayName
-  }
-
-  const session = await new SignJWT(sessionPayload)
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('7d')
-    .sign(encodedKey)
- 
-  const cookieStore = await cookies();
-  cookieStore.set('session', session, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    expires: expiresAt,
-    sameSite: 'lax',
-    path: '/',
-  })
-}
-
-// 2. Delete Session (Logout)
-export async function deleteSession() {
-  const cookieStore = await cookies();
-  cookieStore.delete('session')
-}
-
-// 3. Verify Session (Middleware check)
 export async function getSession() {
-  const cookieStore = await cookies();
-  const cookie = cookieStore.get('session')?.value
-  if (!cookie) return null
-  
-  try {
-    const { payload } = await jwtVerify(cookie, encodedKey, {
-      algorithms: ['HS256'],
-    })
-    return payload
-  } catch {
+  const session = await auth()
+  if (!session?.user) {
     return null
   }
+
+  // Convert Auth.js session to legacy format
+  const user = session.user as any
+  return {
+    userId: user.id,
+    role: user.role || 'APPLICANT',
+    displayName: user.name,
+    email: user.email,
+    user,
+  }
+}
+
+export async function requireSession() {
+  const session = await getSession()
+  if (!session) {
+    redirect('/login')
+  }
+  return session
+}
+
+export async function requireAdmin() {
+  const session = await requireSession()
+  const userRole = (session as any)?.role
+  if (userRole !== 'ADMIN') {
+    redirect('/')
+  }
+  return session
+}
+
+/**
+ * Create session via Auth.js signIn
+ * Note: In Auth.js, sessions are created automatically after successful authorize
+ */
+export async function createSession(userId: string, role: string, displayName?: string) {
+  // In Auth.js with database sessions, this is handled automatically
+  // This function is kept for backward compatibility
+  console.warn('[Session] createSession called - Auth.js handles session creation automatically')
+}
+
+/**
+ * Delete session via Auth.js signOut
+ */
+export async function deleteSession() {
+  await signOut({ redirect: false })
 }

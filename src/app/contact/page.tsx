@@ -143,7 +143,7 @@ export default function ContactPage() {
                  referrerPolicy="no-referrer-when-downgrade"
                  className="absolute inset-0 opacity-60 group-hover:opacity-100 transition-opacity duration-500 rounded-lg filter grayscale group-hover:grayscale-0"
                ></iframe>
-               <div className="absolute bottom-4 left-4 bg-white text-black px-3 py-1 text-xs font-bold rounded shadow-lg pointer-events-none">
+               <div className="absolute bottom-4 left-4 bg-white text-black px-3 py-1 text-xs font-bold rounded-sm shadow-lg pointer-events-none">
                   ACGCET, Karaikudi
                </div>
             </div>
@@ -161,7 +161,7 @@ export default function ContactPage() {
                 >
                     <button 
                       onClick={() => toggleSection(idx)}
-                      className="w-full flex justify-between items-center p-4 text-left focus:outline-none bg-transparent"
+                      className="w-full flex justify-between items-center p-4 text-left focus:outline-hidden bg-transparent"
                     >
                       <span className={`font-semibold text-sm uppercase tracking-wide flex items-center gap-2 ${openSection === idx ? "text-purple-400" : "text-gray-200"}`}>
                         {item.title}
@@ -217,7 +217,7 @@ export default function ContactPage() {
                   onChange={handleChange}
                   placeholder="Name" 
                   required
-                  className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                  className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-hidden transition-all placeholder:text-gray-400"
                 />
               </div>
 
@@ -232,7 +232,7 @@ export default function ContactPage() {
                   onChange={handleChange}
                   placeholder="Mobile" 
                   required
-                  className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                  className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-hidden transition-all placeholder:text-gray-400"
                 />
               </div>
 
@@ -247,7 +247,7 @@ export default function ContactPage() {
                   onChange={handleChange}
                   placeholder="Email" 
                   required
-                  className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                  className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-hidden transition-all placeholder:text-gray-400"
                 />
               </div>
 
@@ -259,7 +259,7 @@ export default function ContactPage() {
                   onChange={handleChange}
                   placeholder="Your Message" 
                   required
-                  className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400 resize-none"
+                  className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-hidden transition-all placeholder:text-gray-400 resize-none"
                 />
               </div>
 
@@ -279,13 +279,13 @@ export default function ContactPage() {
               </button>
 
               {success && (
-                <div className="p-3 bg-green-50 text-green-700 text-sm text-center rounded border border-green-200 animate-pulse">
+                <div className="p-3 bg-green-50 text-green-700 text-sm text-center rounded-sm border border-green-200 animate-pulse">
                   Request sent successfully!
                 </div>
               )}
               
               {error && (
-                <div className="p-3 bg-red-50 text-red-700 text-sm text-center rounded border border-red-200">
+                <div className="p-3 bg-red-50 text-red-700 text-sm text-center rounded-sm border border-red-200">
                   {error}
                 </div>
               )}

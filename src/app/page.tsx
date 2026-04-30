@@ -42,8 +42,8 @@ const aboutCards = [
 export default function Home() {
   return (
     <div className="flex flex-col gap-16 pb-8">
-      <section className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white px-8 py-12 shadow-sm">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-gray-900/0 via-gray-900/15 to-gray-900/0" />
+      <section className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white px-8 py-12 shadow-xs">
+        <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-gray-900/0 via-gray-900/15 to-gray-900/0" />
 
         <div className="flex flex-col gap-8">
           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
@@ -89,7 +89,7 @@ export default function Home() {
           {challengeCards.map((item) => (
             <div
               key={item.title}
-              className="flex h-full flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-gray-300"
+              className="flex h-full flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-xs transition-all hover:-translate-y-0.5 hover:border-gray-300"
             >
               <div className="flex items-center gap-3 text-gray-700">
                 <span className="grid h-10 w-10 place-items-center rounded-full border border-gray-200 text-base font-semibold text-gray-900">
@@ -112,7 +112,7 @@ export default function Home() {
           {aboutCards.map((item) => (
             <div
               key={item.title}
-              className="flex h-full flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-gray-300"
+              className="flex h-full flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-6 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-gray-300"
             >
               <h3 className="text-lg font-semibold text-gray-900 leading-snug">{item.title}</h3>
               <p className="text-sm leading-relaxed text-gray-600">{item.description}</p>

@@ -1,0 +1,21 @@
+TypeError: result.toDataStreamResponse is not a function
+    at POST (webpack-internal:///(rsc)/./src/app/api/chat/route.ts:137:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:55759
+    at async eO.execute (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46527)
+    at async eO.handle (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57093)
+    at async doRender (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\base-server.js:1345:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\base-server.js:1567:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\base-server.js:1475:28)
+    at async DevServer.renderPageComponent (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\base-server.js:1901:24)
+    at async DevServer.renderToResponseImpl (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\base-server.js:1939:32)
+    at async DevServer.pipeImpl (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\base-server.js:914:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\base-server.js:810:17)
+    at async C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\lib\router-server.js:173:21)
+    at async handleRequest (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\lib\router-server.js:350:24)
+    at async requestHandlerImpl (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\lib\router-server.js:374:13)
+    at async Server.requestListener (C:\Users\haris\Downloads\shackles_symposium\node_modules\next\dist\server\lib\start-server.js:141:13)

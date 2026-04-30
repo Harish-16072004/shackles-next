@@ -78,21 +78,21 @@ export default async function AdminAccommodationsPage({ searchParams }: { search
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <p className="text-xs font-semibold text-gray-500 uppercase">Total Requests</p>
             <p className="mt-2 text-2xl font-bold text-gray-900">{total}</p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <p className="text-xs font-semibold text-gray-500 uppercase">Male</p>
             <p className="mt-2 text-2xl font-bold text-gray-900">{male}</p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <p className="text-xs font-semibold text-gray-500 uppercase">Female</p>
             <p className="mt-2 text-2xl font-bold text-gray-900">{female}</p>
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-100 text-gray-600 uppercase text-xs">

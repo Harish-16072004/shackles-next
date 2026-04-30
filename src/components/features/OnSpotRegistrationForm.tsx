@@ -133,7 +133,7 @@ export default function OnSpotRegistrationForm() {
 
   if (successMessage) {
     return (
-      <div className="rounded-2xl border border-green-200 bg-green-50 p-8 text-center shadow-sm">
+      <div className="rounded-2xl border border-green-200 bg-green-50 p-8 text-center shadow-xs">
         <h2 className="text-2xl font-bold text-green-800">Submission Received</h2>
         <p className="mt-3 text-sm text-green-700">{successMessage}</p>
         <p className="mt-2 text-xs text-green-700">You can log in after an admin verifies your payment.</p>

@@ -506,7 +506,7 @@ export function Step6ReviewExecute() {
             <button
               type="button"
               onClick={() => void flushQueue()}
-              className="text-xs px-2 py-1 rounded bg-amber-100 hover:bg-amber-200"
+              className="text-xs px-2 py-1 rounded-sm bg-amber-100 hover:bg-amber-200"
             >
               Retry sync now
             </button>

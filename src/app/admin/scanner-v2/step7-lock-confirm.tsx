@@ -242,7 +242,7 @@ export function Step7LockConfirm() {
             <button
               type="button"
               onClick={() => void flushLockQueue()}
-              className="text-xs px-2 py-1 rounded bg-amber-100 hover:bg-amber-200"
+              className="text-xs px-2 py-1 rounded-sm bg-amber-100 hover:bg-amber-200"
             >
               Retry lock sync
             </button>

@@ -128,7 +128,7 @@ export function Step5BulkTeam() {
               type="button"
               onClick={addMemberField}
               disabled={memberInputs.length >= MAX_FIELDS}
-              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
+              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
             >
               <Plus className="w-3 h-3" /> Add member
             </button>
@@ -154,7 +154,7 @@ export function Step5BulkTeam() {
                     type="button"
                     onClick={() => removeMemberField(index)}
                     disabled={memberInputs.length <= MIN_FIELDS}
-                    className="p-2 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
+                    className="p-2 rounded-sm bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
                     aria-label={`Remove member ${index + 1}`}
                   >
                     <Trash2 className="w-4 h-4" />

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle2, ChevronRight, AlertCircle } from 'lucide-react';
 import { ScannerProvider, useScannerContext } from './ScannerContext';
@@ -150,7 +150,7 @@ function ScannerContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
@@ -163,7 +163,7 @@ function ScannerContent() {
                 resetContext();
                 router.push('/admin/scanner-v2?step=1');
               }}
-              className="px-4 py-2 rounded bg-slate-700 text-white text-sm hover:bg-slate-600"
+              className="px-4 py-2 rounded-sm bg-slate-700 text-white text-sm hover:bg-slate-600"
             >
               New Scan
             </button>
@@ -201,7 +201,7 @@ function ScannerContent() {
 
         {actionState.status === 'error' && actionState.error && (
           <div className="mb-6 p-4 bg-red-900 border border-red-700 rounded-lg flex gap-3">
-            <AlertCircle className="w-5 h-5 text-red-200 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-red-200 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-red-100">Error</p>
               <p className="text-red-200 text-sm">{actionState.error}</p>
@@ -256,7 +256,20 @@ function ScannerContent() {
 export default function ScannerV2Page() {
   return (
     <ScannerProvider>
-      <ScannerContent />
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+            <div className="text-white flex flex-col items-center gap-4">
+              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              <p>Loading Scanner...</p>
+            </div>
+          </div>
+        }
+      >
+        <ScannerContent />
+      </Suspense>
     </ScannerProvider>
   );
 }
+
+export const dynamic = 'force-dynamic';

@@ -46,7 +46,7 @@ export default function AccommodationForm({ userId }: { userId: string }) {
             </p>
           </div>
           
-          <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 space-y-6">
+          <div className="bg-white p-8 rounded-xl shadow-xs border border-gray-200 space-y-6">
             <h2 className="font-semibold text-lg text-gray-900 border-b pb-2">Rules & Regulations</h2>
             <ul className="space-y-4 text-gray-600 list-disc pl-5 text-sm leading-relaxed">
               <li>Accommodation is provided on a <strong>First-Come-First-Serve</strong> basis.</li>
@@ -124,7 +124,7 @@ export default function AccommodationForm({ userId }: { userId: string }) {
                 <input 
                   type="checkbox" 
                   id="rules" 
-                  className="w-5 h-5 mt-0.5 accent-black rounded border-gray-300"
+                  className="w-5 h-5 mt-0.5 accent-black rounded-sm border-gray-300"
                   checked={accepted}
                   onChange={(e) => setAccepted(e.target.checked)}
                 />
@@ -137,7 +137,7 @@ export default function AccommodationForm({ userId }: { userId: string }) {
               <button 
                 onClick={handleSubmit}
                 disabled={loading || !accepted || days.length === 0 || !gender}
-                className="w-full bg-black text-white py-4 rounded-xl font-bold text-lg hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                className="w-full bg-black text-white py-4 rounded-xl font-bold text-lg hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
               >
                 {loading ? "Processing..." : "Confirm Accommodation"}
               </button>

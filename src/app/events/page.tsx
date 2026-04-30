@@ -57,7 +57,7 @@ export default function Events() {
           <Link
             key={category.id}
             href={`/events/${category.id}`}
-            className={`group flex h-full flex-col gap-4 rounded-2xl border-2 bg-white/50 p-6 shadow-sm transition-all hover:-translate-y-1 ${
+            className={`group flex h-full flex-col gap-4 rounded-2xl border-2 bg-white/50 p-6 shadow-xs transition-all hover:-translate-y-1 ${
               borderColorMap[category.color as keyof typeof borderColorMap]
             }`}
           >

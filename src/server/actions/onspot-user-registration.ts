@@ -37,9 +37,9 @@ function getClientIpFromHeaders(store: Headers) {
   return 'unknown';
 }
 
-function getRequestHeadersSafe() {
+async function getRequestHeadersSafe() {
   try {
-    return headers();
+    return await headers();
   } catch {
     return null;
   }
@@ -96,7 +96,7 @@ export async function registerOnSpotParticipant(input: unknown) {
   }
 
   const data = parsed.data;
-  const headerStore = getRequestHeadersSafe();
+  const headerStore = await getRequestHeadersSafe();
   const clientIp = headerStore ? getClientIpFromHeaders(headerStore) : 'unknown';
   const deviceFingerprint = (data.deviceId || '').trim().toLowerCase() || 'no-device';
   const now = Date.now();

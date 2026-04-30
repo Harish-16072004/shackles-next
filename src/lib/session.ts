@@ -20,7 +20,8 @@ export async function createSession(userId: string, role: string, displayName?: 
     .setExpirationTime('7d')
     .sign(encodedKey)
  
-  cookies().set('session', session, {
+  const cookieStore = await cookies();
+  cookieStore.set('session', session, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     expires: expiresAt,
@@ -31,12 +32,14 @@ export async function createSession(userId: string, role: string, displayName?: 
 
 // 2. Delete Session (Logout)
 export async function deleteSession() {
-  cookies().delete('session')
+  const cookieStore = await cookies();
+  cookieStore.delete('session')
 }
 
 // 3. Verify Session (Middleware check)
 export async function getSession() {
-  const cookie = cookies().get('session')?.value
+  const cookieStore = await cookies();
+  const cookie = cookieStore.get('session')?.value
   if (!cookie) return null
   
   try {

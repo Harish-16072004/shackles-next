@@ -450,22 +450,22 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <p className="text-xs font-semibold text-gray-500 uppercase">Total Events</p>
             <p className="mt-2 text-2xl font-bold text-gray-900">{totalEvents}</p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <p className="text-xs font-semibold text-gray-500 uppercase">Workshops</p>
             <p className="mt-2 text-2xl font-bold text-gray-900">{workshopCount}</p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <p className="text-xs font-semibold text-gray-500 uppercase">Upcoming</p>
             <p className="mt-2 text-2xl font-bold text-gray-900">{upcomingCount}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-3">
             <h2 className="text-lg font-bold text-gray-900">CSV Export</h2>
             <p className="text-sm text-gray-600">Download all events for backup or bulk editing.</p>
             <a
@@ -475,7 +475,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
               Download Events CSV
             </a>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-3">
             <h2 className="text-lg font-bold text-gray-900">CSV Import</h2>
             <p className="text-sm text-gray-600">Upload events CSV (same headers as export) to upsert records.</p>
             <form action="/api/admin/csv/events/import" method="post" encType="multipart/form-data" className="flex flex-col sm:flex-row gap-2 sm:items-center">
@@ -496,7 +496,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
           <form className="flex flex-col md:flex-row gap-3 md:items-center" method="get">
             <input
               type="number"
@@ -504,14 +504,14 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
               max={3000}
               name="year"
               defaultValue={selectedYear}
-              className="w-full md:w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full md:w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
             />
             <input
               type="text"
               name="q"
               defaultValue={q}
               placeholder="Search events"
-              className="w-full md:flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full md:flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
             />
             <label className="inline-flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" name="showArchived" value="true" defaultChecked={showArchived} />
@@ -529,7 +529,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
           </p>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
@@ -584,8 +584,8 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                               <span>{participantCount}/{event.maxParticipants ?? "∞"}</span>
                             </div>
                             {event.maxParticipants != null && (
-                              <div className="mt-1 h-1.5 w-full rounded bg-gray-200">
-                                <div className="h-1.5 rounded bg-gray-700" style={{ width: `${participantRatio}%` }} />
+                              <div className="mt-1 h-1.5 w-full rounded-sm bg-gray-200">
+                                <div className="h-1.5 rounded-sm bg-gray-700" style={{ width: `${participantRatio}%` }} />
                               </div>
                             )}
                           </div>
@@ -595,8 +595,8 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                               <span>{teamCount}/{event.maxTeams ?? "∞"}</span>
                             </div>
                             {event.maxTeams != null && (
-                              <div className="mt-1 h-1.5 w-full rounded bg-gray-200">
-                                <div className="h-1.5 rounded bg-gray-700" style={{ width: `${teamRatio}%` }} />
+                              <div className="mt-1 h-1.5 w-full rounded-sm bg-gray-200">
+                                <div className="h-1.5 rounded-sm bg-gray-700" style={{ width: `${teamRatio}%` }} />
                               </div>
                             )}
                           </div>
@@ -609,7 +609,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                         <div className="flex items-center gap-2">
                           <a
                             href={`/admin/events?year=${selectedYear}&edit=${event.id}${q ? `&q=${encodeURIComponent(q)}` : ""}${showArchived ? "&showArchived=true" : ""}`}
-                            className="rounded border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+                            className="rounded-sm border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-100"
                           >
                             Edit
                           </a>
@@ -619,7 +619,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                               <input type="hidden" name="year" value={selectedYear} />
                               <button
                                 type="submit"
-                                className="rounded border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                                className="rounded-sm border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
                               >
                                 Restore
                               </button>
@@ -630,7 +630,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                               <input type="hidden" name="year" value={selectedYear} />
                               <button
                                 type="submit"
-                                className="rounded border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                                className="rounded-sm border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
                               >
                                 Archive
                               </button>
@@ -655,7 +655,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
         </div>
 
         {editingEvent && (
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900">Edit Event</h2>
               <a href="/admin/events" className="text-sm font-semibold text-gray-600 hover:text-gray-900">Clear</a>
@@ -666,14 +666,14 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Event Name*
-                  <input name="name" required defaultValue={editingEvent.name} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input name="name" required defaultValue={editingEvent.name} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Type
                   <select
                     name="type"
                     defaultValue={editingEvent.type || ""}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
                   >
                     <option value="">Select type</option>
                     {EVENT_TYPE_OPTIONS.map((option) => (
@@ -685,7 +685,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Participation Mode
-                  <select name="participationMode" defaultValue={editingEvent.participationMode} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
+                  <select name="participationMode" defaultValue={editingEvent.participationMode} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900">
                     <option value="INDIVIDUAL">INDIVIDUAL</option>
                     <option value="TEAM">TEAM</option>
                   </select>
@@ -698,7 +698,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                   <select
                     name="dayLabel"
                     defaultValue={editingEvent.dayLabel || ""}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
                   >
                     <option value="">Select day</option>
                     {DAY_LABEL_OPTIONS.map((option) => (
@@ -710,27 +710,27 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Date & Time
-                  <input type="datetime-local" name="date" defaultValue={toDateTimeLocalValue(editingEvent.date)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input type="datetime-local" name="date" defaultValue={toDateTimeLocalValue(editingEvent.date)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   End Date & Time
-                  <input type="datetime-local" name="endDate" defaultValue={toDateTimeLocalValue(editingEvent.endDate)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input type="datetime-local" name="endDate" defaultValue={toDateTimeLocalValue(editingEvent.endDate)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Max Participants
-                  <input type="number" min={1} name="maxParticipants" defaultValue={editingEvent.maxParticipants ?? ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input type="number" min={1} name="maxParticipants" defaultValue={editingEvent.maxParticipants ?? ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Max Teams
-                  <input type="number" min={1} name="maxTeams" defaultValue={editingEvent.maxTeams ?? ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input type="number" min={1} name="maxTeams" defaultValue={editingEvent.maxTeams ?? ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Team Min Size
-                  <input type="number" min={1} name="teamMinSize" defaultValue={editingEvent.teamMinSize ?? ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input type="number" min={1} name="teamMinSize" defaultValue={editingEvent.teamMinSize ?? ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Team Max Size
-                  <input type="number" min={1} name="teamMaxSize" defaultValue={editingEvent.teamMaxSize ?? ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input type="number" min={1} name="teamMaxSize" defaultValue={editingEvent.teamMaxSize ?? ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex items-center gap-2 text-sm text-gray-700 mt-7">
                   <input type="checkbox" name="isActive" defaultChecked={editingEvent.isActive} /> Active
@@ -739,36 +739,36 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Description
-                  <textarea name="description" rows={3} defaultValue={editingEvent.description || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <textarea name="description" rows={3} defaultValue={editingEvent.description || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
                     Rules URL
-                    <input name="rulesUrl" defaultValue={editingEvent.rulesUrl || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    <input name="rulesUrl" defaultValue={editingEvent.rulesUrl || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
                     Coordinator 1 Name*
-                    <input name="coordinatorName1" required defaultValue={editingCoordinatorName1} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    <input name="coordinatorName1" required defaultValue={editingCoordinatorName1} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
                     Coordinator 1 Phone*
-                    <input name="coordinatorPhone1" required defaultValue={editingCoordinatorPhone1} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    <input name="coordinatorPhone1" required defaultValue={editingCoordinatorPhone1} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
                     Coordinator 2 Name
-                    <input name="coordinatorName2" defaultValue={editingCoordinatorName2} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    <input name="coordinatorName2" defaultValue={editingCoordinatorName2} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
                     Coordinator 2 Phone
-                    <input name="coordinatorPhone2" defaultValue={editingCoordinatorPhone2} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    <input name="coordinatorPhone2" defaultValue={editingCoordinatorPhone2} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
                     Coordinator 3 Name
-                    <input name="coordinatorName3" defaultValue={editingCoordinatorName3} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    <input name="coordinatorName3" defaultValue={editingCoordinatorName3} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
                     Coordinator 3 Phone
-                    <input name="coordinatorPhone3" defaultValue={editingCoordinatorPhone3} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    <input name="coordinatorPhone3" defaultValue={editingCoordinatorPhone3} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                   </label>
                 </div>
               </div>
@@ -779,21 +779,21 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
           </div>
         )}
 
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
           <h2 className="text-lg font-bold text-gray-900 mb-3">Create Event</h2>
           <form key={formReset} action={createEventAction} className="space-y-3" autoComplete="off">
             <input type="hidden" name="year" value={selectedYear} />
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Event Name*
-                <input name="name" required className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <input name="name" required className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Type
                 <select
                   name="type"
                   defaultValue=""
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
                 >
                   <option value="">Select type</option>
                   {EVENT_TYPE_OPTIONS.map((option) => (
@@ -805,7 +805,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Participation Mode
-                <select name="participationMode" defaultValue="INDIVIDUAL" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
+                <select name="participationMode" defaultValue="INDIVIDUAL" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900">
                   <option value="INDIVIDUAL">INDIVIDUAL</option>
                   <option value="TEAM">TEAM</option>
                 </select>
@@ -818,7 +818,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
                 <select
                   name="dayLabel"
                   defaultValue=""
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
                 >
                   <option value="">Select day</option>
                   {DAY_LABEL_OPTIONS.map((option) => (
@@ -830,27 +830,27 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Date & Time
-                <input type="datetime-local" name="date" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <input type="datetime-local" name="date" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 End Date & Time
-                <input type="datetime-local" name="endDate" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <input type="datetime-local" name="endDate" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Max Participants
-                <input type="number" min={1} name="maxParticipants" placeholder="Leave empty for unlimited" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <input type="number" min={1} name="maxParticipants" placeholder="Leave empty for unlimited" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Max Teams
-                <input type="number" min={1} name="maxTeams" placeholder="Team events only" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <input type="number" min={1} name="maxTeams" placeholder="Team events only" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Team Min Size
-                <input type="number" min={1} name="teamMinSize" placeholder="e.g. 2" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <input type="number" min={1} name="teamMinSize" placeholder="e.g. 2" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Team Max Size
-                <input type="number" min={1} name="teamMaxSize" placeholder="e.g. 4" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <input type="number" min={1} name="teamMaxSize" placeholder="e.g. 4" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="flex items-center gap-2 text-sm text-gray-700 mt-7">
                 <input type="checkbox" name="isActive" defaultChecked /> Active
@@ -859,36 +859,36 @@ export default async function AdminEventsPage({ searchParams }: { searchParams?:
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 Description
-                <textarea name="description" rows={3} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <textarea name="description" rows={3} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Rules URL
-                  <input name="rulesUrl" placeholder="https://..." className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input name="rulesUrl" placeholder="https://..." className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Coordinator 1 Name*
-                  <input name="coordinatorName1" required className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input name="coordinatorName1" required className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Coordinator 1 Phone*
-                  <input name="coordinatorPhone1" required className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input name="coordinatorPhone1" required className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Coordinator 2 Name
-                  <input name="coordinatorName2" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input name="coordinatorName2" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Coordinator 2 Phone
-                  <input name="coordinatorPhone2" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input name="coordinatorPhone2" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Coordinator 3 Name
-                  <input name="coordinatorName3" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input name="coordinatorName3" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-gray-700">
                   Coordinator 3 Phone
-                  <input name="coordinatorPhone3" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                  <input name="coordinatorPhone3" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                 </label>
               </div>
             </div>

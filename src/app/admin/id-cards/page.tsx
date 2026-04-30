@@ -118,7 +118,7 @@ export default async function IDCardsPage() {
             <span className="font-mono font-semibold">744 × 1004 px</span> at 300 PPI)
             at:
           </p>
-          <code className="mt-1 block rounded bg-yellow-500/10 px-2 py-1 font-mono text-xs">
+          <code className="mt-1 block rounded-sm bg-yellow-500/10 px-2 py-1 font-mono text-xs">
             public/templates/id-card-template.png
           </code>
         </div>

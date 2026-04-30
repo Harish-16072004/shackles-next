@@ -54,7 +54,7 @@ export default async function UserDashboardPage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
       <LiveSyncRefresher intervalMs={12000} />
-      <section className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+      <section className="rounded-2xl border border-gray-200 bg-white p-8 shadow-xs">
         <p className="text-xs uppercase tracking-[0.2em] text-gray-500">User Dashboard</p>
         <h1 className="mt-2 text-3xl font-bold text-gray-900 md:text-4xl">Welcome {userName},</h1>
         {isOnSpotUser && (
@@ -66,7 +66,7 @@ export default async function UserDashboardPage() {
       </section>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-gray-900">Your Shackles ID</h2>
             {isOnSpotUser && (
@@ -83,7 +83,7 @@ export default async function UserDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
           <h2 className="text-lg font-semibold text-gray-900">Your QR</h2>
           {isPaymentVerified && qrImageUrl ? (
             <div className="mt-4">
@@ -105,7 +105,7 @@ export default async function UserDashboardPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
           <h2 className="text-lg font-semibold text-gray-900">Registered Events</h2>
           {events.length === 0 ? (
             <p className="mt-3 text-sm text-gray-500">No event registrations yet.</p>
@@ -121,7 +121,7 @@ export default async function UserDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
           <h2 className="text-lg font-semibold text-gray-900">Registered Workshops</h2>
           {workshops.length === 0 ? (
             <p className="mt-3 text-sm text-gray-500">No workshop registrations yet.</p>

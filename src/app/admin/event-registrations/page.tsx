@@ -118,12 +118,12 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
           </div>
         ) : null}
 
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
           <form className="grid grid-cols-1 md:grid-cols-3 gap-3" method="get">
             <select
               name="type"
               defaultValue={typeFilter}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
             >
               {typeOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -134,7 +134,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
               name="q"
               defaultValue={q}
               placeholder="Name, email, or college"
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
             />
             <div className="flex gap-2">
               <button
@@ -170,7 +170,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-3">
             <h2 className="text-lg font-bold text-gray-900">CSV Export</h2>
             <p className="text-sm text-gray-600">Download all event registrations with team and attendance fields.</p>
             <a
@@ -180,7 +180,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
               Download Registrations CSV
             </a>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-3">
             <h2 className="text-lg font-bold text-gray-900">CSV Import</h2>
             <p className="text-sm text-gray-600">Upload registrations CSV (eventName + userEmail required) to bulk upsert rows.</p>
             <form action="/api/admin/csv/registrations/import" method="post" encType="multipart/form-data" className="flex flex-col sm:flex-row gap-2 sm:items-center">
@@ -201,7 +201,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             {filtered.length === 0 ? (
               <div className="p-12 text-center text-gray-500">No registrations found.</div>
@@ -246,7 +246,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
                         <td className="px-4 py-3">
                           <a
                             href={`/api/admin/csv/registrations/export?eventId=${encodeURIComponent(evt.id)}`}
-                            className="inline-flex rounded border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                            className="inline-flex rounded-sm border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                           >
                             Download CSV
                           </a>
@@ -257,7 +257,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
                           ) : (
                             <div className="space-y-3">
                               {teamsInEvent.length > 0 ? (
-                                <div className="space-y-1 rounded border border-gray-200 bg-gray-50 p-2">
+                                <div className="space-y-1 rounded-sm border border-gray-200 bg-gray-50 p-2">
                                   <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Teams</p>
                                   <ul className="space-y-1 text-xs text-gray-800">
                                     {teamsInEvent.map((team) => (
@@ -272,7 +272,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
 
                               <ul className="space-y-1 text-xs text-gray-800">
                                 {evt.registrations.map((reg) => (
-                                  <li key={reg.id} className="flex items-center justify-between gap-2 rounded border border-gray-100 px-2 py-1">
+                                  <li key={reg.id} className="flex items-center justify-between gap-2 rounded-sm border border-gray-100 px-2 py-1">
                                     <div className="min-w-0">
                                       <p className="font-semibold text-gray-900">{reg.user.firstName} {reg.user.lastName}</p>
                                       <p className="text-gray-500">

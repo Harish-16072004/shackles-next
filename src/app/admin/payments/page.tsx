@@ -94,15 +94,15 @@ export default async function PaymentVerificationPage({ searchParams }: { search
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pending</p>
             <p className="mt-2 text-2xl font-bold text-orange-600">{pendingCount}</p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Verified</p>
             <p className="mt-2 text-2xl font-bold text-green-600">{verifiedCount}</p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total (filtered)</p>
             <p className="mt-2 text-2xl font-bold text-gray-900">{payments.length}</p>
             <p className="text-sm text-gray-500">{formatINR(totalAmount)} total</p>
@@ -138,7 +138,7 @@ export default async function PaymentVerificationPage({ searchParams }: { search
             return (
               <div
                 key={payment.id}
-                className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex flex-col gap-4"
+                className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs flex flex-col gap-4"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -225,7 +225,7 @@ export default async function PaymentVerificationPage({ searchParams }: { search
                     <p>Reviewed on {formatDate(payment.verifiedAt || payment.rejectedAt || payment.createdAt)}</p>
                     <p>Reviewed by {payment.verifiedBy || "--"}</p>
                     {user.shacklesId && (
-                      <span className="inline-flex font-mono text-xs bg-gray-900 text-white px-2 py-1 rounded">{user.shacklesId}</span>
+                      <span className="inline-flex font-mono text-xs bg-gray-900 text-white px-2 py-1 rounded-sm">{user.shacklesId}</span>
                     )}
                   </div>
                 )}

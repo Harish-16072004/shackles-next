@@ -360,9 +360,9 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                                 className="space-y-1"
                               >
                                 <input type="hidden" name="userId" value={user.id} />
-                                <input name="deviceId" placeholder="Device ID (optional)" className="w-full border rounded px-2 py-1 text-xs" />
-                                <input name="note" placeholder="Verification note (optional)" className="w-full border rounded px-2 py-1 text-xs" />
-                                <button className="w-full bg-green-600 text-white px-2 py-1.5 rounded text-xs font-semibold hover:bg-green-700">Verify Payment</button>
+                                <input name="deviceId" placeholder="Device ID (optional)" className="w-full border rounded-sm px-2 py-1 text-xs" />
+                                <input name="note" placeholder="Verification note (optional)" className="w-full border rounded-sm px-2 py-1 text-xs" />
+                                <button className="w-full bg-green-600 text-white px-2 py-1.5 rounded-sm text-xs font-semibold hover:bg-green-700">Verify Payment</button>
                               </form>
 
                               <form
@@ -377,8 +377,8 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                                 className="space-y-1"
                               >
                                 <input type="hidden" name="userId" value={user.id} />
-                                <input name="reason" placeholder="Rejection reason" className="w-full border rounded px-2 py-1 text-xs" />
-                                <button className="w-full bg-red-600 text-white px-2 py-1.5 rounded text-xs font-semibold hover:bg-red-700">Reject Payment</button>
+                                <input name="reason" placeholder="Rejection reason" className="w-full border rounded-sm px-2 py-1 text-xs" />
+                                <button className="w-full bg-red-600 text-white px-2 py-1.5 rounded-sm text-xs font-semibold hover:bg-red-700">Reject Payment</button>
                               </form>
                             </>
                           )}

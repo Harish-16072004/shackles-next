@@ -19,7 +19,7 @@ export default function TermsAndConditionsPage() {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50 text-gray-900">
-      <div className="max-w-3xl w-full bg-white border border-gray-200 p-8 md:p-12 rounded-xl shadow-sm">
+      <div className="max-w-3xl w-full bg-white border border-gray-200 p-8 md:p-12 rounded-xl shadow-xs">
         
         <div className="text-center mb-10 border-b border-gray-200 pb-6">
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">
@@ -33,7 +33,7 @@ export default function TermsAndConditionsPage() {
         <div className="space-y-5">
           {terms.map((term, index) => (
             <div key={index} className="flex items-start gap-4 p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-              <span className="flex-shrink-0 text-lg font-semibold text-gray-400 w-8 text-right">
+              <span className="shrink-0 text-lg font-semibold text-gray-400 w-8 text-right">
                 {index + 1}.
               </span>
               <p className="text-base leading-relaxed text-gray-700 mt-0.5">

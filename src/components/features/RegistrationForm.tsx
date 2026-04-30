@@ -409,7 +409,7 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
               </div>
 
               <div className="space-y-1 mt-4">
-                <div className="flex items-center gap-2 bg-gray-50 p-3 rounded">
+                <div className="flex items-center gap-2 bg-gray-50 p-3 rounded-sm">
                   <input {...register("acceptedTerms")} type="checkbox" id="terms" className="w-4 h-4" />
                   <label htmlFor="terms" className="text-sm text-gray-600">
                     I accept the <a

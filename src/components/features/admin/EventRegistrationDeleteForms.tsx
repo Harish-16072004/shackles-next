@@ -24,7 +24,7 @@ export function TeamDeleteForm({ teamId, teamName }: TeamDeleteFormProps) {
       <input type="hidden" name="teamId" value={teamId} />
       <button
         type="submit"
-        className="rounded border border-red-300 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+        className="rounded-sm border border-red-300 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
       >
         Delete Team
       </button>
@@ -43,7 +43,7 @@ export function MemberDeleteForm({ registrationId, fullName, hasTeam }: MemberDe
       <input type="hidden" name="registrationId" value={registrationId} />
       <button
         type="submit"
-        className="rounded border border-red-300 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+        className="rounded-sm border border-red-300 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
       >
         {hasTeam ? "Delete Member" : "Delete Participant"}
       </button>

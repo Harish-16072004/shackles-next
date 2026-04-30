@@ -166,7 +166,7 @@ export function Step1Scan() {
             <strong>{participant.firstName}</strong>
           </p>
           {participant.shacklesId && (
-            <p className="font-mono text-xs bg-green-100 px-2 py-1 rounded">
+            <p className="font-mono text-xs bg-green-100 px-2 py-1 rounded-sm">
               {participant.shacklesId}
             </p>
           )}
@@ -177,7 +177,7 @@ export function Step1Scan() {
             setError('');
             scannerRef.current?.resume();
           }}
-          className="mt-4 w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
+          className="mt-4 w-full px-4 py-2 bg-green-600 text-white rounded-sm hover:bg-green-700 transition"
         >
           Scan Another
         </button>
@@ -203,7 +203,7 @@ export function Step1Scan() {
 
       {error && (
         <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-          <XCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+          <XCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
           <div>
             <p className="text-sm font-medium text-red-800">Scan Error</p>
             <p className="text-xs text-red-700 mt-1">{error}</p>

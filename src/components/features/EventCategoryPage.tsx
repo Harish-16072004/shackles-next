@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Suspense, ReactNode } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -37,6 +37,7 @@ type Props = {
   title: string;
   subtitle: string;
   accent: "red" | "cyan" | "emerald";
+  fallback?: ReactNode;
 };
 
 const accentStyles = {
@@ -109,7 +110,7 @@ function shouldShowLoginPopup(status: number): boolean {
   return status === 401;
 }
 
-export default function EventCategoryPage({ category, title, subtitle, accent }: Props) {
+function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props, 'fallback'>) {
   const searchParams = useSearchParams();
   const [events, setEvents] = useState<EventItem[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
@@ -360,7 +361,7 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
             <button
               key={event.id}
               onClick={() => setSelectedEvent(event)}
-              className={`flex h-full flex-col gap-3 rounded-2xl border-2 border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:-translate-y-0.5 ${styles.cardBorder}`}
+              className={`flex h-full flex-col gap-3 rounded-2xl border-2 border-gray-200 bg-white p-6 text-left shadow-xs transition-all hover:-translate-y-0.5 ${styles.cardBorder}`}
             >
               <div className="h-4 w-4 rounded-full bg-white/50" />
               <h2 className="text-xl font-semibold text-gray-900 leading-tight">{event.name}</h2>
@@ -382,7 +383,7 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
           <div className={`relative w-full max-w-2xl rounded-2xl border-2 bg-gray-900 p-8 text-white max-h-[90vh] overflow-y-auto ${styles.modalBorder}`}>
             <button
               onClick={() => setSelectedEvent(null)}
-              className={`absolute right-4 top-4 rounded border p-1 ${styles.closeButton}`}
+              className={`absolute right-4 top-4 rounded-sm border p-1 ${styles.closeButton}`}
             >
               <X size={20} />
             </button>
@@ -393,7 +394,7 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
             </div>
 
             {formatSchedule(selectedEvent.date, selectedEvent.endDate) && (
-              <p className="mb-4 rounded border border-gray-700 bg-gray-800/40 px-3 py-2 text-xs text-gray-200">
+              <p className="mb-4 rounded-sm border border-gray-700 bg-gray-800/40 px-3 py-2 text-xs text-gray-200">
                 Schedule: {formatSchedule(selectedEvent.date, selectedEvent.endDate)}
               </p>
             )}
@@ -401,16 +402,16 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
             <p className="mb-6 text-sm leading-relaxed text-gray-300">{selectedEvent.description || "No description available."}</p>
 
             {selectedEvent.participationMode === "TEAM" && (
-              <div className="mb-6 rounded border border-gray-700 bg-gray-800/40 p-4">
+              <div className="mb-6 rounded-sm border border-gray-700 bg-gray-800/40 p-4">
                 <p className="mb-3 text-sm font-semibold text-gray-100">Team Registration</p>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded border border-gray-700 bg-gray-900/50 p-3">
+                  <div className="rounded-sm border border-gray-700 bg-gray-900/50 p-3">
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-300">Create Team</p>
                     <input
                       value={teamName}
                       onChange={(event) => setTeamName(event.target.value)}
                       placeholder="Team name"
-                      className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-gray-400"
+                      className="w-full rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400"
                     />
                     <button
                       disabled={creatingTeam || registering || completingTeam || !selectedEvent.isActive}
@@ -420,20 +421,20 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
                       {creatingTeam ? "CREATING TEAM..." : "CREATE TEAM (LEADER)"}
                     </button>
                   </div>
-                  <div className="rounded border border-gray-700 bg-gray-900/50 p-3">
+                  <div className="rounded-sm border border-gray-700 bg-gray-900/50 p-3">
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-300">Join Team</p>
                     <div className="grid gap-2">
                       <input
                         value={teamCode}
                         onChange={(event) => setTeamCode(event.target.value.toUpperCase())}
                         placeholder="Team code"
-                        className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-gray-400"
+                        className="rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400"
                       />
                       <input
                         value={inviteToken}
                         onChange={(event) => setInviteToken(event.target.value)}
                         placeholder="Invite token (optional)"
-                        className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-gray-400"
+                        className="rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400"
                       />
                     </div>
                     <button
@@ -446,7 +447,7 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
                   </div>
                 </div>
                 {latestTeamCode && (
-                  <p className="mt-3 rounded border border-emerald-700 bg-emerald-900/30 px-3 py-2 text-xs text-emerald-200">
+                  <p className="mt-3 rounded-sm border border-emerald-700 bg-emerald-900/30 px-3 py-2 text-xs text-emerald-200">
                     Team created. Share this code: <span className="font-mono font-semibold">{latestTeamCode}</span>
                   </p>
                 )}
@@ -466,7 +467,7 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
                     href={selectedEvent.rulesUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`inline-flex items-center gap-2 rounded border px-4 py-2 font-medium ${styles.rules}`}
+                    className={`inline-flex items-center gap-2 rounded-sm border px-4 py-2 font-medium ${styles.rules}`}
                   >
                     <span>📄</span>
                     <span>VIEW RULES & REGULATIONS</span>
@@ -477,7 +478,7 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
               {(selectedEvent.coordinatorName || selectedEvent.coordinatorPhone || selectedEvent.contactName || selectedEvent.contactPhone || selectedEvent.trainerName) && (
                 <div>
                   <h3 className="text-lg font-semibold text-white mb-3">Contacts</h3>
-                  <div className="rounded border border-gray-700 bg-gray-800/50 p-4 space-y-2">
+                  <div className="rounded-sm border border-gray-700 bg-gray-800/50 p-4 space-y-2">
                     {selectedEvent.trainerName && <p className="text-sm text-gray-300">Trainer: {selectedEvent.trainerName}</p>}
                     {selectedEvent.coordinatorName && <p className="text-sm font-semibold text-gray-200">{selectedEvent.coordinatorName}</p>}
                     {selectedEvent.coordinatorPhone && (
@@ -536,5 +537,21 @@ export default function EventCategoryPage({ category, title, subtitle, accent }:
         </div>
       )}
     </div>
+  );
+}
+
+export default function EventCategoryPage(props: Props) {
+  const { fallback, ...rest } = props;
+  
+  const defaultFallback = (
+    <div className="flex justify-center py-20 text-gray-500">
+      Loading events...
+    </div>
+  );
+
+  return (
+    <Suspense fallback={fallback || defaultFallback}>
+      <EventCategoryContent {...rest} />
+    </Suspense>
   );
 }

@@ -49,13 +49,13 @@ export default async function AdminMessagesPage({ searchParams }: { searchParams
           <p className="text-gray-600">View and respond to inquiries submitted via the contact form.</p>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center justify-between">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs flex items-center justify-between">
             <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
               Total Messages: {totalMessages}
             </span>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
@@ -89,7 +89,7 @@ export default async function AdminMessagesPage({ searchParams }: { searchParams
                     <td className="px-4 py-3 align-top text-right">
                       <a 
                         href={`mailto:${msg.email}?subject=Re: Inquiry to Shackles Symposium`} 
-                        className="inline-flex items-center text-xs px-3 py-1.5 bg-black text-white rounded font-medium hover:bg-gray-800 transition-colors"
+                        className="inline-flex items-center text-xs px-3 py-1.5 bg-black text-white rounded-sm font-medium hover:bg-gray-800 transition-colors"
                       >
                         Reply Via Email
                       </a>

@@ -73,12 +73,12 @@ export default async function AdminAuditLogsPage({ searchParams }: { searchParam
           </a>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
           <form method="get" className="grid grid-cols-1 md:grid-cols-6 gap-3">
             <select
               name="action"
               defaultValue={action}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
             >
               <option value="">All Actions</option>
               {actionOptions.map((option) => (
@@ -88,7 +88,7 @@ export default async function AdminAuditLogsPage({ searchParams }: { searchParam
             <select
               name="status"
               defaultValue={status}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
             >
               <option value="">All Statuses</option>
               <option value="SUCCESS">SUCCESS</option>
@@ -98,20 +98,20 @@ export default async function AdminAuditLogsPage({ searchParams }: { searchParam
               type="date"
               name="dateFrom"
               defaultValue={dateFrom}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
             />
             <input
               type="date"
               name="dateTo"
               defaultValue={dateTo}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
             />
             <input
               type="text"
               name="q"
               defaultValue={q}
               placeholder="Search actor, target, details"
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900"
             />
             <div className="flex gap-2">
               <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">Apply</button>
@@ -120,7 +120,7 @@ export default async function AdminAuditLogsPage({ searchParams }: { searchParam
           </form>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-gray-900">Scanner Bulk Rollout</h2>
@@ -177,7 +177,7 @@ export default async function AdminAuditLogsPage({ searchParams }: { searchParam
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
@@ -201,7 +201,7 @@ export default async function AdminAuditLogsPage({ searchParams }: { searchParam
                     </td>
                     <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{record.target || "--"}</td>
                     <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{record.status || "--"}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600 max-w-[380px] break-words">
+                    <td className="px-4 py-3 text-xs text-gray-600 max-w-[380px] wrap-break-word">
                       {record.details ? JSON.stringify(record.details) : "--"}
                     </td>
                   </tr>

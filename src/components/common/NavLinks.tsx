@@ -112,7 +112,7 @@ export function NavLinks() {
                 href="/admin/adminDashboard"
                 prefetch={false}
                 onClick={handleMobileMenuClose}
-                className="block rounded border-2 border-pink-600 px-3 py-2 text-center text-sm font-semibold text-pink-600 transition-colors hover:bg-pink-600 hover:text-white"
+                className="block rounded-sm border-2 border-pink-600 px-3 py-2 text-center text-sm font-semibold text-pink-600 transition-colors hover:bg-pink-600 hover:text-white"
               >
                 Admin
               </Link>
@@ -121,7 +121,7 @@ export function NavLinks() {
                   handleLogout();
                   handleMobileMenuClose();
                 }}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded border-2 border-yellow-500 px-3 py-2 text-sm font-semibold text-yellow-600 transition-colors hover:bg-yellow-500 hover:text-white"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-sm border-2 border-yellow-500 px-3 py-2 text-sm font-semibold text-yellow-600 transition-colors hover:bg-yellow-500 hover:text-white"
               >
                 <LogOut size={16} />
                 Logout

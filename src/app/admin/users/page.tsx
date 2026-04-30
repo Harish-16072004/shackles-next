@@ -171,14 +171,14 @@ export default async function UserManagementPage({ searchParams }: { searchParam
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {summaryCards.map((card) => (
-            <div key={card.label} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+            <div key={card.label} className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{card.label}</p>
               <p className="mt-2 text-2xl font-bold text-gray-900">{card.value}</p>
             </div>
           ))}
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col gap-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs flex flex-col gap-3">
           <form method="get" className="flex flex-col md:flex-row gap-3 md:items-center">
 
             <div className="flex flex-wrap gap-2 md:flex-nowrap md:w-full">
@@ -222,7 +222,7 @@ export default async function UserManagementPage({ searchParams }: { searchParam
           </form>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-100 text-gray-600 uppercase text-xs">

@@ -44,7 +44,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
           type="password" 
           required 
           minLength={6}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black transition-all"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-black/5 focus:border-black transition-all"
         />
       </div>
 
@@ -55,7 +55,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
           type="password" 
           required 
           minLength={6}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black transition-all"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-black/5 focus:border-black transition-all"
         />
       </div>
 

@@ -20,6 +20,58 @@ const remoteHosts = Array.from(
   ].filter(Boolean))
 );
 
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // 1. Image & Optimization Settings
+  images: {
+    remotePatterns: remoteHosts.map((hostname) => ({
+      protocol: "https",
+      hostname,
+      pathname: "/**",
+    })),
+  },
+  compress: true,
+  poweredByHeader: false,
+  productionBrowserSourceMaps: false,
+  
+  // 2. Server Packages
+  serverExternalPackages: ["sharp", "pdfkit", "@xenova/transformers"],
+
+  // 3. Webpack Configuration (Merged and Fixed)
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      path: false,
+      crypto: false,
+    };
+
+    // Fix for __webpack_require__ error with ONNX/Transformers
+    config.externals.push({
+      'onnxruntime-node': 'commonjs onnxruntime-node',
+      'sharp': 'commonjs sharp',
+    });
+
+    // Alias fixes
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "sharp$": false,
+      "onnxruntime-node$": false,
+    };
+
+    return config;
+  },
+  
+  turbopack: {},
+
+  // 4. Dev Server Settings
+  onDemandEntries: {
+    maxInactiveAge: 60 * 1000,
+    pagesBufferLength: 8,
+  },
+};
+
+// 5. PWA Wrapper
 const withPWA = withPWAInit({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
@@ -35,33 +87,11 @@ const withPWA = withPWAInit({
         networkTimeoutSeconds: 5,
         expiration: {
           maxEntries: 20,
-          maxAgeSeconds: 60 * 60, // 1 hour cache to keep UI available offline
+          maxAgeSeconds: 60 * 60, // 1 hour cache
         },
       },
     },
   ],
 });
-
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["sharp", "pdfkit"],
-  },
-  images: {
-    remotePatterns: remoteHosts.map((hostname) => ({
-      protocol: "https",
-      hostname,
-      pathname: "/**",
-    })),
-  },
-  compress: true,
-  poweredByHeader: false,
-  productionBrowserSourceMaps: false,
-  swcMinify: true,
-  onDemandEntries: {
-    maxInactiveAge: 60 * 1000,
-    pagesBufferLength: 8,
-  },
-};
 
 export default withPWA(nextConfig);

@@ -110,7 +110,7 @@ export function Step4TeamMode() {
                   ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
                   : isSelected
                     ? 'border-blue-600 bg-blue-50 shadow-md'
-                    : 'border-gray-200 bg-white hover:border-blue-400 hover:shadow'
+                    : 'border-gray-200 bg-white hover:border-blue-400 hover:shadow-sm'
               }`}
             >
               <div className={`flex items-center gap-3 mb-2 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`}>

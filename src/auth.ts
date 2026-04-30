@@ -4,19 +4,7 @@ import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import { compare } from "bcryptjs";
 import { z } from "zod";
-import type { DefaultUser } from "next-auth";
 import { authConfig } from "@/auth.config";
-
-
-// Extend the default User type with role
-declare global {
-  namespace NextAuth {
-    interface User extends DefaultUser {
-      id: string;
-      role?: string;
-    }
-  }
-}
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -87,7 +75,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
      * session callback — shapes the session object exposed to the client.
      * Reads id and role from the JWT token.
      */
-    async session({ session, token }) {
+    async session(params: any) {
+      const { session, token } = params;
       if (session.user) {
         session.user.id = token.id as string;
         (session.user as any).role = token.role;
@@ -104,8 +93,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user }) {
       console.log(`[Auth] User signed in: ${user?.email}`);
     },
-    async signOut({ token }) {
-      console.log(`[Auth] User signed out: ${(token as any)?.email}`);
+    async signOut({ token }: any) {
+      console.log(`[Auth] User signed out: ${token?.email}`);
     },
   },
 });

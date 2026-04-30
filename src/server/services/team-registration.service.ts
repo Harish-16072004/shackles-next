@@ -474,6 +474,9 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     teamData.lockedAt = new Date();
   }
 
+  // Ensure the team record reflects the correct member count after bulk registration
+  teamData.memberCount = finalMemberCount;
+
   await input.db.team.update({
     where: { id: team.id },
     data: teamData,

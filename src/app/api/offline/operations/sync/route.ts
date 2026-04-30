@@ -5,6 +5,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createError } from "@/lib/error-contract";
+import { createRateLimiter, rateLimitPresets } from "@/lib/rate-limit";
 import { resolveRequestId, safeLogError, safeLogInfo } from "@/lib/safe-log";
 import { requireScannerActor } from "@/server/services/scanner-auth.service";
 import { applyAttendanceMark } from "@/server/services/attendance.service";
@@ -43,6 +44,11 @@ async function getScannerActor() {
   if (!auth.ok) return null;
   return auth.actor;
 }
+
+const offlineSyncRateLimiter = createRateLimiter({
+  ...rateLimitPresets.offlineSync,
+  keyPrefix: "api:offline:operations:sync",
+});
 
 function conflict(reason: string, message: string, details?: Record<string, unknown>) {
   return {
@@ -260,6 +266,23 @@ export async function POST(request: Request) {
   const actor = await getScannerActor();
   if (!actor) {
     return NextResponse.json({ error: createError("NOT_AUTHENTICATED", "Unauthorized") }, { status: 401 });
+  }
+
+  const rateLimitResult = await offlineSyncRateLimiter.limit(`offline:sync:${actor.id}`);
+  if (!rateLimitResult.success) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+    return NextResponse.json(
+      { error: createError("INTERNAL_ERROR", "Too many sync operations. Please try again later.") },
+      {
+        status: 429,
+        headers: {
+          "x-ratelimit-limit": String(rateLimitPresets.offlineSync.maxRequests),
+          "x-ratelimit-remaining": String(rateLimitResult.remaining),
+          "x-ratelimit-reset": String(rateLimitResult.reset),
+          "retry-after": String(retryAfterSeconds),
+        },
+      }
+    );
   }
 
   const body = await request.json().catch(() => ({}));

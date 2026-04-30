@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { logAdminAudit } from "@/lib/admin-audit";
 import { composeCard, resolveQrBuffer } from "@/lib/id-cards/compose-card";
+import { createRateLimiter } from "@/lib/rate-limit";
 // pdfkit is a CommonJS module; cast via require to avoid ESM interop issues
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const PDFDocument = require("pdfkit") as typeof import("pdfkit");
@@ -28,6 +29,12 @@ const V_GAP = (A3_H - ROWS * CARD_H_PT) / (ROWS + 1);  // ≈ 45.35 pt
 const VALID_TYPES = ["GENERAL", "WORKSHOP", "COMBO"] as const;
 type RegType = (typeof VALID_TYPES)[number];
 
+const adminIdCardsExportRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 5,
+  keyPrefix: "api:admin:id-cards:export",
+});
+
 async function getAdminContext() {
   const session = await getSession();
   if (!session?.userId) return null;
@@ -42,6 +49,23 @@ export async function GET(request: Request) {
   try {
   const admin = await getAdminContext();
   if (!admin) return new Response("Unauthorized", { status: 401 });
+
+  const rateLimitResult = await adminIdCardsExportRateLimiter.limit(`admin:id-cards:export:${admin.id}`);
+  if (!rateLimitResult.success) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+    return Response.json(
+      { error: "Too many ID card export requests. Please try again later." },
+      {
+        status: 429,
+        headers: {
+          "x-ratelimit-limit": "5",
+          "x-ratelimit-remaining": String(rateLimitResult.remaining),
+          "x-ratelimit-reset": String(rateLimitResult.reset),
+          "retry-after": String(retryAfterSeconds),
+        },
+      }
+    );
+  }
 
   const { searchParams } = new URL(request.url);
   const typeParam = searchParams.get("type")?.toUpperCase();

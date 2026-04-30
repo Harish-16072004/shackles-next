@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import type { Prisma } from "@prisma/client";
+import { createRateLimiter } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const adminAccommodationDownloadRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 10,
+  keyPrefix: "api:admin:accommodations:download",
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,6 +26,23 @@ export async function GET(request: NextRequest) {
 
     if (!currentUser || currentUser.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const rateLimitResult = await adminAccommodationDownloadRateLimiter.limit(`admin:accommodations:download:${currentUser.id}`);
+    if (!rateLimitResult.success) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+      return NextResponse.json(
+        { error: "Too many accommodation download requests. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "x-ratelimit-limit": "10",
+            "x-ratelimit-remaining": String(rateLimitResult.remaining),
+            "x-ratelimit-reset": String(rateLimitResult.reset),
+            "retry-after": String(retryAfterSeconds),
+          },
+        }
+      );
     }
 
     const gender = request.nextUrl.searchParams.get("gender");

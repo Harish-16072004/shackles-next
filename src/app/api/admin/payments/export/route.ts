@@ -2,6 +2,13 @@ import { PaymentStatus } from "@prisma/client";
 import { stringifyCsvRow } from "@/lib/csv";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { createRateLimiter } from "@/lib/rate-limit";
+
+const adminPaymentsExportRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 20,
+  keyPrefix: "api:admin:payments:export",
+});
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -26,6 +33,25 @@ export async function GET(request: Request) {
   const isAdmin = await assertAdmin();
   if (!isAdmin) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  const session = await getSession();
+  const adminUserId = session?.userId ? String(session.userId) : "unknown";
+  const rateLimitResult = await adminPaymentsExportRateLimiter.limit(`admin:payments:export:${adminUserId}`);
+  if (!rateLimitResult.success) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+    return Response.json(
+      { error: "Too many payment export requests. Please try again later." },
+      {
+        status: 429,
+        headers: {
+          "x-ratelimit-limit": "20",
+          "x-ratelimit-remaining": String(rateLimitResult.remaining),
+          "x-ratelimit-reset": String(rateLimitResult.reset),
+          "retry-after": String(retryAfterSeconds),
+        },
+      }
+    );
   }
 
   const { searchParams } = new URL(request.url);

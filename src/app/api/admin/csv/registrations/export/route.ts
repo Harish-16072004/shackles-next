@@ -3,6 +3,13 @@ import { getSession } from "@/lib/session";
 import { stringifyCsvRow } from "@/lib/csv";
 import { logAdminAudit } from "@/lib/admin-audit";
 import { getActiveYear } from "@/lib/edition";
+import { createRateLimiter } from "@/lib/rate-limit";
+
+const adminRegistrationsExportRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 20,
+  keyPrefix: "api:admin:csv:registrations:export",
+});
 
 async function getAdminContext() {
   const session = await getSession();
@@ -24,6 +31,23 @@ export async function GET(request: Request) {
   const admin = await getAdminContext();
   if (!admin) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  const rateLimitResult = await adminRegistrationsExportRateLimiter.limit(`admin:csv:registrations:export:${admin.id}`);
+  if (!rateLimitResult.success) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+    return Response.json(
+      { error: "Too many registrations export requests. Please try again later." },
+      {
+        status: 429,
+        headers: {
+          "x-ratelimit-limit": "20",
+          "x-ratelimit-remaining": String(rateLimitResult.remaining),
+          "x-ratelimit-reset": String(rateLimitResult.reset),
+          "retry-after": String(retryAfterSeconds),
+        },
+      }
+    );
   }
 
   const { searchParams } = new URL(request.url);

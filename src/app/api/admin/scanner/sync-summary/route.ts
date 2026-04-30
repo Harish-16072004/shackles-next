@@ -2,8 +2,15 @@ import { NextResponse } from "next/server";
 import { RegistrationSyncStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createError } from "@/lib/error-contract";
+import { createRateLimiter } from "@/lib/rate-limit";
 import { resolveRequestId, safeLogError, safeLogInfo } from "@/lib/safe-log";
 import { requireScannerActor } from "@/server/services/scanner-auth.service";
+
+const scannerSyncSummaryRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 60,
+  keyPrefix: "api:admin:scanner:sync-summary",
+});
 
 export async function GET(request: Request) {
   const startedAt = Date.now();
@@ -16,6 +23,23 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: createError(auth.reason, auth.message) }, { status });
     }
     const actor = auth.actor;
+
+    const rateLimitResult = await scannerSyncSummaryRateLimiter.limit(`admin:scanner:sync-summary:${actor.id}`);
+    if (!rateLimitResult.success) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+      return NextResponse.json(
+        { error: createError("INTERNAL_ERROR", "Too many sync summary requests. Please try again later.") },
+        {
+          status: 429,
+          headers: {
+            "x-ratelimit-limit": "60",
+            "x-ratelimit-remaining": String(rateLimitResult.remaining),
+            "x-ratelimit-reset": String(rateLimitResult.reset),
+            "retry-after": String(retryAfterSeconds),
+          },
+        }
+      );
+    }
 
     const now = new Date();
     const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);

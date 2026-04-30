@@ -477,10 +477,21 @@ export async function bulkRegisterTeamByShacklesIds(input: {
   // Ensure the team record reflects the correct member count after bulk registration
   teamData.memberCount = finalMemberCount;
 
-  await input.db.team.update({
-    where: { id: team.id },
-    data: teamData,
-  });
+  // If we're attempting to lock the team, perform a conditional update so
+  // only one concurrent transaction can succeed (prevents multiple winners).
+  if (shouldLockTeam) {
+    const res = await input.db.team.updateMany({
+      where: { id: team.id, status: TeamStatus.DRAFT },
+      data: teamData,
+    });
+
+    if (res.count === 0) {
+      // Another transaction locked the team concurrently.
+      return { success: false, reason: "TEAM_LOCKED", error: "Team was locked by another process." };
+    }
+  } else {
+    await input.db.team.update({ where: { id: team.id }, data: teamData });
+  }
 
   if (!shouldLockTeam) {
     return {

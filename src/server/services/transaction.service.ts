@@ -37,7 +37,7 @@ export async function runSerializableTransaction<T>(
   callback: (tx: Prisma.TransactionClient) => Promise<T>,
   options?: SerializableRetryOptions
 ): Promise<T> {
-  const maxRetries = options?.maxRetries ?? 3;
+  const maxRetries = options?.maxRetries ?? 6;
   const baseDelayMs = options?.baseDelayMs ?? 40;
   const maxDelayMs = options?.maxDelayMs ?? 400;
   const transactionTimeoutMs = options?.transactionTimeoutMs ?? 15000;

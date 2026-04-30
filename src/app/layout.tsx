@@ -4,7 +4,17 @@ import Header from "@/components/common/Header";
 import { getActivePublicDomain, getActiveThemeKey, getActiveYear } from "@/lib/edition";
 import { resolveThemeConfig } from "@/lib/theme-registry";
 import ChatWidget from "@/components/features/ai-chat/ChatWidget";
+import { validateServerEnv } from "@/lib/env";
 import "./globals.css";
+
+// Validate environment at app startup
+try {
+  validateServerEnv();
+} catch (error) {
+  console.error("Environment validation failed at app startup:", error);
+  // App will still try to render, but errors will be visible to user
+  throw error;
+}
 
 const inter = Inter({ 
   subsets: ["latin"],

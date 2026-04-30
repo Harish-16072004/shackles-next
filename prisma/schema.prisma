@@ -5,8 +5,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // DATABASE_URL      → runtime queries (may be a pooler URL)
+  // DIRECT_DATABASE_URL → direct connection used by prisma migrate / prisma db push
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 enum Role {

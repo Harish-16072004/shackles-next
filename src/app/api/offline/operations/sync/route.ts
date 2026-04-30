@@ -133,7 +133,7 @@ async function applyOperation(op: SyncOperationInput): Promise<Omit<SyncResult, 
           teamEventMessage: "Team events require team flow.",
           successMessage: "Quick registration applied.",
         })
-      );
+      , { maxRetries: 5 });
 
       if (result.success) {
         return applied(result.message);
@@ -165,7 +165,7 @@ async function applyOperation(op: SyncOperationInput): Promise<Omit<SyncResult, 
           clientOperationId: op.operationId,
           syncedAt: new Date(),
         })
-      );
+      , { maxRetries: 5 });
 
       if (result.success) {
         return applied(result.message);
@@ -216,7 +216,7 @@ async function applyOperation(op: SyncOperationInput): Promise<Omit<SyncResult, 
             operationId: op.operationId,
             syncedAt: new Date(),
           })
-        );
+        , { maxRetries: 5 });
 
         if (bulkResult.success) {
           return applied(bulkResult.message);
@@ -236,7 +236,7 @@ async function applyOperation(op: SyncOperationInput): Promise<Omit<SyncResult, 
           teamName,
           leaderUserId: op.teamLeaderUserId,
         })
-      );
+      , { maxRetries: 5 });
 
       if (completeResult.success) {
         return applied(completeResult.message);

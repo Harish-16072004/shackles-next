@@ -1,5 +1,7 @@
 version: '3.8'
+
 services:
+  # PostgreSQL database
   db:
     image: postgres:15-alpine
     container_name: shackles-local-db
@@ -9,9 +11,31 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: shackles_local
     ports:
-      - "5433:5432"  # <--- CHANGE THIS LINE (Left side is 5433)
+      - "5433:5432"  # Local development port mapping
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis cache for rate limiting and caching
+  redis:
+    image: redis:7-alpine
+    container_name: shackles-local-redis
+    restart: always
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
+  redis_data:

@@ -15,6 +15,7 @@ const doSpacesEndpointHost = process.env.DO_SPACES_ENDPOINT
 const remoteHosts = Array.from(
   new Set([
     "shackles-dev.sgp1.cdn.digitaloceanspaces.com",
+    "ui-avatars.com",
     activePublicDomain,
     doSpacesEndpointHost,
   ].filter(Boolean))

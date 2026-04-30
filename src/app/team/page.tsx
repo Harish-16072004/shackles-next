@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from "react";
+import Image from "next/image";
 import { Linkedin } from "lucide-react";
 
 // ============================================================
@@ -37,17 +39,19 @@ function SectionTitle({ title }: { title: string }) {
 }
 
 function MemberCard({ member }: { member: { name: string; role: string; image: string; linkedin: string } }) {
+  const [imgSrc, setImgSrc] = useState(member.image);
+
   return (
     <div className="flex flex-col items-center p-6 rounded-xl border border-gray-200 bg-white hover:shadow-lg transition-all duration-300">
-      <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-gray-200 mb-4">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={member.image}
+      <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-gray-200 mb-4 relative">
+        <Image
+          src={imgSrc}
           alt={member.name}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=f3f4f6&color=111827&size=256&font-size=0.35&bold=true`;
+          fill
+          sizes="96px"
+          className="object-cover"
+          onError={() => {
+            setImgSrc(`https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=f3f4f6&color=111827&size=256&font-size=0.35&bold=true`);
           }}
         />
       </div>

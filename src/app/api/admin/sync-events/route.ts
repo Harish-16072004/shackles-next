@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getPineconeIndex } from '@/lib/pinecone';
 import { getLocalEmbedding } from '@/lib/embeddings';
+import { createRateLimiter, getClientIdentifier } from '@/lib/rate-limit';
+
+const adminSyncEventsRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 5,
+  keyPrefix: 'api:admin:sync-events',
+});
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +16,23 @@ export async function POST(req: Request) {
     const authHeader = req.headers.get('Authorization');
     if (authHeader !== `Bearer ${process.env.ADMIN_SECRET || 'dev-secret'}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const rateLimitResult = await adminSyncEventsRateLimiter.limit(`admin:sync-events:${getClientIdentifier(req)}`);
+    if (!rateLimitResult.success) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+      return NextResponse.json(
+        { error: 'Too many sync requests. Please try again later.' },
+        {
+          status: 429,
+          headers: {
+            'x-ratelimit-limit': '5',
+            'x-ratelimit-remaining': String(rateLimitResult.remaining),
+            'x-ratelimit-reset': String(rateLimitResult.reset),
+            'retry-after': String(retryAfterSeconds),
+          },
+        }
+      );
     }
 
     // 2. Fetch Data

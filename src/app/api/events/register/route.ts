@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { createRateLimiter, rateLimitPresets } from "@/lib/rate-limit";
 import { TeamMemberRole, TeamStatus } from "@prisma/client";
 import { sendTeamInviteEmail } from "@/lib/email";
 import { getActiveYear } from "@/lib/edition";
@@ -72,11 +73,34 @@ function hasScheduleOverlap(
   return a.start < b.end && b.start < a.end;
 }
 
+const registrationRateLimiter = createRateLimiter({
+  ...rateLimitPresets.registration,
+  keyPrefix: "api:events:register",
+});
+
 export async function POST(request: Request) {
   try {
     const session = await getSession();
     if (!session?.userId) {
       return NextResponse.json({ error: "Please login to register." }, { status: 401 });
+    }
+
+    const rateLimitKey = `events:register:${session.userId}`;
+    const rateLimitResult = await registrationRateLimiter.limit(rateLimitKey);
+    if (!rateLimitResult.success) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+      return NextResponse.json(
+        { error: "Too many registration attempts. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "x-ratelimit-limit": String(rateLimitPresets.registration.maxRequests),
+            "x-ratelimit-remaining": String(rateLimitResult.remaining),
+            "x-ratelimit-reset": String(rateLimitResult.reset),
+            "retry-after": String(retryAfterSeconds),
+          },
+        }
+      );
     }
 
     const body = await request.json().catch(() => ({}));

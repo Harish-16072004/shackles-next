@@ -5,6 +5,12 @@ import { csvHeaderMap, parseCsv, readCsvField } from "@/lib/csv";
 import { logAdminAudit } from "@/lib/admin-audit";
 import { getActiveYear } from "@/lib/edition";
 import { EventParticipationMode } from "@prisma/client";
+import { createRateLimiter, rateLimitPresets } from "@/lib/rate-limit";
+
+const adminEventsImportRateLimiter = createRateLimiter({
+  ...rateLimitPresets.adminImport,
+  keyPrefix: "api:admin:csv:events:import",
+});
 
 async function getAdminContext() {
   const session = await getSession();
@@ -30,6 +36,23 @@ export async function POST(request: Request) {
   const admin = await getAdminContext();
   if (!admin) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimitResult = await adminEventsImportRateLimiter.limit(`admin:csv:events:import:${admin.id}`);
+  if (!rateLimitResult.success) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+    return Response.json(
+      { error: "Too many import attempts. Please try again later." },
+      {
+        status: 429,
+        headers: {
+          "x-ratelimit-limit": String(rateLimitPresets.adminImport.maxRequests),
+          "x-ratelimit-remaining": String(rateLimitResult.remaining),
+          "x-ratelimit-reset": String(rateLimitResult.reset),
+          "retry-after": String(retryAfterSeconds),
+        },
+      }
+    );
   }
 
   const formData = await request.formData();

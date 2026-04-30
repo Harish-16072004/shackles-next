@@ -5,6 +5,12 @@ import { createSpacesSignedGetUrl, uploadToSpaces } from "@/lib/digitalocean/spa
 import { promises as fs } from "fs";
 import path from "path";
 import { safeLogError } from "@/lib/safe-log";
+import { createRateLimiter, getClientIdentifier, rateLimitPresets } from "@/lib/rate-limit";
+
+const paymentProofRateLimiter = createRateLimiter({
+  ...rateLimitPresets.upload,
+  keyPrefix: "api:upload:payment-proof",
+});
 
 export async function GET() {
   return NextResponse.json({
@@ -38,6 +44,24 @@ function toReadableError(message: string) {
 
 export async function POST(request: Request) {
   try {
+    const clientKey = `payment-proof:${getClientIdentifier(request)}`;
+    const rateLimitResult = await paymentProofRateLimiter.limit(clientKey);
+    if (!rateLimitResult.success) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+      return NextResponse.json(
+        { error: "Too many upload attempts. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "x-ratelimit-limit": String(rateLimitPresets.upload.maxRequests),
+            "x-ratelimit-remaining": String(rateLimitResult.remaining),
+            "x-ratelimit-reset": String(rateLimitResult.reset),
+            "retry-after": String(retryAfterSeconds),
+          },
+        }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("file");
 

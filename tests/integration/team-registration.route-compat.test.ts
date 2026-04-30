@@ -253,4 +253,77 @@ describe("integration: team registration route compatibility", () => {
       await prisma.user.deleteMany({ where: { email: { contains: tag } } });
     }
   }, 30000);
+
+  it("rate limits repeated team registration attempts for the same user", async () => {
+    if (!(await ensureDatabaseAvailable())) {
+      console.warn("Skipping route compatibility test: database is not reachable.");
+      return;
+    }
+
+    const tag = runTag();
+    const activeYear = 2035;
+    process.env.ACTIVE_YEAR = String(activeYear);
+
+    const eventName = `ROUTE-RATE-${tag}`;
+    const teamName = `ROUTE RATE TEAM ${tag}`;
+
+    try {
+      await prisma.event.create({
+        data: {
+          name: eventName,
+          year: activeYear,
+          type: "TECHNICAL",
+          participationMode: "TEAM",
+          teamMinSize: 2,
+          teamMaxSize: 4,
+          maxParticipants: 50,
+          maxTeams: 10,
+          isActive: true,
+          isArchived: false,
+          isTemplate: false,
+        },
+      });
+
+      const registrant = await createVerifiedUser(tag, "rate", `RR${activeYear % 100}A${Math.floor(Math.random() * 899 + 100)}`);
+
+      vi.mocked(getSession).mockResolvedValue({ userId: registrant.id, role: "USER" } as never);
+
+      const makeRequest = () =>
+        registerPost(
+          new Request("http://localhost/api/events/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "createTeam",
+              eventName,
+              teamName,
+            }),
+          })
+        );
+
+      let response = await makeRequest();
+      expect(response.status).toBe(200);
+
+      for (let attempt = 0; attempt < 9; attempt += 1) {
+        response = await makeRequest();
+        expect(response.status).toBe(200);
+      }
+
+      const rateLimitedResponse = await makeRequest();
+      expect(rateLimitedResponse.status).toBe(429);
+      expect(rateLimitedResponse.headers.get("x-ratelimit-limit")).toBe("10");
+      expect(rateLimitedResponse.headers.get("retry-after")).toBeTruthy();
+
+      const body = await rateLimitedResponse.json();
+      expect(body).toMatchObject({
+        error: "Too many registration attempts. Please try again later.",
+      });
+    } finally {
+      await prisma.eventRegistration.deleteMany({ where: { event: { name: eventName } } });
+      await prisma.team.deleteMany({ where: { name: { startsWith: "ROUTE RATE TEAM " } } });
+      await prisma.event.deleteMany({ where: { name: eventName } });
+      await prisma.payment.deleteMany({ where: { transactionId: { contains: tag } } });
+      await prisma.user.deleteMany({ where: { email: { contains: tag } } });
+    }
+  }, 30000);
 });

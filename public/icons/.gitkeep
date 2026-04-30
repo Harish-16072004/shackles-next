@@ -1,0 +1,10 @@
+# PNG icons (icon-192.png, icon-512.png, icon-512-maskable.png) must be placed
+# in this directory before deploying to production.
+#
+# Generate them from public/pwa-icon.svg using:
+#   npx pwa-asset-generator public/pwa-icon.svg public/icons --background "#111827"
+#
+# Required files:
+#   icon-192.png          (192x192, purpose: any)
+#   icon-512.png          (512x512, purpose: any)
+#   icon-512-maskable.png (512x512, purpose: maskable, with safe-zone padding)

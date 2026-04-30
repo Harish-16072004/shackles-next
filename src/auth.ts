@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { compare } from "bcryptjs";
 import { z } from "zod";
 import type { DefaultUser } from "next-auth";
+import { authConfig } from "@/auth.config";
+
 
 // Extend the default User type with role
 declare global {
@@ -22,6 +24,7 @@ const credentialsSchema = z.object({
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   adapter: PrismaAdapter(prisma) as any,
   providers: [
     Credentials({
@@ -70,28 +73,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     /**
-     * Session callback - runs when reading session
-     * Adds user role to session object exposed to client
+     * jwt callback — runs when a token is created or updated.
+     * Stores id and role from the user object (available on first sign-in).
      */
-    async session({ session, user }) {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.role = (user as any).role;
+      }
+      return token;
+    },
+    /**
+     * session callback — shapes the session object exposed to the client.
+     * Reads id and role from the JWT token.
+     */
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id;
-        (session.user as any).role = user.role;
+        session.user.id = token.id as string;
+        (session.user as any).role = token.role;
       }
       return session;
     },
   },
   session: {
-    strategy: "database",
+    strategy: "jwt",
     maxAge: 7 * 24 * 60 * 60, // 7 days
-    updateAge: 24 * 60 * 60, // 1 day
+    updateAge: 24 * 60 * 60,  // 1 day
   },
   events: {
     async signIn({ user }) {
       console.log(`[Auth] User signed in: ${user?.email}`);
     },
     async signOut({ token }) {
-      console.log(`[Auth] User signed out: ${token?.email}`);
+      console.log(`[Auth] User signed out: ${(token as any)?.email}`);
     },
   },
 });
+

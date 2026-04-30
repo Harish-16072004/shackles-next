@@ -1,0 +1,79 @@
+name: Deploy
+
+# Trigger: only after the CI workflow succeeds on main.
+# This ensures we never deploy a build that hasn't passed lint, typecheck,
+# tests, migration drift check, and governance gates.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+
+jobs:
+  deploy:
+    name: Build → Push → Deploy
+    runs-on: ubuntu-latest
+    # Skip if the triggering CI run failed or was cancelled.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment: production
+
+    steps:
+      # --------------------------------------------------------
+      # 1. Source
+      # --------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Check out the commit that triggered the CI run, not HEAD.
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      # --------------------------------------------------------
+      # 2. DigitalOcean CLI
+      # --------------------------------------------------------
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DO_API_TOKEN }}
+
+      - name: Authenticate with DO Container Registry
+        run: doctl registry login --expiry-seconds 1200
+
+      # --------------------------------------------------------
+      # 3. Docker build + push
+      # --------------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # Tag with the exact commit SHA (for rollback) and 'latest'
+          tags: |
+            registry.digitalocean.com/${{ secrets.DO_REGISTRY_NAME }}/shackles-next:${{ github.event.workflow_run.head_sha }}
+            registry.digitalocean.com/${{ secrets.DO_REGISTRY_NAME }}/shackles-next:latest
+          # GitHub Actions layer cache — keeps subsequent builds fast
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      # --------------------------------------------------------
+      # 4. Trigger DigitalOcean App Platform redeploy
+      # --------------------------------------------------------
+      - name: Trigger App Platform deployment
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.DO_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://api.digitalocean.com/v2/apps/${{ secrets.DO_APP_ID }}/deployments"
+
+      # --------------------------------------------------------
+      # 5. Deployment summary
+      # --------------------------------------------------------
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "### Deployment triggered ✅" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.event.workflow_run.head_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** registry.digitalocean.com/${{ secrets.DO_REGISTRY_NAME }}/shackles-next:${{ github.event.workflow_run.head_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**App ID:** ${{ secrets.DO_APP_ID }}" >> $GITHUB_STEP_SUMMARY

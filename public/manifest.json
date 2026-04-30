@@ -1,21 +1,63 @@
 {
   "name": "Shackles Symposium",
   "short_name": "Shackles",
-  "description": "Offline-enabled tools for Shackles 25-26 registrations and logistics.",
+  "description": "Offline-enabled event management and registration tools for Shackles Symposium.",
   "start_url": "/admin/scanner-v2",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#000000",
   "theme_color": "#111827",
+  "lang": "en",
+  "categories": ["utilities", "education"],
   "icons": [
     {
       "src": "/pwa-icon.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml"
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
       "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "Scanner",
+      "short_name": "Scan",
+      "description": "Open the QR attendance scanner",
+      "url": "/admin/scanner-v2",
+      "icons": [{ "src": "/pwa-icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Events",
+      "short_name": "Events",
+      "description": "Browse all events",
+      "url": "/events",
+      "icons": [{ "src": "/pwa-icon.svg", "sizes": "any" }]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
 }

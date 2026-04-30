@@ -23,6 +23,11 @@ const remoteHosts = Array.from(
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // 0. Standalone output — required for Docker / container deployments.
+  //    Next.js copies only the files needed to run the server into
+  //    .next/standalone, dramatically reducing the image footprint.
+  output: "standalone",
+
   // 1. Image & Optimization Settings
   images: {
     remotePatterns: remoteHosts.map((hostname) => ({
@@ -34,7 +39,7 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
-  
+
   // 2. Server Packages
   serverExternalPackages: ["sharp", "pdfkit", "@xenova/transformers"],
 
@@ -62,7 +67,7 @@ const nextConfig = {
 
     return config;
   },
-  
+
   turbopack: {},
 
   // 4. Dev Server Settings

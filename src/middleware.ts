@@ -1,37 +1,16 @@
-import { auth } from "@/auth";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
 
 /**
- * Middleware for Auth.js v5 - handles authorization
- * Protected routes require authentication and appropriate roles
+ * Middleware — Edge-safe.
+ * Imports only authConfig (no Prisma) so the Edge runtime stays clean.
+ * Route protection logic lives in authConfig.callbacks.authorized.
  */
-export async function middleware(request: NextRequest) {
-  const session = await auth();
-  const pathname = request.nextUrl.pathname;
+export const { auth: middleware } = NextAuth(authConfig);
 
-  // Admin routes: require ADMIN role
-  if (pathname.startsWith("/admin")) {
-    if (!session?.user) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-
-    const user = session.user as any;
-    if (user.role !== "ADMIN") {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
-  }
-
-  // Protected routes: require login
-  if (pathname.startsWith("/(protected)")) {
-    if (!session?.user) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-  }
-
-  return NextResponse.next();
-}
+export default middleware;
 
 export const config = {
   matcher: ["/admin/:path*", "/(protected)/:path*"],
 };
+

@@ -15,12 +15,12 @@ This document serves as a persistent record of the project roadmap, ensuring the
 - [x] Phase 4A: Replace `<img>` with `Image`
 - [x] Phase 4B: Move AI inference service
 - [x] Phase 4C: Pinecone caching layer
-- [ ] Phase 5: Playwright E2E tests
-- [ ] Phase 6A: DB connection pooling
+- [x] Phase 5: Playwright E2E tests
+- [x] Phase 6A: DB connection pooling
 - [x] Phase 6B: Cleanup stale records
-- [ ] Phase 7A: Enhance CI workflow
+- [x] Phase 7A: Enhance CI workflow
 - [x] Phase 7B: Docker Redis + .env
-- [ ] Phase 8: Verify PWA setup
+- [x] Phase 8: Verify PWA setup
 - [x] Phase 9A: Add SECURITY.md
 - [x] Phase 9B: Create TESTING.md
-- [ ] Phase 9C: DB pooling & README
+- [x] Phase 9C: DB pooling & README

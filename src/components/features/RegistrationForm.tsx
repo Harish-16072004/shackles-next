@@ -56,6 +56,7 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
       collegeLoc: "",
       department: "",
       yearOfStudy: "I",
+      gender: "" as any,
       password: "",
       confirmPassword: "",
       registrationType: "GENERAL",
@@ -147,6 +148,7 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
       "lastName",
       "email",
       "phone",
+      "gender",
       "collegeName",
       "collegeLoc",
       "department",
@@ -188,7 +190,7 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
   };
 
   return (
-    <div className="card max-w-2xl mx-auto p-8 bg-white shadow-xl rounded-2xl">
+    <div className="card max-w-2xl mx-auto p-4 sm:p-6 md:p-8 bg-white shadow-xl rounded-2xl">
 
       {/* Progress Bar */}
       <div className="flex mb-8 text-sm font-medium text-gray-400">
@@ -228,6 +230,16 @@ export default function RegistrationForm({ yearShort }: RegistrationFormProps) {
                 />
                 {errors.phone && <p className="mt-1 text-xs text-red-500">{errors.phone.message}</p>}
               </div>
+            </div>
+
+            <div>
+              <select {...register("gender")} className="input-field text-gray-700">
+                <option value="" disabled>Select Gender</option>
+                <option value="MALE">Male</option>
+                <option value="FEMALE">Female</option>
+                <option value="OTHER">Other</option>
+              </select>
+              {errors.gender && <p className="mt-1 text-xs text-red-500">{errors.gender.message}</p>}
             </div>
 
             <div>

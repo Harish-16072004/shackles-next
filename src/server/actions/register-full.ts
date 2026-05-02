@@ -24,6 +24,7 @@ const FullRegisterSchema = z.object({
   collegeLoc: z.string().min(2),
   department: z.string().min(2),
   yearOfStudy: z.string(),
+  gender: z.enum(["MALE", "FEMALE", "OTHER"]),
   password: z.string().min(6),
   
   // --- NEW FIELDS ---

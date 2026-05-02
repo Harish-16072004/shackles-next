@@ -48,6 +48,7 @@ export default function OnSpotRegistrationForm() {
       collegeLoc: '',
       department: '',
       yearOfStudy: 'I',
+      gender: '' as any,
       password: '',
       confirmPassword: '',
       registrationType: 'GENERAL',
@@ -145,7 +146,7 @@ export default function OnSpotRegistrationForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit(onValidSubmit)} className="rounded-2xl border bg-white p-6 shadow-lg space-y-5">
+    <form onSubmit={handleSubmit(onValidSubmit)} className="rounded-2xl border bg-white p-4 sm:p-6 shadow-lg space-y-5">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
           <input {...register('firstName')} placeholder="First name" className="input-field" />
@@ -184,6 +185,15 @@ export default function OnSpotRegistrationForm() {
             ))}
           </select>
           {errors.yearOfStudy && <p className="mt-1 text-xs text-red-500">{errors.yearOfStudy.message}</p>}
+        </div>
+        <div>
+          <select {...register('gender')} className="input-field text-gray-700">
+            <option value="" disabled>Select Gender</option>
+            <option value="MALE">Male</option>
+            <option value="FEMALE">Female</option>
+            <option value="OTHER">Other</option>
+          </select>
+          {errors.gender && <p className="mt-1 text-xs text-red-500">{errors.gender.message}</p>}
         </div>
       </div>
 

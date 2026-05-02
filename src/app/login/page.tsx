@@ -1,8 +1,7 @@
 'use client'
 
-import { useFormState } from "react-dom";
 import { loginUser } from "@/server/actions/login";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useActionState } from "react";
 import { REGISTRATION_TARGET_TIME } from "@/components/features/CountdownOptimized";
 
 const initialState = {
@@ -10,7 +9,7 @@ const initialState = {
 };
 
 export default function LoginPage() {
-  const [state, formAction] = useFormState(loginUser, initialState);
+  const [state, formAction] = useActionState(loginUser, initialState);
   const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {

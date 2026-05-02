@@ -75,8 +75,6 @@ const smtpSchema = z.object({
 
 // AI/ML features
 const aiSchema = z.object({
-  PINECONE_API_KEY: z.string().optional(),
-  PINECONE_INDEX: z.string().default("shackles-events").optional(),
 });
 
 // Feature flags
@@ -143,8 +141,6 @@ export function validateAndGetEnv(): ValidatedEnv {
       SMTP_SECURE: process.env.SMTP_SECURE,
       SMTP_USER: process.env.SMTP_USER,
       SMTP_PASS: process.env.SMTP_PASS,
-      PINECONE_API_KEY: process.env.PINECONE_API_KEY,
-      PINECONE_INDEX: process.env.PINECONE_INDEX,
       ENABLE_SCANNER_BULK_TEAM_FLOW: process.env.ENABLE_SCANNER_BULK_TEAM_FLOW,
       PLAYWRIGHT_DATABASE_URL: process.env.PLAYWRIGHT_DATABASE_URL,
       PLAYWRIGHT_SESSION_SECRET: process.env.PLAYWRIGHT_SESSION_SECRET,
@@ -179,12 +175,6 @@ export function validateAndGetEnv(): ValidatedEnv {
     const validated = fullEnvSchema.parse(envData);
     validationCache = validated;
 
-    // Warn if optional features disabled
-    if (!validated.PINECONE_API_KEY) {
-      console.warn(
-        "[ENV] PINECONE_API_KEY not set. AI event recommendations will be unavailable."
-      );
-    }
 
     return validated;
   } catch (error) {

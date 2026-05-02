@@ -91,11 +91,11 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
   const showActionsColumn = participants.some((participant) => participant.payment?.status === 'PENDING');
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">On-Spot Registration Console</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">On-Spot Registration Console</h1>
             <p className="text-sm text-gray-600 mt-1">Create on-spot users, verify payments, and manage on-spot participant lifecycle.</p>
           </div>
           <a
@@ -106,7 +106,7 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
           </a>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
           <div className="bg-white rounded-lg border p-4">
             <p className="text-xs text-gray-500 uppercase">Total</p>
             <p className="text-2xl font-bold text-gray-900">{summary.total}</p>
@@ -163,7 +163,7 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
         )}
 
         {tab === 'register' && (
-          <div className="bg-white rounded-xl border p-6">
+          <div className="bg-white rounded-xl border p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Create On-Spot Participant</h2>
             <form
               action={async (formData) => {
@@ -180,6 +180,7 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                   collegeLoc: String(formData.get('collegeLoc') || ''),
                   department: String(formData.get('department') || ''),
                   yearOfStudy: String(formData.get('yearOfStudy') || ''),
+                  gender: String(formData.get('gender') || 'MALE'),
                   registrationType: String(formData.get('registrationType') || 'GENERAL'),
                   amount: Number.isFinite(amount) ? amount : 0,
                   paymentChannel: String(formData.get('paymentChannel') || 'CASH'),
@@ -208,6 +209,11 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                 <option value="WORKSHOP">WORKSHOP</option>
                 <option value="COMBO">COMBO</option>
               </select>
+              <select name="gender" className="border rounded-lg px-3 py-2" defaultValue="MALE">
+                <option value="MALE">MALE</option>
+                <option value="FEMALE">FEMALE</option>
+                <option value="OTHER">OTHER</option>
+              </select>
               <input name="collegeName" placeholder="College" className="border rounded-lg px-3 py-2" required />
               <input name="collegeLoc" placeholder="College location" className="border rounded-lg px-3 py-2" required />
               <input name="department" placeholder="Department" className="border rounded-lg px-3 py-2" required />
@@ -231,7 +237,7 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
         )}
 
         {(tab === 'verify' || tab === 'users') && (
-          <div className="bg-white rounded-xl border p-6 space-y-4">
+          <div className="bg-white rounded-xl border p-4 sm:p-6 space-y-4">
             <div className="flex flex-wrap gap-2 items-center">
               <a
                 href={`/admin/onspot-registration?tab=${tab}&status=ALL&channel=${selectedChannel}&q=${encodeURIComponent(search)}`}
@@ -279,11 +285,11 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                 ONLINE
               </a>
 
-              <form action="/admin/onspot-registration" className="ml-auto flex gap-2">
+              <form action="/admin/onspot-registration" className="ml-auto flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                 <input type="hidden" name="tab" value={tab} />
                 <input type="hidden" name="status" value={selectedStatus} />
                 <input type="hidden" name="channel" value={selectedChannel} />
-                <input name="q" defaultValue={search} placeholder="Search name/email/phone/ID" className="border rounded-lg px-3 py-1.5 text-sm" />
+                <input name="q" defaultValue={search} placeholder="Search name/email/phone/ID" className="border rounded-lg px-3 py-1.5 text-sm w-full sm:w-auto" />
                 <button className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-sm">Search</button>
               </form>
             </div>

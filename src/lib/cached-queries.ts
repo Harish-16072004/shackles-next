@@ -28,8 +28,8 @@ export const getCachedDashboardStats = unstable_cache(
       prisma.user.count({ where: { registrationType: 'COMBO' } }),
       prisma.user.count({ where: { kitStatus: 'ISSUED' } }),
       prisma.accommodation.count(),
-      prisma.accommodation.count({ where: { gender: 'MALE' } }),
-      prisma.accommodation.count({ where: { gender: 'FEMALE' } }),
+      prisma.accommodation.count({ where: { user: { gender: 'MALE' } } }),
+      prisma.accommodation.count({ where: { user: { gender: 'FEMALE' } } }),
       prisma.event
         .findMany({
           orderBy: { name: 'asc' },

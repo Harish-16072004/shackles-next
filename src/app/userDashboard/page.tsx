@@ -52,11 +52,11 @@ export default async function UserDashboardPage() {
   const qrImageUrl = qrSignedUrl || user.qrImageUrl || generatedQrFallbackUrl;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 md:gap-8">
       <LiveSyncRefresher intervalMs={12000} />
-      <section className="rounded-2xl border border-gray-200 bg-white p-8 shadow-xs">
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 md:p-8 shadow-xs">
         <p className="text-xs uppercase tracking-[0.2em] text-gray-500">User Dashboard</p>
-        <h1 className="mt-2 text-3xl font-bold text-gray-900 md:text-4xl">Welcome {userName},</h1>
+        <h1 className="mt-2 text-2xl sm:text-3xl font-bold text-gray-900 md:text-4xl">Welcome {userName},</h1>
         {isOnSpotUser && (
           <span className="mt-3 inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-700">
             On-Spot Participant
@@ -65,8 +65,8 @@ export default async function UserDashboardPage() {
         <p className="mt-2 text-gray-600">Your registration details, QR pass, and enrolled activities.</p>
       </section>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2">
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-xs">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-gray-900">Your Shackles ID</h2>
             {isOnSpotUser && (
@@ -83,7 +83,7 @@ export default async function UserDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-xs">
           <h2 className="text-lg font-semibold text-gray-900">Your QR</h2>
           {isPaymentVerified && qrImageUrl ? (
             <div className="mt-4">
@@ -104,8 +104,8 @@ export default async function UserDashboardPage() {
         </section>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2">
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-xs">
           <h2 className="text-lg font-semibold text-gray-900">Registered Events</h2>
           {events.length === 0 ? (
             <p className="mt-3 text-sm text-gray-500">No event registrations yet.</p>
@@ -121,7 +121,7 @@ export default async function UserDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-xs">
           <h2 className="text-lg font-semibold text-gray-900">Registered Workshops</h2>
           {workshops.length === 0 ? (
             <p className="mt-3 text-sm text-gray-500">No workshop registrations yet.</p>

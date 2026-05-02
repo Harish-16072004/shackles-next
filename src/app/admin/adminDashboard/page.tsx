@@ -62,19 +62,19 @@ export default async function AdminDashboard() {
   const maxRegistrations = Math.max(1, ...registrationsPerEvent);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">
       <LiveSyncRefresher intervalMs={12000} />
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600 mt-2">SHACKLES {activeYear} Statistics & Management</p>
+        <div className="mb-8 md:mb-12">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">Admin Dashboard</h1>
+          <p className="text-gray-600 mt-2 text-sm sm:text-base">SHACKLES {activeYear} Statistics & Management</p>
         </div>
 
         {/* Overview Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
           {/* Total Registrations */}
-          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-cyan-500">
+          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 border-l-4 border-cyan-500">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-gray-600 font-semibold text-sm uppercase tracking-wide">Total Registrations</h3>
               <div className="bg-cyan-100 p-3 rounded-lg">
@@ -83,11 +83,11 @@ export default async function AdminDashboard() {
                 </svg>
               </div>
             </div>
-            <p className="text-4xl font-bold text-gray-900">{totalRegistrations}</p>
+            <p className="text-3xl sm:text-4xl font-bold text-gray-900">{totalRegistrations}</p>
           </div>
 
           {/* Verified Payments */}
-          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 border-l-4 border-green-500">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-gray-600 font-semibold text-sm uppercase tracking-wide">Verified Payments</h3>
               <div className="bg-green-100 p-3 rounded-lg">
@@ -96,11 +96,11 @@ export default async function AdminDashboard() {
                 </svg>
               </div>
             </div>
-            <p className="text-4xl font-bold text-gray-900">{verifiedPayments}</p>
+            <p className="text-3xl sm:text-4xl font-bold text-gray-900">{verifiedPayments}</p>
           </div>
 
           {/* Pending Payments */}
-          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
+          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 border-l-4 border-orange-500">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-gray-600 font-semibold text-sm uppercase tracking-wide">Pending Payments Verification</h3>
               <div className="bg-orange-100 p-3 rounded-lg">
@@ -109,14 +109,14 @@ export default async function AdminDashboard() {
                 </svg>
               </div>
             </div>
-            <p className="text-4xl font-bold text-gray-900">{pendingPayments}</p>
+            <p className="text-3xl sm:text-4xl font-bold text-gray-900">{pendingPayments}</p>
           </div>
         </div>
 
         {/* Pass Mix Cards */}
         <div className="mb-8">
           <h2 className="text-lg font-bold text-gray-900 mb-4">Registration Types</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {/* General Only */}
             <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
               <div className="flex items-center justify-between mb-4">
@@ -161,7 +161,7 @@ export default async function AdminDashboard() {
         {/* Logistics Cards */}
         <div className="mb-8">
           <h2 className="text-lg font-bold text-gray-900 mb-4">Logistics & Kit Distribution</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {/* Kits Issued */}
             <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-teal-500">
               <div className="flex items-center justify-between mb-4">
@@ -219,13 +219,13 @@ export default async function AdminDashboard() {
         </div>
 
         {/* Quick Actions Section */}
-        <div className="mt-12">
-          <h2 className="text-lg font-bold text-gray-900 mb-6">Quick Actions</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="mt-8 md:mt-12">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 sm:mb-6">Quick Actions</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {/* Manage Users */}
-            <a href="/admin/users" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
-              <div className="bg-blue-100 w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
-                <svg className="w-8 h-8 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+            <a href="/admin/users" className="bg-white rounded-lg shadow-md p-4 sm:p-6 hover:shadow-lg transition-shadow text-center">
+              <div className="bg-blue-100 w-12 h-12 sm:w-16 sm:h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M10.5 1.5H5.75A2.25 2.25 0 003.5 3.75v12.5A2.25 2.25 0 005.75 18.5h8.5a2.25 2.25 0 002.25-2.25V6.75M10.5 1.5v5.25m0 0H6M10.5 6.75h4.5"></path>
                   <path d="M7 11h6M7 14h6"></path>
                 </svg>
@@ -339,11 +339,11 @@ export default async function AdminDashboard() {
         </div>
 
         {/* Event-wise Registrations */}
-        <div className="mt-12">
-          <h2 className="text-lg font-bold text-gray-900 mb-6">Event-wise Registrations</h2>
+        <div className="mt-8 md:mt-12">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 sm:mb-6">Event-wise Registrations</h2>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
               <h3 className="text-md font-bold text-gray-900 mb-4">Technical Events</h3>
               <div className="space-y-4">
                 {technicalEvents.length === 0 && (
@@ -353,8 +353,8 @@ export default async function AdminDashboard() {
                   const count = event.registrations.reduce((sum, registration) => sum + (registration.teamSize || 1), 0);
                   const width = Math.round((count / maxRegistrations) * 100);
                   return (
-                    <div key={event.id} className="flex items-center gap-4">
-                      <div className="w-48 text-sm font-medium text-gray-700 truncate">{event.name}</div>
+                    <div key={event.id} className="flex items-center gap-2 sm:gap-4">
+                      <div className="w-24 sm:w-48 text-xs sm:text-sm font-medium text-gray-700 truncate">{event.name}</div>
                       <div className="flex-1">
                         <div className="h-3 bg-gray-100 rounded-full">
                           <div className="h-3 bg-blue-500 rounded-full" style={{ width: `${width}%` }}></div>
@@ -367,7 +367,7 @@ export default async function AdminDashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
               <h3 className="text-md font-bold text-gray-900 mb-4">Non-Technical Events</h3>
               <div className="space-y-4">
                 {nonTechnicalEvents.length === 0 && (
@@ -377,8 +377,8 @@ export default async function AdminDashboard() {
                   const count = event.registrations.reduce((sum, registration) => sum + (registration.teamSize || 1), 0);
                   const width = Math.round((count / maxRegistrations) * 100);
                   return (
-                    <div key={event.id} className="flex items-center gap-4">
-                      <div className="w-48 text-sm font-medium text-gray-700 truncate">{event.name}</div>
+                    <div key={event.id} className="flex items-center gap-2 sm:gap-4">
+                      <div className="w-24 sm:w-48 text-xs sm:text-sm font-medium text-gray-700 truncate">{event.name}</div>
                       <div className="flex-1">
                         <div className="h-3 bg-gray-100 rounded-full">
                           <div className="h-3 bg-blue-500 rounded-full" style={{ width: `${width}%` }}></div>
@@ -391,7 +391,7 @@ export default async function AdminDashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
               <h3 className="text-md font-bold text-gray-900 mb-4">Special Events</h3>
               <div className="space-y-4">
                 {specialEvents.length === 0 && (
@@ -401,8 +401,8 @@ export default async function AdminDashboard() {
                   const count = event.registrations.reduce((sum, registration) => sum + (registration.teamSize || 1), 0);
                   const width = Math.round((count / maxRegistrations) * 100);
                   return (
-                    <div key={event.id} className="flex items-center gap-4">
-                      <div className="w-48 text-sm font-medium text-gray-700 truncate">{event.name}</div>
+                    <div key={event.id} className="flex items-center gap-2 sm:gap-4">
+                      <div className="w-24 sm:w-48 text-xs sm:text-sm font-medium text-gray-700 truncate">{event.name}</div>
                       <div className="flex-1">
                         <div className="h-3 bg-gray-100 rounded-full">
                           <div className="h-3 bg-blue-500 rounded-full" style={{ width: `${width}%` }}></div>
@@ -415,7 +415,7 @@ export default async function AdminDashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
               <h3 className="text-md font-bold text-gray-900 mb-4">Workshops</h3>
               <div className="space-y-4">
                 {workshopEvents.length === 0 && (
@@ -425,8 +425,8 @@ export default async function AdminDashboard() {
                   const count = event.registrations.reduce((sum, registration) => sum + (registration.teamSize || 1), 0);
                   const width = Math.round((count / maxRegistrations) * 100);
                   return (
-                    <div key={event.id} className="flex items-center gap-4">
-                      <div className="w-48 text-sm font-medium text-gray-700 truncate">{event.name}</div>
+                    <div key={event.id} className="flex items-center gap-2 sm:gap-4">
+                      <div className="w-24 sm:w-48 text-xs sm:text-sm font-medium text-gray-700 truncate">{event.name}</div>
                       <div className="flex-1">
                         <div className="h-3 bg-gray-100 rounded-full">
                           <div className="h-3 bg-blue-500 rounded-full" style={{ width: `${width}%` }}></div>

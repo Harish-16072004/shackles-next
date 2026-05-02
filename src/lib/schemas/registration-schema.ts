@@ -14,6 +14,7 @@ export const registrationStep1Schema = z.object({
   yearOfStudy: z.enum(['I', 'II', 'III', 'IV']),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string().min(1, 'Confirm your password'),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER'], { message: 'Select your gender' }),
 });
 
 export const registrationStep2Schema = z.object({

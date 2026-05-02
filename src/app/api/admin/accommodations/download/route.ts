@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const where: Prisma.AccommodationWhereInput = { gender };
+    const where: Prisma.AccommodationWhereInput = { user: { gender } };
 
     const accommodations = await prisma.accommodation.findMany({
       where,
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
       acc.user.phone,
       acc.user.email,
       acc.user.collegeName,
-      acc.gender,
+      acc.user.gender || 'UNKNOWN',
       acc.days.join("; "),
     ]);
 

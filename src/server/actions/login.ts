@@ -1,9 +1,8 @@
 'use server'
 
 import { z } from "zod";
-import { compare } from "bcryptjs"; 
-import { createSession } from "@/lib/session";
-import { redirect } from "next/navigation";
+import { signIn } from "@/auth";
+import { AuthError } from "next-auth";
 import { prisma } from "@/lib/prisma";
 
 
@@ -15,45 +14,41 @@ const LoginSchema = z.object({
 export async function loginUser(prevState: unknown, formData: FormData) {
   const data = Object.fromEntries(formData.entries());
   let loggedInRole: string | null = null;
-  
-  // 1. Validate Input
+
   const result = LoginSchema.safeParse(data);
   if (!result.success) {
     return { error: "Invalid email or password format." };
   }
 
   const { email, password } = result.data;
+  let targetPath = "/userDashboard";
 
   try {
-    // 2. Find User
-    const user = await prisma.user.findUnique({
-      where: { email }
+    // Look up user to determine redirect path
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user && user.role === "ADMIN") {
+      targetPath = "/admin/adminDashboard";
+    }
+  } catch (err) {
+    console.error("Database error during login prep:", err);
+  }
+
+  try {
+    await signIn("credentials", {
+      email,
+      password,
+      redirectTo: targetPath,
     });
-
-    if (!user) {
-      return { error: "Invalid credentials." };
-    }
-
-    // 3. Check Password
-    const passwordsMatch = await compare(password, user.password);
-    if (!passwordsMatch) {
-      return { error: "Invalid credentials." };
-    }
-
-    // 4. Create Session
-    const displayName = `${user.firstName} ${user.lastName}`.trim();
-    await createSession(user.id, user.role, displayName || undefined);
-    loggedInRole = user.role;
-
   } catch (error) {
-    console.error("Login error:", error);
-    return { error: "Something went wrong." };
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case "CredentialsSignin":
+          return { error: "Invalid credentials." };
+        default:
+          return { error: "Something went wrong." };
+      }
+    }
+    // Re-throw NEXT_REDIRECT error so Next.js redirects properly
+    throw error;
   }
-
-  // 5. Redirect (Must be outside try-catch)
-  if (loggedInRole === "ADMIN") {
-    redirect("/admin/adminDashboard");
-  }
-
-  redirect("/");
 }

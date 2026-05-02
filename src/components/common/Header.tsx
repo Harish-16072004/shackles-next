@@ -4,6 +4,7 @@ import { deleteSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getActiveYear, getActiveYearShort } from "@/lib/edition";
+import MobileNav from "./MobileNav";
 
 const publicNavItems = [
   { label: "Home", href: "/" },
@@ -58,7 +59,7 @@ export default async function Header() {
           </Link>
 
           {/* Navigation Links */}
-          <nav className="hidden items-center gap-8 md:flex">
+          <nav className="hidden items-center gap-8 lg:flex">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -72,7 +73,7 @@ export default async function Header() {
 
           {/* Auth Area */}
           {profileName ? (
-            <div className="hidden md:flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-3">
               <Link
                 href={profileHref}
                 className="rounded-full border-2 border-gray-300 px-4 py-1.5 text-sm font-semibold text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
@@ -97,11 +98,23 @@ export default async function Header() {
           ) : (
             <Link
               href="/login"
-              className="hidden md:inline-block rounded-full border-2 border-pink-600 px-4 py-1.5 text-sm font-semibold text-pink-600 transition-colors hover:bg-pink-600 hover:text-white"
+              className="hidden lg:inline-block rounded-full border-2 border-pink-600 px-4 py-1.5 text-sm font-semibold text-pink-600 transition-colors hover:bg-pink-600 hover:text-white"
             >
               Login
             </Link>
           )}
+
+          {/* Mobile Navigation */}
+          <MobileNav
+            navItems={navItems}
+            profileName={profileName}
+            profileHref={profileHref}
+            onLogoutAction={async () => {
+              "use server";
+              await deleteSession();
+              redirect("/");
+            }}
+          />
         </div>
       </div>
     </header>

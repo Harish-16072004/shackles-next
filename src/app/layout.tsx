@@ -4,6 +4,7 @@ import Header from "@/components/common/Header";
 import { getActivePublicDomain, getActiveThemeKey, getActiveYear } from "@/lib/edition";
 import { resolveThemeConfig } from "@/lib/theme-registry";
 import { validateServerEnv } from "@/lib/env";
+import ChatWidget from "@/components/features/ai-chat/ChatWidget";
 import "./globals.css";
 
 // Validate environment at app startup
@@ -49,6 +50,7 @@ export default function RootLayout({
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-8">
           {children}
         </main>
+        <ChatWidget />
       </body>
     </html>
   );

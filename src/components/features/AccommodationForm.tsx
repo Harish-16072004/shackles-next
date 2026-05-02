@@ -4,7 +4,7 @@ import { useState } from "react";
 import { registerAccommodation } from "@/server/actions/accommodation";
 
 export default function AccommodationForm({ userId }: { userId: string }) {
-  const [gender, setGender] = useState<"MALE" | "FEMALE" | "">("");
+
   const [days, setDays] = useState<string[]>([]);
   const [accepted, setAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -16,17 +16,15 @@ export default function AccommodationForm({ userId }: { userId: string }) {
     );
   };
 
-  const toggleGender = (value: "MALE" | "FEMALE") => {
-    setGender((prev) => (prev === value ? "" : value));
-  };
+
 
   const handleSubmit = async () => {
     if (!accepted) return alert("Please accept the rules.");
-    if (!gender) return alert("Please select your gender.");
+
     if (days.length === 0) return alert("Select at least one date.");
 
     setLoading(true);
-    const res = await registerAccommodation({ userId, gender, days });
+    const res = await registerAccommodation({ userId, days });
     setLoading(false);
 
     if (res.success) setSuccess(true);
@@ -96,28 +94,7 @@ export default function AccommodationForm({ userId }: { userId: string }) {
                 </div>
               </div>
 
-              {/* Gender Selection */}
-              <div className="mb-8">
-                <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Select Gender</label>
-                <div className="flex gap-4">
-                  <button 
-                    onClick={() => toggleGender("MALE")}
-                    className={`flex-1 py-3 rounded-lg border font-medium transition-all ${
-                      gender === "MALE" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    Male
-                  </button>
-                  <button 
-                    onClick={() => toggleGender("FEMALE")}
-                    className={`flex-1 py-3 rounded-lg border font-medium transition-all ${
-                      gender === "FEMALE" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    Female
-                  </button>
-                </div>
-              </div>
+
 
               {/* Rules Checkbox */}
               <div className="mb-8 flex items-start gap-3 bg-gray-50 p-4 rounded-lg border border-gray-100">
@@ -136,7 +113,7 @@ export default function AccommodationForm({ userId }: { userId: string }) {
               {/* Submit Button */}
               <button 
                 onClick={handleSubmit}
-                disabled={loading || !accepted || days.length === 0 || !gender}
+                disabled={loading || !accepted || days.length === 0}
                 className="w-full bg-black text-white py-4 rounded-xl font-bold text-lg hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
               >
                 {loading ? "Processing..." : "Confirm Accommodation"}

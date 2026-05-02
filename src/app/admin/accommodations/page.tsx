@@ -27,7 +27,7 @@ export default async function AdminAccommodationsPage({ searchParams }: { search
 
   const where: Prisma.AccommodationWhereInput = {};
   if (genderFilter) {
-    where.gender = genderFilter;
+    where.user = { gender: genderFilter };
   }
   if (search) {
     where.OR = [
@@ -46,18 +46,18 @@ export default async function AdminAccommodationsPage({ searchParams }: { search
   });
 
   const total = accommodations.length;
-  const male = accommodations.filter((a) => a.gender === "MALE").length;
-  const female = accommodations.filter((a) => a.gender === "FEMALE").length;
+  const male = accommodations.filter((a) => a.user.gender === "MALE").length;
+  const female = accommodations.filter((a) => a.user.gender === "FEMALE").length;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
-        <div className="flex justify-between items-start gap-4">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">
+      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Accommodation Management</h1>
-            <p className="text-gray-600">Review participant accommodation requests.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Accommodation Management</h1>
+            <p className="text-gray-600 text-sm sm:text-base">Review participant accommodation requests.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <a
               href="/api/admin/accommodations/download?gender=MALE"
               download
@@ -77,7 +77,7 @@ export default async function AdminAccommodationsPage({ searchParams }: { search
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <p className="text-xs font-semibold text-gray-500 uppercase">Total Requests</p>
             <p className="mt-2 text-2xl font-bold text-gray-900">{total}</p>
@@ -115,7 +115,7 @@ export default async function AdminAccommodationsPage({ searchParams }: { search
                     <td className="px-4 py-3 text-gray-700">{acc.user.email}</td>
                     <td className="px-4 py-3 text-gray-700">{acc.user.phone}</td>
                     <td className="px-4 py-3 text-gray-700">{acc.user.collegeName}</td>
-                    <td className="px-4 py-3 text-xs font-semibold text-gray-900">{acc.gender}</td>
+                    <td className="px-4 py-3 text-xs font-semibold text-gray-900">{acc.user.gender || "UNKNOWN"}</td>
                     <td className="px-4 py-3 text-gray-700 text-xs">{acc.days.join(", ")}</td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{formatDate(acc.createdAt)}</td>
                   </tr>

@@ -19,6 +19,7 @@ const CreateOnSpotParticipantSchema = z.object({
 	collegeLoc: z.string().trim().min(2),
 	department: z.string().trim().min(2),
 	yearOfStudy: z.string().trim().min(1),
+	gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
 	registrationType: z.enum(['GENERAL', 'WORKSHOP', 'COMBO']),
 	amount: z.number().int().nonnegative(),
 	paymentChannel: z.enum(['CASH', 'ONLINE']),
@@ -106,6 +107,7 @@ export async function createOnSpotParticipant(input: unknown) {
 				collegeLoc: data.collegeLoc,
 				department: data.department,
 				yearOfStudy: data.yearOfStudy,
+				gender: data.gender,
 				role: Role.APPLICANT,
 				registrationType: data.registrationType as RegistrationType,
 				payment: {

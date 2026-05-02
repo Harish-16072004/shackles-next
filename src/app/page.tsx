@@ -4,17 +4,17 @@ const aboutCards = [
   {
     title: "Alagappa Chettiar Government College of Engineering and Technology",
     description:
-      "An autonomous institution with decades of engineering education, research, and student-led initiatives anchored in Karaikudi, Tamil Nadu.",
+      "Alagappa Chettiar Government College of Engineering and Technology (ACGCET), with over 70 years of academic excellence, is one of the region's most esteemed government institutions — offering quality education at a nominal fee without compromising standards. Our autonomous status allows us to design industry-aligned curricula, supported by experienced faculty dedicated to holistic student development. A vibrant campus life — enriched by clubs, associations, intra and inter-college competitions, and sports facilities — complements rigorous academics, fostering leadership, teamwork, and creativity. Backed by a strong alumni network and a consistent record of high placements with leading companies, ACGCET stands where tradition meets innovation, empowering students to become competent, responsible, and future-ready professionals.",
   },
   {
     title: "Department of Mechanical Engineering",
     description:
-      "NBA-accredited, with deep project culture across manufacturing, design, and analysis. The team behind the event’s discipline and logistics.",
+      "The Department of Mechanical Engineering, established in 1952 and NBA accredited, has grown from 40 students to 120 over seven decades — offering B.E., Part-Time B.E., and M.E. programmes in Manufacturing Engineering and Computer Aided Design. Recognized as an Anna University research centre since 2002, the department has produced 50+ Ph.D. scholars across Composite Materials, Heat Transfer, Robotics & Automation, and Additive Manufacturing, further strengthened by a Government of Tamil Nadu-funded Centre of Excellence in Additive Manufacturing (2019). Beyond academics, students compete in BAJA, Go-Kart, Solar Car, and Effi-Cycle challenges through SAE, while gaining industry exposure through internships, guest lectures, and industrial visits.",
   },
   {
     title: "Shackles 25–26",
     description:
-      "A national-level symposium framed as a survival game. Built to reward sharp execution, clean thinking, and collaborative problem-solving.",
+      "Shackles is a National Level Inter-Collegiate Symposium conducted by the Mechanical Engineering Association of Alagappa Chettiar Government College of Engineering and Technology (ACGCET), bringing together bright minds from institutions across the country. The event features a dynamic blend of technical and non-technical events designed to challenge, inspire, and celebrate engineering talent. Alongside competitive events, hands-on workshops on cutting-edge technologies provide participants with practical exposure beyond the classroom — making Shackles not just a competition, but a platform for learning, networking, and innovation.",
   },
 ];
 
@@ -74,10 +74,10 @@ export default function Home() {
           {aboutCards.map((item) => (
             <div
               key={item.title}
-              className="flex h-full flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-6 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-gray-300"
+              className="flex h-full flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-6 shadow-xs transition-all hover:-translate-y-0.5 hover:border-gray-300"
             >
               <h3 className="text-lg font-semibold text-gray-900 leading-snug">{item.title}</h3>
-              <p className="text-sm leading-relaxed text-gray-600">{item.description}</p>
+              <p className="text-sm leading-relaxed text-gray-600 text-justify">{item.description}</p>
             </div>
           ))}
         </div>

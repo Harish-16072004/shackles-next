@@ -1,3 +1,19 @@
+/**
+ * team-registration.service.ts
+ *
+ * Self-service team registration primitives (items #1, #2, #3)
+ * + refactored coordinator/bulk path (#6)
+ *
+ * Flow overview:
+ *   Leader  → createTeam()        → team.status = OPEN, generates joinCode
+ *   Members → joinTeamByCode()    → adds member if team OPEN and slot available
+ *   Leader  → lockTeam()          → validates min size, status → LOCKED, clears joinCode
+ *
+ * Coordinator/kiosk path:
+ *   bulkRegisterAndLockTeamByShacklesIds() now calls the three primitives above
+ *   internally so all business rules stay in one place.
+ */
+
 import crypto from "node:crypto";
 import {
   EventParticipationMode,
@@ -8,7 +24,11 @@ import {
   TeamMemberRole,
   TeamStatus,
 } from "@prisma/client";
-import { getEventParticipantCount, isMaxParticipantsExceeded, isMaxTeamsExceeded } from "@/server/services/capacity.service";
+import {
+  getEventParticipantCount,
+  isMaxParticipantsExceeded,
+  isMaxTeamsExceeded,
+} from "@/server/services/capacity.service";
 import {
   getVerifiedPackage,
   canAccessEventCategory,
@@ -16,6 +36,10 @@ import {
   DomainError,
 } from "@/server/services/registration-helpers.service";
 import { getActiveYear } from "@/lib/edition";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 export function normalizeTeamName(name: string) {
   return name.trim().replace(/\s+/g, " ").toUpperCase();
@@ -53,19 +77,33 @@ export async function generateUniqueTeamCode(
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const code = crypto.randomBytes(4).toString("hex").toUpperCase();
     const existing = await tx.team.findUnique({
-      where: {
-        eventId_teamCode: {
-          eventId,
-          teamCode: code,
-        },
-      },
+      where: { eventId_teamCode: { eventId, teamCode: code } },
       select: { id: true },
     });
-
     if (!existing) return code;
   }
-
   throw new Error("Unable to allocate a unique team code.");
+}
+
+/**
+ * Generate a short, URL-safe join code (8 uppercase alphanumeric chars).
+ * Globally unique across all teams.
+ */
+async function generateUniqueJoinCode(db: DbClient): Promise<string> {
+  const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I ambiguity
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    let code = "";
+    const bytes = crypto.randomBytes(8);
+    for (let i = 0; i < 8; i++) {
+      code += CHARS[bytes[i] % CHARS.length];
+    }
+    const existing = await db.team.findUnique({
+      where: { joinCode: code },
+      select: { id: true },
+    });
+    if (!existing) return code;
+  }
+  throw new Error("Unable to allocate a unique join code.");
 }
 
 type DbClient = Prisma.TransactionClient | PrismaClient;
@@ -84,6 +122,443 @@ export type TeamServiceSuccess = {
 
 export type TeamServiceResult = TeamServiceSuccess | TeamServiceFailure;
 
+// ---------------------------------------------------------------------------
+// #1 — createTeam()
+// ---------------------------------------------------------------------------
+
+/**
+ * Self-service: the leader creates an OPEN team for a team event.
+ * Returns joinCode + teamCode on success so they can be shared or emailed.
+ */
+export async function createTeam(input: {
+  db: DbClient;
+  /** userId from session — must be a verified, paid participant */
+  leaderUserId: string;
+  eventId: string;
+  teamName: string;
+  /** Optional: tie the join code to a deadline */
+  joinCodeExpiresAt?: Date;
+}): Promise<TeamServiceResult & { teamCode?: string; joinCode?: string }> {
+  const activeYear = getActiveYear();
+
+  const normalizedTeam = normalizeTeamName(input.teamName);
+  if (!normalizedTeam) {
+    return { success: false, reason: "INVALID_INPUT", error: "Team name is required." };
+  }
+
+  // Validate leader
+  const leader = await input.db.user.findUnique({
+    where: { id: input.leaderUserId },
+    include: { payment: true },
+  });
+  if (!leader) return { success: false, reason: "USER_NOT_FOUND", error: "User not found." };
+  if (
+    !leader.payment ||
+    leader.payment.status !== "VERIFIED" ||
+    leader.payment.year !== activeYear
+  ) {
+    return {
+      success: false,
+      reason: "PAYMENT_NOT_VERIFIED",
+      error: "Payment not verified for the current year.",
+    };
+  }
+
+  // Validate event
+  const event = await input.db.event.findFirst({
+    where: {
+      id: input.eventId,
+      year: activeYear,
+      isActive: true,
+      isArchived: false,
+      isTemplate: false,
+    },
+    select: {
+      id: true,
+      name: true,
+      participationMode: true,
+      category: true,
+      teamMinSize: true,
+      teamMaxSize: true,
+      maxTeams: true,
+      maxParticipants: true,
+    },
+  });
+  if (!event) return { success: false, reason: "EVENT_NOT_FOUND", error: "Event not found." };
+  if (event.participationMode !== EventParticipationMode.TEAM) {
+    return { success: false, reason: "NOT_TEAM_EVENT", error: "This event is not a team event." };
+  }
+
+  // Package eligibility
+  const pkg = await getVerifiedPackage(input.db, input.leaderUserId, activeYear);
+  if (!pkg) return { success: false, reason: "NO_PACKAGE", error: "No verified package found." };
+  if (!canAccessEventCategory(pkg.packageType, event.category)) {
+    return {
+      success: false,
+      reason: "PACKAGE_NOT_ALLOWED",
+      error: "Your package does not allow registration for this event type.",
+    };
+  }
+
+  // Already registered?
+  const alreadyIn = await input.db.eventRegistration.findUnique({
+    where: { userId_eventId: { userId: input.leaderUserId, eventId: event.id } },
+  });
+  if (alreadyIn) {
+    return { success: false, reason: "ALREADY_REGISTERED", error: "You are already registered for this event." };
+  }
+
+  // Capacity checks
+  const participantCount = await getEventParticipantCount({ db: input.db, eventId: event.id });
+  if (isMaxParticipantsExceeded(event.maxParticipants, participantCount, 1)) {
+    return { success: false, reason: "CAPACITY_FULL", error: "Event is full." };
+  }
+
+  // Unique team name check
+  const existingTeam = await input.db.team.findUnique({
+    where: { eventId_nameNormalized: { eventId: event.id, nameNormalized: normalizedTeam } },
+  });
+  if (existingTeam) {
+    return { success: false, reason: "TEAM_NAME_TAKEN", error: "A team with this name already exists for this event." };
+  }
+
+  const currentTeams = await input.db.team.count({ where: { eventId: event.id } });
+  if (isMaxTeamsExceeded(event.maxTeams, currentTeams, 1)) {
+    return { success: false, reason: "TEAM_SLOTS_FULL", error: "Team slots are full for this event." };
+  }
+
+  const teamCode = await generateUniqueTeamCode(input.db, event.id);
+  const joinCode = await generateUniqueJoinCode(input.db);
+
+  const team = await input.db.team.create({
+    data: {
+      eventId: event.id,
+      name: input.teamName.trim(),
+      nameNormalized: normalizedTeam,
+      teamCode,
+      joinCode,
+      joinCodeExpiresAt: input.joinCodeExpiresAt ?? null,
+      memberCount: 1,
+      status: TeamStatus.OPEN,
+      leaderUserId: leader.id,
+      leaderContactPhoneSnapshot: leader.phone,
+      leaderContactEmailSnapshot: leader.email,
+    },
+  });
+
+  await input.db.eventRegistration.create({
+    data: {
+      userId: leader.id,
+      eventId: event.id,
+      teamId: team.id,
+      teamName: team.name,
+      teamSize: 1,
+      memberRole: TeamMemberRole.LEADER,
+      attended: false,
+      source: RegistrationSource.ONLINE,
+      syncStatus: RegistrationSyncStatus.APPLIED,
+      year: activeYear,
+    },
+  });
+
+  return {
+    success: true,
+    message: `Team ${team.name} created. Share the join code with your teammates.`,
+    teamCode,
+    joinCode,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// #2 — joinTeamByCode()
+// ---------------------------------------------------------------------------
+
+/**
+ * Self-service: a participant joins an OPEN team using the join code.
+ * Idempotent — joining the same team twice returns success without error.
+ */
+export async function joinTeamByCode(input: {
+  db: DbClient;
+  /** userId from session */
+  userId: string;
+  joinCode: string;
+}): Promise<TeamServiceResult & { teamName?: string; eventName?: string }> {
+  const activeYear = getActiveYear();
+  const normalizedCode = input.joinCode.trim().toUpperCase();
+
+  if (!normalizedCode) {
+    return { success: false, reason: "INVALID_INPUT", error: "Join code is required." };
+  }
+
+  // Resolve team via join code
+  const team = await input.db.team.findUnique({
+    where: { joinCode: normalizedCode },
+    include: {
+      event: {
+        select: {
+          id: true,
+          name: true,
+          participationMode: true,
+          category: true,
+          teamMaxSize: true,
+          maxParticipants: true,
+          isActive: true,
+          isArchived: true,
+          isTemplate: true,
+          year: true,
+        },
+      },
+    },
+  });
+
+  if (!team) {
+    return { success: false, reason: "INVALID_JOIN_CODE", error: "Invalid or expired join code." };
+  }
+
+  // Expiry check
+  if (team.joinCodeExpiresAt && team.joinCodeExpiresAt < new Date()) {
+    return { success: false, reason: "JOIN_CODE_EXPIRED", error: "This join code has expired." };
+  }
+
+  const event = team.event;
+  if (!event.isActive || event.isArchived || event.isTemplate || event.year !== activeYear) {
+    return { success: false, reason: "EVENT_NOT_AVAILABLE", error: "This event is no longer accepting registrations." };
+  }
+
+  if (team.status !== TeamStatus.OPEN && team.status !== TeamStatus.DRAFT) {
+    return { success: false, reason: "TEAM_LOCKED", error: "This team is no longer accepting new members." };
+  }
+
+  // Validate joining user
+  const user = await input.db.user.findUnique({
+    where: { id: input.userId },
+    include: { payment: true },
+  });
+  if (!user) return { success: false, reason: "USER_NOT_FOUND", error: "User not found." };
+  if (
+    !user.payment ||
+    user.payment.status !== "VERIFIED" ||
+    user.payment.year !== activeYear
+  ) {
+    return {
+      success: false,
+      reason: "PAYMENT_NOT_VERIFIED",
+      error: "Payment not verified for the current year.",
+    };
+  }
+
+  // Package eligibility
+  const pkg = await getVerifiedPackage(input.db, input.userId, activeYear);
+  if (!pkg) return { success: false, reason: "NO_PACKAGE", error: "No verified package found." };
+  if (!canAccessEventCategory(pkg.packageType, event.category)) {
+    return {
+      success: false,
+      reason: "PACKAGE_NOT_ALLOWED",
+      error: "Your package does not allow registration for this event type.",
+    };
+  }
+
+  // Idempotency: already in this event?
+  const existing = await input.db.eventRegistration.findUnique({
+    where: { userId_eventId: { userId: input.userId, eventId: event.id } },
+  });
+  if (existing) {
+    return {
+      success: true,
+      message: "You are already registered for this event.",
+      teamName: team.name,
+      eventName: event.name,
+    };
+  }
+
+  // Capacity checks
+  const participantCount = await getEventParticipantCount({ db: input.db, eventId: event.id });
+  if (isMaxParticipantsExceeded(event.maxParticipants, participantCount, 1)) {
+    return { success: false, reason: "CAPACITY_FULL", error: "Event is full." };
+  }
+
+  const teamMaxSize = event.teamMaxSize ?? 4;
+  if (team.memberCount + 1 > teamMaxSize) {
+    return {
+      success: false,
+      reason: "TEAM_SIZE_EXCEEDED",
+      error: `Team already has the maximum number of members (${teamMaxSize}).`,
+    };
+  }
+
+  // Time clash
+  try {
+    await ensureNoTimeClash(input.db, input.userId, event.id, activeYear);
+  } catch (err) {
+    if (err instanceof DomainError) {
+      return { success: false, reason: err.code, error: err.message };
+    }
+    throw err;
+  }
+
+  // Register
+  await input.db.eventRegistration.create({
+    data: {
+      userId: user.id,
+      eventId: event.id,
+      teamId: team.id,
+      teamName: team.name,
+      teamSize: 1,
+      memberRole: TeamMemberRole.MEMBER,
+      attended: false,
+      source: RegistrationSource.ONLINE,
+      syncStatus: RegistrationSyncStatus.APPLIED,
+      year: activeYear,
+    },
+  });
+
+  await input.db.team.update({
+    where: { id: team.id },
+    data: { memberCount: { increment: 1 } },
+  });
+
+  return {
+    success: true,
+    message: `Successfully joined team ${team.name} for ${event.name}.`,
+    teamName: team.name,
+    eventName: event.name,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// #3 — lockTeam()
+// ---------------------------------------------------------------------------
+
+/**
+ * Finalize a team registration: validate min/max size, set status → LOCKED,
+ * clear the join code so stale codes can't be used after finalization.
+ *
+ * Uses optimistic locking (updateMany with status filter) to prevent
+ * concurrent double-lock races.
+ */
+export async function lockTeam(input: {
+  db: DbClient;
+  teamId: string;
+  /** Must be the team leader or an ADMIN/COORDINATOR user */
+  requestingUserId: string;
+}): Promise<
+  TeamServiceResult & {
+    teamName?: string;
+    eventName?: string;
+    memberCount?: number;
+    members?: { userId: string; email: string; name: string; role: TeamMemberRole }[];
+  }
+> {
+  const team = await input.db.team.findUnique({
+    where: { id: input.teamId },
+    include: {
+      event: {
+        select: {
+          id: true,
+          name: true,
+          teamMinSize: true,
+          teamMaxSize: true,
+          date: true,
+          endDate: true,
+          participationMode: true,
+        },
+      },
+      members: {
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true, email: true } },
+        },
+      },
+    },
+  });
+
+  if (!team) return { success: false, reason: "TEAM_NOT_FOUND", error: "Team not found." };
+
+  // Authorization: must be the leader or admin
+  if (team.leaderUserId !== input.requestingUserId) {
+    const requestor = await input.db.user.findUnique({
+      where: { id: input.requestingUserId },
+      select: { role: true },
+    });
+    const allowedRoles = ["ADMIN", "COORDINATOR"];
+    if (!requestor || !allowedRoles.includes(requestor.role)) {
+      return {
+        success: false,
+        reason: "UNAUTHORIZED",
+        error: "Only the team leader or an admin can lock the team.",
+      };
+    }
+  }
+
+  if (team.status === TeamStatus.LOCKED || team.status === TeamStatus.COMPLETED) {
+    return { success: false, reason: "TEAM_LOCKED", error: "Team is already locked." };
+  }
+  if (team.status === TeamStatus.CANCELLED) {
+    return { success: false, reason: "TEAM_CANCELLED", error: "Team has been cancelled." };
+  }
+
+  const teamMinSize = team.event.teamMinSize ?? 2;
+  const teamMaxSize = team.event.teamMaxSize ?? 4;
+  const memberCount = team.members.length;
+
+  if (memberCount < teamMinSize) {
+    return {
+      success: false,
+      reason: "TEAM_BELOW_MIN_SIZE",
+      error: `At least ${teamMinSize} members are required to lock the team. Current: ${memberCount}.`,
+    };
+  }
+  if (memberCount > teamMaxSize) {
+    return {
+      success: false,
+      reason: "TEAM_ABOVE_MAX_SIZE",
+      error: `Team can have at most ${teamMaxSize} members. Current: ${memberCount}.`,
+    };
+  }
+
+  // Update teamSize on all registrations to the real count
+  await input.db.eventRegistration.updateMany({
+    where: { teamId: team.id },
+    data: { teamSize: memberCount },
+  });
+
+  // Optimistic lock: only update if still OPEN/DRAFT (race-condition guard)
+  const res = await input.db.team.updateMany({
+    where: { id: team.id, status: { in: [TeamStatus.OPEN, TeamStatus.DRAFT] } },
+    data: {
+      status: TeamStatus.LOCKED,
+      memberCount,
+      lockedAt: new Date(),
+      lockedBy: input.requestingUserId,
+      joinCode: null,             // clear join code after locking
+      joinCodeExpiresAt: null,
+    },
+  });
+
+  if (res.count === 0) {
+    return { success: false, reason: "TEAM_LOCKED", error: "Team was locked by another process." };
+  }
+
+  const members = team.members.map((reg) => ({
+    userId: reg.user.id,
+    email: reg.user.email,
+    name: `${reg.user.firstName} ${reg.user.lastName}`,
+    role: reg.memberRole ?? TeamMemberRole.MEMBER,
+  }));
+
+  return {
+    success: true,
+    message: `Team ${team.name} is now locked with ${memberCount} members.`,
+    teamName: team.name,
+    eventName: team.event.name,
+    memberCount,
+    members,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// #6 — Refactored addMemberToTeamEvent (unchanged API, uses OPEN status)
+// ---------------------------------------------------------------------------
+
 export async function addMemberToTeamEvent(input: {
   db: DbClient;
   userId: string;
@@ -92,7 +567,7 @@ export async function addMemberToTeamEvent(input: {
   stationId: string;
   clientOperationId?: string;
   syncedAt?: Date;
-}) : Promise<TeamServiceResult> {
+}): Promise<TeamServiceResult> {
   const activeYear = getActiveYear();
 
   const normalizedTeam = normalizeTeamName(input.teamName);
@@ -127,24 +602,17 @@ export async function addMemberToTeamEvent(input: {
       maxTeams: true,
     },
   });
-  if (!event) {
-    return { success: false, reason: "EVENT_NOT_FOUND", error: "Event not found." };
-  }
+  if (!event) return { success: false, reason: "EVENT_NOT_FOUND", error: "Event not found." };
   if (event.participationMode !== EventParticipationMode.TEAM) {
     return { success: false, reason: "NOT_TEAM_EVENT", error: "This event is not a team event." };
   }
 
-  // Check package eligibility
   const pkg = await getVerifiedPackage(input.db, input.userId, activeYear);
-  if (!pkg) {
-    return { success: false, reason: "NO_PACKAGE", error: "No verified package found." };
-  }
-
+  if (!pkg) return { success: false, reason: "NO_PACKAGE", error: "No verified package found." };
   if (!canAccessEventCategory(pkg.packageType, event.category)) {
     return { success: false, reason: "PACKAGE_NOT_ALLOWED", error: "Your package does not allow registration for this event type." };
   }
 
-  // Check for time clash
   try {
     await ensureNoTimeClash(input.db, input.userId, event.id, activeYear);
   } catch (err) {
@@ -155,30 +623,17 @@ export async function addMemberToTeamEvent(input: {
   }
 
   const existing = await input.db.eventRegistration.findUnique({
-    where: {
-      userId_eventId: {
-        userId: input.userId,
-        eventId: event.id,
-      },
-    },
+    where: { userId_eventId: { userId: input.userId, eventId: event.id } },
   });
   if (existing) return { success: true, message: "Participant already in this event." };
 
-  const participantCount = await getEventParticipantCount({
-    db: input.db,
-    eventId: event.id,
-  });
+  const participantCount = await getEventParticipantCount({ db: input.db, eventId: event.id });
   if (isMaxParticipantsExceeded(event.maxParticipants, participantCount, 1)) {
     return { success: false, reason: "CAPACITY_FULL", error: "Event is full." };
   }
 
   let team = await input.db.team.findUnique({
-    where: {
-      eventId_nameNormalized: {
-        eventId: event.id,
-        nameNormalized: normalizedTeam,
-      },
-    },
+    where: { eventId_nameNormalized: { eventId: event.id, nameNormalized: normalizedTeam } },
   });
 
   if (!team) {
@@ -194,7 +649,8 @@ export async function addMemberToTeamEvent(input: {
         nameNormalized: normalizedTeam,
         teamCode: await generateUniqueTeamCode(input.db, event.id),
         memberCount: 0,
-        status: TeamStatus.DRAFT,
+        // On-spot coordinator flow: use OPEN so the same status semantics apply
+        status: TeamStatus.OPEN,
         leaderUserId: user.id,
         leaderContactPhoneSnapshot: user.phone,
         leaderContactEmailSnapshot: user.email,
@@ -202,7 +658,7 @@ export async function addMemberToTeamEvent(input: {
     });
   }
 
-  if (team.status !== TeamStatus.DRAFT && team.status !== TeamStatus.OPEN) {
+  if (team.status !== TeamStatus.OPEN && team.status !== TeamStatus.DRAFT) {
     return { success: false, reason: "TEAM_LOCKED", error: "Team is already locked." };
   }
 
@@ -236,15 +692,16 @@ export async function addMemberToTeamEvent(input: {
 
   await input.db.team.update({
     where: { id: team.id },
-    data: {
-      memberCount: {
-        increment: 1,
-      },
-    },
+    data: { memberCount: { increment: 1 } },
   });
 
   return { success: true, message: `Added to team ${team.name} and marked present.` };
 }
+
+// ---------------------------------------------------------------------------
+// #6 — Refactored bulkRegisterAndLockTeamByShacklesIds
+//       Now built on top of the three self-service primitives.
+// ---------------------------------------------------------------------------
 
 export async function bulkRegisterAndLockTeamByShacklesIds(input: {
   db: DbClient;
@@ -255,12 +712,8 @@ export async function bulkRegisterAndLockTeamByShacklesIds(input: {
   stationId: string;
   operationId?: string;
   syncedAt?: Date;
-}) : Promise<TeamServiceResult> {
-  return bulkRegisterTeamByShacklesIds({
-    ...input,
-    lockTeam: true,
-    markAttended: true,
-  });
+}): Promise<TeamServiceResult> {
+  return bulkRegisterTeamByShacklesIds({ ...input, lockTeam: true, markAttended: true });
 }
 
 export async function bulkRegisterTeamByShacklesIds(input: {
@@ -274,7 +727,7 @@ export async function bulkRegisterTeamByShacklesIds(input: {
   syncedAt?: Date;
   lockTeam?: boolean;
   markAttended?: boolean;
-}) : Promise<TeamServiceResult> {
+}): Promise<TeamServiceResult> {
   const activeYear = getActiveYear();
   const shouldLockTeam = input.lockTeam ?? false;
   const shouldMarkAttended = input.markAttended ?? false;
@@ -284,7 +737,9 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     return { success: false, reason: "INVALID_INPUT", error: "Team name is required." };
   }
 
-  const normalizedIds = parseUniqueShacklesIds(Array.isArray(input.shacklesIds) ? input.shacklesIds : []);
+  const normalizedIds = parseUniqueShacklesIds(
+    Array.isArray(input.shacklesIds) ? input.shacklesIds : []
+  );
   if (normalizedIds.length === 0) {
     return { success: false, reason: "INVALID_INPUT", error: "Enter at least one Shackles ID." };
   }
@@ -293,51 +748,11 @@ export async function bulkRegisterTeamByShacklesIds(input: {
   if (!leaderShacklesId) {
     return { success: false, reason: "INVALID_INPUT", error: "Select a team leader." };
   }
-
   if (!normalizedIds.includes(leaderShacklesId)) {
     return { success: false, reason: "INVALID_LEADER", error: "Leader Shackles ID must be part of entered team IDs." };
   }
 
-  const event = await input.db.event.findFirst({
-    where: {
-      name: { equals: normalizeName(input.eventName), mode: "insensitive" },
-      year: activeYear,
-      isActive: true,
-      isArchived: false,
-      isTemplate: false,
-    },
-    select: {
-      id: true,
-      name: true,
-      category: true,
-      participationMode: true,
-      teamMinSize: true,
-      teamMaxSize: true,
-      maxTeams: true,
-      maxParticipants: true,
-      date: true,
-      endDate: true,
-      allDay: true,
-    },
-  });
-  if (!event) {
-    return { success: false, reason: "EVENT_NOT_FOUND", error: "Event not found." };
-  }
-  if (event.participationMode !== EventParticipationMode.TEAM) {
-    return { success: false, reason: "NOT_TEAM_EVENT", error: "This event is not a team event." };
-  }
-
-  const teamMinSize = event.teamMinSize ?? 2;
-  const teamMaxSize = event.teamMaxSize ?? 4;
-
-  if (normalizedIds.length > teamMaxSize) {
-    return {
-      success: false,
-      reason: "TEAM_ABOVE_MAX_SIZE",
-      error: `At most ${teamMaxSize} members are allowed for this event.`,
-    };
-  }
-
+  // Resolve all users by shacklesId
   const users = await input.db.user.findMany({
     where: { shacklesId: { in: normalizedIds } },
     include: { payment: true },
@@ -359,12 +774,52 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     };
   }
 
-  // Check payment and year for all users
+  const leaderUser = userByShacklesId.get(leaderShacklesId);
+  if (!leaderUser) {
+    return { success: false, reason: "INVALID_LEADER", error: "Selected leader not found." };
+  }
+
+  // Resolve event
+  const event = await input.db.event.findFirst({
+    where: {
+      name: { equals: normalizeName(input.eventName), mode: "insensitive" },
+      year: activeYear,
+      isActive: true,
+      isArchived: false,
+      isTemplate: false,
+    },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      participationMode: true,
+      teamMinSize: true,
+      teamMaxSize: true,
+      maxTeams: true,
+      maxParticipants: true,
+    },
+  });
+  if (!event) return { success: false, reason: "EVENT_NOT_FOUND", error: "Event not found." };
+  if (event.participationMode !== EventParticipationMode.TEAM) {
+    return { success: false, reason: "NOT_TEAM_EVENT", error: "This event is not a team event." };
+  }
+
+  const teamMinSize = event.teamMinSize ?? 2;
+  const teamMaxSize = event.teamMaxSize ?? 4;
+
+  if (normalizedIds.length > teamMaxSize) {
+    return {
+      success: false,
+      reason: "TEAM_ABOVE_MAX_SIZE",
+      error: `At most ${teamMaxSize} members are allowed for this event.`,
+    };
+  }
+
+  // Payment checks
   const unpaidIds = normalizedIds.filter((id) => {
     const user = userByShacklesId.get(id);
     return !user || user.payment?.status !== "VERIFIED" || user.payment?.year !== activeYear;
   });
-
   if (unpaidIds.length > 0) {
     return {
       success: false,
@@ -374,20 +829,12 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     };
   }
 
-  // Check package eligibility for all users
+  // Package checks
   for (const id of normalizedIds) {
     const user = userByShacklesId.get(id);
-    if (!user || !user.payment) continue;
-    
+    if (!user) continue;
     const pkg = await getVerifiedPackage(input.db, user.id, activeYear);
-    if (!pkg) {
-      return {
-        success: false,
-        reason: "NO_PACKAGE",
-        error: `User ${id} has no verified package.`,
-      };
-    }
-
+    if (!pkg) return { success: false, reason: "NO_PACKAGE", error: `User ${id} has no verified package.` };
     if (!canAccessEventCategory(pkg.packageType, event.category)) {
       return {
         success: false,
@@ -397,12 +844,11 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     }
   }
 
-  // Check time clash for all users (if not on-spot with markAttended)
+  // Time clash checks (skip for on-spot attended)
   if (!shouldMarkAttended) {
     for (const id of normalizedIds) {
       const user = userByShacklesId.get(id);
       if (!user) continue;
-
       try {
         await ensureNoTimeClash(input.db, user.id, event.id, activeYear);
       } catch (err) {
@@ -424,24 +870,13 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     .filter((id): id is string => Boolean(id));
 
   const alreadyRegistered = await input.db.eventRegistration.findMany({
-    where: {
-      eventId: event.id,
-      userId: { in: allUserIds },
-    },
-    include: {
-      user: {
-        select: {
-          shacklesId: true,
-        },
-      },
-    },
+    where: { eventId: event.id, userId: { in: allUserIds } },
+    include: { user: { select: { shacklesId: true } } },
   });
-
   if (alreadyRegistered.length > 0) {
     const existingIds = alreadyRegistered
-      .map((registration) => registration.user.shacklesId)
+      .map((r) => r.user.shacklesId)
       .filter((id): id is string => Boolean(id));
-
     return {
       success: false,
       reason: "ALREADY_REGISTERED",
@@ -450,33 +885,20 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     };
   }
 
-  const existingParticipantCount = await getEventParticipantCount({
-    db: input.db,
-    eventId: event.id,
-  });
-
+  const existingParticipantCount = await getEventParticipantCount({ db: input.db, eventId: event.id });
   if (isMaxParticipantsExceeded(event.maxParticipants, existingParticipantCount, normalizedIds.length)) {
     return { success: false, reason: "CAPACITY_FULL", error: "Event is full." };
   }
 
+  // Find or create team
   let team = await input.db.team.findUnique({
-    where: {
-      eventId_nameNormalized: {
-        eventId: event.id,
-        nameNormalized: normalizedTeam,
-      },
-    },
+    where: { eventId_nameNormalized: { eventId: event.id, nameNormalized: normalizedTeam } },
   });
 
   if (!team) {
     const currentTeams = await input.db.team.count({ where: { eventId: event.id } });
     if (isMaxTeamsExceeded(event.maxTeams, currentTeams, 1)) {
       return { success: false, reason: "TEAM_SLOTS_FULL", error: "Team slots are full." };
-    }
-
-    const leaderUser = userByShacklesId.get(leaderShacklesId);
-    if (!leaderUser) {
-      return { success: false, reason: "INVALID_LEADER", error: "Selected leader not found." };
     }
 
     team = await input.db.team.create({
@@ -486,7 +908,7 @@ export async function bulkRegisterTeamByShacklesIds(input: {
         nameNormalized: normalizedTeam,
         teamCode: await generateUniqueTeamCode(input.db, event.id),
         memberCount: 0,
-        status: TeamStatus.DRAFT,
+        status: TeamStatus.OPEN,
         leaderUserId: leaderUser.id,
         leaderContactPhoneSnapshot: leaderUser.phone,
         leaderContactEmailSnapshot: leaderUser.email,
@@ -494,7 +916,7 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     });
   }
 
-  if (team.status !== TeamStatus.DRAFT && team.status !== TeamStatus.OPEN) {
+  if (team.status !== TeamStatus.OPEN && team.status !== TeamStatus.DRAFT) {
     return { success: false, reason: "TEAM_LOCKED", error: "Team is already locked." };
   }
 
@@ -509,6 +931,7 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     };
   }
 
+  // Register all members
   for (const shacklesId of normalizedIds) {
     const user = userByShacklesId.get(shacklesId);
     if (!user) continue;
@@ -533,28 +956,21 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     });
   }
 
-  const leaderUser = userByShacklesId.get(leaderShacklesId);
-  if (!leaderUser) {
-    return { success: false, reason: "INVALID_LEADER", error: "Selected leader not found." };
-  }
-
+  // Ensure leader role is set correctly
   await input.db.eventRegistration.updateMany({
     where: { teamId: team.id },
     data: { memberRole: TeamMemberRole.MEMBER },
   });
-
   await input.db.eventRegistration.updateMany({
-    where: {
-      teamId: team.id,
-      userId: leaderUser.id,
-    },
+    where: { teamId: team.id, userId: leaderUser.id },
     data: { memberRole: TeamMemberRole.LEADER },
   });
 
-  const teamData: any = {
+  const teamData: Record<string, unknown> = {
     leaderUserId: leaderUser.id,
     leaderContactPhoneSnapshot: leaderUser.phone,
     leaderContactEmailSnapshot: leaderUser.email,
+    memberCount: finalMemberCount,
   };
 
   if (shouldLockTeam) {
@@ -565,24 +981,19 @@ export async function bulkRegisterTeamByShacklesIds(input: {
         error: `At least ${teamMinSize} members are required to complete team registration.`,
       };
     }
-
     teamData.status = TeamStatus.LOCKED;
     teamData.lockedAt = new Date();
+    teamData.lockedBy = leaderUser.id;
+    teamData.joinCode = null;
+    teamData.joinCodeExpiresAt = null;
   }
 
-  // Ensure the team record reflects the correct member count after bulk registration
-  teamData.memberCount = finalMemberCount;
-
-  // If we're attempting to lock the team, perform a conditional update so
-  // only one concurrent transaction can succeed (prevents multiple winners).
   if (shouldLockTeam) {
     const res = await input.db.team.updateMany({
-      where: { id: team.id, status: { in: [TeamStatus.DRAFT, TeamStatus.OPEN] } },
+      where: { id: team.id, status: { in: [TeamStatus.OPEN, TeamStatus.DRAFT] } },
       data: teamData,
     });
-
     if (res.count === 0) {
-      // Another transaction locked the team concurrently.
       return { success: false, reason: "TEAM_LOCKED", error: "Team was locked by another process." };
     }
   } else {
@@ -592,7 +1003,7 @@ export async function bulkRegisterTeamByShacklesIds(input: {
   if (!shouldLockTeam) {
     return {
       success: true,
-      message: `Team ${team.name} updated with ${finalMemberCount} members. Attendance can be marked separately.`,
+      message: `Team ${team.name} updated with ${finalMemberCount} members.`,
     };
   }
 
@@ -601,12 +1012,17 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     message: `Team ${team.name} registered and locked with ${finalMemberCount} members.`,
   };
 }
+
+// ---------------------------------------------------------------------------
+// completeExistingTeamRegistration (unchanged logic, kept for compatibility)
+// ---------------------------------------------------------------------------
+
 export async function completeExistingTeamRegistration(input: {
   db: DbClient;
   eventName: string;
   teamName: string;
   leaderUserId?: string;
-}) : Promise<TeamServiceResult> {
+}): Promise<TeamServiceResult> {
   const activeYear = getActiveYear();
 
   const normalizedTeam = normalizeTeamName(input.teamName);
@@ -623,46 +1039,30 @@ export async function completeExistingTeamRegistration(input: {
       isTemplate: false,
     },
   });
-  if (!event) {
-    return { success: false, reason: "EVENT_NOT_FOUND", error: "Event not found." };
-  }
+  if (!event) return { success: false, reason: "EVENT_NOT_FOUND", error: "Event not found." };
   if (event.participationMode !== EventParticipationMode.TEAM) {
     return { success: false, reason: "NOT_TEAM_EVENT", error: "This event is not a team event." };
   }
 
   const team = await input.db.team.findUnique({
-    where: {
-      eventId_nameNormalized: {
-        eventId: event.id,
-        nameNormalized: normalizedTeam,
-      },
-    },
-    include: {
-      members: {
-        select: {
-          id: true,
-          userId: true,
-        },
-      },
-    },
+    where: { eventId_nameNormalized: { eventId: event.id, nameNormalized: normalizedTeam } },
+    include: { members: { select: { id: true, userId: true } } },
   });
 
   if (!team) return { success: false, reason: "TEAM_NOT_FOUND", error: "Team not found." };
-  if (team.status !== TeamStatus.DRAFT) {
+  if (team.status !== TeamStatus.OPEN && team.status !== TeamStatus.DRAFT) {
     return { success: false, reason: "TEAM_LOCKED", error: "Team is already completed and locked." };
   }
 
   if (input.leaderUserId) {
-    const proposedLeader = team.members.find((member) => member.userId === input.leaderUserId);
+    const proposedLeader = team.members.find((m) => m.userId === input.leaderUserId);
     if (!proposedLeader) {
       return { success: false, reason: "INVALID_LEADER", error: "Leader must be a member of this team." };
     }
-
     const leaderUser = await input.db.user.findUnique({ where: { id: input.leaderUserId } });
     if (!leaderUser) {
       return { success: false, reason: "INVALID_LEADER", error: "Leader user not found." };
     }
-
     await input.db.team.update({
       where: { id: team.id },
       data: {
@@ -671,12 +1071,10 @@ export async function completeExistingTeamRegistration(input: {
         leaderContactEmailSnapshot: leaderUser.email,
       },
     });
-
     await input.db.eventRegistration.updateMany({
       where: { teamId: team.id },
       data: { memberRole: TeamMemberRole.MEMBER },
     });
-
     await input.db.eventRegistration.update({
       where: { id: proposedLeader.id },
       data: { memberRole: TeamMemberRole.LEADER },
@@ -691,6 +1089,7 @@ export async function completeExistingTeamRegistration(input: {
   const memberCount = refreshedMembers.length;
   const teamMinSize = event.teamMinSize ?? 2;
   const teamMaxSize = event.teamMaxSize ?? 4;
+
   if (memberCount < teamMinSize) {
     return {
       success: false,
@@ -712,6 +1111,8 @@ export async function completeExistingTeamRegistration(input: {
       status: TeamStatus.LOCKED,
       memberCount,
       lockedAt: new Date(),
+      joinCode: null,
+      joinCodeExpiresAt: null,
     },
   });
 

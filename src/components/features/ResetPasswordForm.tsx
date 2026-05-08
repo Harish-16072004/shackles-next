@@ -1,6 +1,6 @@
 'use client'
 
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 import { resetPassword } from "@/server/actions/forgot-password";
 import Link from "next/link";
 
@@ -11,7 +11,7 @@ const initialState = {
 };
 
 export default function ResetPasswordForm({ token }: { token: string }) {
-  const [state, formAction] = useFormState(resetPassword, initialState);
+  const [state, formAction] = useActionState(resetPassword, initialState);
 
   if (state?.success) {
     return (

@@ -7,7 +7,6 @@ import { hash } from "bcryptjs";
 import { z } from "zod";
 import { BCRYPT_ROUNDS } from "@/lib/crypto-config";
 import { createRateLimiter, rateLimitPresets } from "@/lib/rate-limit";
-import { headers } from "next/headers";
 
 // M6: Rate limiter for password reset requests
 const resetRateLimiter = createRateLimiter({
@@ -22,19 +21,23 @@ const resetRateLimiter = createRateLimiter({
 export async function requestPasswordReset(prevState: unknown, formData: FormData) {
   const email = formData.get("email") as string;
 
-  if (!email || !email.includes("@")) {
+  // FIX 14: Proper email validation to prevent rate limit bypass via malformed variants
+  const emailSchema = z.string().email();
+  const emailResult = emailSchema.safeParse(email);
+  if (!emailResult.success) {
     return { success: false, error: "Please enter a valid email.", message: "" };
   }
+  const normalizedEmail = emailResult.data.toLowerCase();
 
-  // M6: Rate limit by email to prevent spam
-  const rateLimitResult = await resetRateLimiter.limit(email.toLowerCase());
+  // M6: Rate limit by normalized email to prevent spam
+  const rateLimitResult = await resetRateLimiter.limit(normalizedEmail);
   if (!rateLimitResult.success) {
     return { success: false, error: "Too many requests. Please try again later.", message: "" };
   }
 
   try {
     // 1. Check if user exists
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     
     // Security: If user doesn't exist, don't tell them. Fake success to stop hackers scanning emails.
     if (!user) {
@@ -59,9 +62,9 @@ export async function requestPasswordReset(prevState: unknown, formData: FormDat
     });
 
     // 4. Send the Email with the RAW token (not the hash)
-    const emailResult = await sendResetEmail(email, rawToken);
+    const sendResult = await sendResetEmail(normalizedEmail, rawToken);
     
-    if (emailResult.success) {
+    if (sendResult.success) {
       return { success: true, message: "Check your email for the reset link!", error: "" };
     } else {
       return { success: false, error: "Failed to send email. Please try again later.", message: "" };

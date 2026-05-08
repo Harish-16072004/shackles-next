@@ -1,6 +1,6 @@
 'use client'
 
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 import { requestPasswordReset } from "@/server/actions/forgot-password";
 
 const initialState = {
@@ -10,7 +10,7 @@ const initialState = {
 };
 
 export default function ForgotPasswordPage() {
-  const [state, formAction] = useFormState(requestPasswordReset, initialState);
+  const [state, formAction] = useActionState(requestPasswordReset, initialState);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">

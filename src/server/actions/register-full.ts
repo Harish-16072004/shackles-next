@@ -4,6 +4,12 @@ import { z } from "zod";
 import { hash } from "bcryptjs";
 import { BCRYPT_ROUNDS } from "@/lib/crypto-config";
 import { prisma } from "@/lib/prisma";
+import { createRateLimiter, rateLimitPresets } from "@/lib/rate-limit";
+
+const registrationRateLimiter = createRateLimiter({
+  ...rateLimitPresets.auth,
+  keyPrefix: "ratelimit:registration",
+});
 
 function normalizeIndianPhone(value: string) {
   const trimmed = value.replace(/[\s-]/g, "");
@@ -43,6 +49,12 @@ export async function registerFullUser(data: unknown) {
   
   if (!result.success) {
     return { success: false, error: "Invalid Data. Please check all fields." };
+  }
+
+  // FIX 5: Rate limit by email to prevent registration spam
+  const rateLimitResult = await registrationRateLimiter.limit(result.data.email.toLowerCase());
+  if (!rateLimitResult.success) {
+    return { success: false, error: "Too many registration attempts. Please try again later." };
   }
 
   // Extract registrationType specifically

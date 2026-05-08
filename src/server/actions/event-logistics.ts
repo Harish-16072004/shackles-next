@@ -19,6 +19,11 @@ import { runSerializableTransaction } from "@/server/services/transaction.servic
 // Input: Scanned QR Token string
 // Output: Safe User Details + Event Status
 export async function scanParticipantQR(token: string) {
+  const session = await getSession();
+  if (!session?.userId) {
+    return { success: false, error: "Authentication required." };
+  }
+
   try {
     const user = await prisma.user.findUnique({
       where: { qrToken: token },
@@ -58,6 +63,11 @@ export async function scanParticipantQR(token: string) {
 }
 
 export async function scanParticipantByShacklesId(shacklesId: string) {
+  const session = await getSession();
+  if (!session?.userId) {
+    return { success: false, error: "Authentication required." };
+  }
+
   try {
     const normalized = shacklesId.trim();
     if (!normalized) {
@@ -102,6 +112,11 @@ export async function scanParticipantByShacklesId(shacklesId: string) {
 
 // --- 2. KIT DISTRIBUTION ---
 export async function updateKitStatus(userId: string) {
+  const session = await getSession();
+  if (!session?.userId) {
+    return { success: false, error: "Authentication required." };
+  }
+
   try {
     await prisma.user.update({
       where: { id: userId },
@@ -121,6 +136,11 @@ export async function updateKitStatus(userId: string) {
 
 // --- 3. EVENT ATTENDANCE ---
 export async function markEventAttendance(userId: string, eventName: string) {
+  const session = await getSession();
+  if (!session?.userId) {
+    return { success: false, error: "Authentication required." };
+  }
+
   try {
     const activeYear = getActiveYear();
 
@@ -181,6 +201,11 @@ export async function markEventAttendance(userId: string, eventName: string) {
 
 // --- 4. QUICK REGISTRATION (On-Spot) ---
 export async function quickRegisterForEvent(userId: string, eventName: string) {
+  const session = await getSession();
+  if (!session?.userId) {
+    return { success: false, error: "Authentication required." };
+  }
+
   try {
     const activeYear = getActiveYear();
 
@@ -350,6 +375,11 @@ export async function getScannerJoinableTeams(input: {
 }
 
 export async function scannerRegisterTeamMember(userId: string, eventName: string, teamName: string) {
+  const session = await getSession();
+  if (!session?.userId) {
+    return { success: false, error: "Authentication required." };
+  }
+
   try {
     const result = await runSerializableTransaction(prisma, async (tx) => addMemberToTeamEvent({
       db: tx,
@@ -376,6 +406,11 @@ export async function scannerRegisterTeamMember(userId: string, eventName: strin
 }
 
 export async function scannerCompleteTeamRegistration(eventName: string, teamName: string, leaderUserId?: string) {
+  const session = await getSession();
+  if (!session?.userId) {
+    return { success: false, error: "Authentication required." };
+  }
+
   try {
     const result = await runSerializableTransaction(prisma, async (tx) => completeExistingTeamRegistration({
       db: tx,
@@ -498,7 +533,7 @@ export async function validateTeamRegistration(input: {
       return {
         success: false,
         reason: "SYSTEM_ERROR",
-        error: `Validation failed: ${message}`,
+        error: "Validation failed. Please check your input and try again.",
       };
     }
   }

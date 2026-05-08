@@ -6,22 +6,30 @@ import { safeLogError } from '@/lib/safe-log';
 const resendApiKey = process.env.RESEND_API_KEY;
 
 // SMTP Configuration for Nodemailer fallback
-const smtpHost = getRequiredEnv('SMTP_HOST');
-const smtpPort = Number(getRequiredEnv('SMTP_PORT'));
-const smtpSecure = getRequiredEnv('SMTP_SECURE') === 'true';
-const smtpUser = getRequiredEnv('SMTP_USER');
-const smtpPass = getRequiredEnv('SMTP_PASS');
-const appUrl = getRequiredEnv('NEXT_PUBLIC_APP_URL');
+// We use process.env instead of getRequiredEnv so we can use Ethereal in dev if missing
+const smtpHost = process.env.SMTP_HOST || '';
+const smtpPort = Number(process.env.SMTP_PORT || 587);
+const smtpSecure = process.env.SMTP_SECURE === 'true';
+const smtpUser = process.env.SMTP_USER || '';
+const smtpPass = process.env.SMTP_PASS || '';
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-const transporter = nodemailer.createTransport({
-  host: smtpHost,
-  port: smtpPort,
-  secure: smtpSecure,
-  auth: {
-    user: smtpUser,
-    pass: smtpPass,
-  },
-});
+let transporter: nodemailer.Transporter | null = null;
+
+async function getTransporter() {
+  if (transporter) return transporter;
+
+  transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+  });
+  return transporter;
+}
 
 /**
  * Send email via Resend (primary) or Nodemailer (fallback)
@@ -63,12 +71,14 @@ async function sendViaResend(email: string, subject: string, html: string) {
  */
 async function sendViaNodemailer(email: string, subject: string, html: string) {
   try {
-    await transporter.sendMail({
+    const tp = await getTransporter();
+    const info = await tp.sendMail({
       from: '"Shackles Symposium" <noreply@shacklessymposium.com>',
       to: email,
       subject,
       html,
     });
+    
     return { success: true, service: 'nodemailer' };
   } catch (error) {
     return { success: false, service: 'nodemailer', error: String(error) };
@@ -79,8 +89,8 @@ async function sendViaNodemailer(email: string, subject: string, html: string) {
  * Hybrid send: Try Resend first, fall back to Nodemailer
  */
 async function sendEmailHybrid(email: string, subject: string, html: string) {
-  // Try Resend first
-  if (resendApiKey) {
+  // Try Resend first in production if API key exists
+  if (resendApiKey && process.env.NODE_ENV !== 'development') {
     const result = await sendViaResend(email, subject, html);
     if (result.success) {
       console.log(`[EMAIL] Sent via ${result.service} to ${email}`);
@@ -89,14 +99,14 @@ async function sendEmailHybrid(email: string, subject: string, html: string) {
     console.warn(`[EMAIL] Resend failed: ${result.error}, falling back to Nodemailer`);
   }
 
-  // Fall back to Nodemailer
+  // Fall back to Nodemailer (always used in development via Ethereal)
   const result = await sendViaNodemailer(email, subject, html);
   if (result.success) {
     console.log(`[EMAIL] Sent via ${result.service} to ${email}`);
     return { success: true, service: result.service };
   }
 
-  console.error(`[EMAIL] Both Resend and Nodemailer failed for ${email}`);
+  console.error(`[EMAIL] Both Resend and Nodemailer failed for ${email}. Error: ${result.error}`);
   return { success: false, error: result.error };
 }
 

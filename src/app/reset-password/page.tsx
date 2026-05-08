@@ -2,12 +2,15 @@ import ResetPasswordForm from "@/components/features/ResetPasswordForm";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
+import crypto from "crypto";
+
 export default async function ResetPasswordPage({
   searchParams
 }: {
-  searchParams: { token: string };
+  searchParams: Promise<{ token: string }>;
 }) {
-  const token = searchParams.token;
+  const params = await searchParams;
+  const token = params.token;
   let isValid = false;
   let errorMessage = "";
 
@@ -15,9 +18,12 @@ export default async function ResetPasswordPage({
     errorMessage = "Invalid or missing token.";
   } else {
     try {
+      // Hash the incoming raw token to match what's in the DB
+      const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
       // Basic check if token exists and is valid
       const user = await prisma.user.findUnique({
-        where: { resetToken: token }
+        where: { resetToken: hashedToken }
       });
 
       if (!user) {

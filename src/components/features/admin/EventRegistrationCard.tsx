@@ -1,29 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
-import { MemberDeleteForm, TeamDeleteForm } from './EventRegistrationDeleteForms';
+import Link from 'next/link';
+import { Users, ArrowRight, Download, CheckCircle2 } from 'lucide-react';
 
 type EventRegistration = {
   id: string;
   userId: string;
   eventId: string;
   teamId: string | null;
-  memberRole: string | null;
   teamName: string | null;
   teamSize: number;
   attended: boolean;
   attendedAt: Date | null;
-  user: {
-    firstName: string;
-    lastName: string;
-    email: string;
-  };
-  team: {
-    id: string;
-    name: string;
-    leaderUserId: string | null;
-  } | null;
+  memberRole: string | null;
+  user: { firstName: string; lastName: string; email: string };
+  team: { id: string; name: string; leaderUserId: string | null } | null;
 };
 
 type EventWithRegistrations = {
@@ -33,146 +24,111 @@ type EventWithRegistrations = {
   registrations: EventRegistration[];
 };
 
-interface EventRegistrationCardProps {
-  event: EventWithRegistrations;
-}
+const TYPE_STYLES: Record<string, string> = {
+  TECHNICAL: 'bg-blue-100 text-blue-700',
+  'NON-TECHNICAL': 'bg-purple-100 text-purple-700',
+  WORKSHOP: 'bg-amber-100 text-amber-700',
+  SPECIAL: 'bg-pink-100 text-pink-700',
+};
 
-export default function EventRegistrationCard({ event }: EventRegistrationCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export default function EventRegistrationCard({ event }: { event: EventWithRegistrations }) {
+  const totalRegistrations = event.registrations.reduce(
+    (sum, reg) => sum + (reg.teamId ? 1 : reg.teamSize || 1), 0
+  );
+  const attended = event.registrations.filter((r) => r.attended).length;
+  const attendancePercent = totalRegistrations > 0
+    ? Math.round((attended / totalRegistrations) * 100)
+    : 0;
 
-  const teamMap = new Map<string, { id: string; name: string; memberCount: number }>();
-  for (const reg of event.registrations) {
-    if (!reg.teamId) continue;
-    const existing = teamMap.get(reg.teamId);
-    if (existing) {
-      existing.memberCount += 1;
-      continue;
-    }
+  const typeKey = (event.type || '').toUpperCase().replace('-', '-');
+  const typeBadgeClass = TYPE_STYLES[typeKey] ?? 'bg-gray-100 text-gray-600';
 
-    teamMap.set(reg.teamId, {
-      id: reg.teamId,
-      name: reg.team?.name || reg.teamName || 'Team',
-      memberCount: 1,
-    });
-  }
-
-  const teamsInEvent = Array.from(teamMap.values());
-  const totalRegistrations = event.registrations.reduce((sum, reg) => sum + (reg.teamId ? 1 : reg.teamSize || 1), 0);
+  const teamCount = new Set(
+    event.registrations.filter((r) => r.teamId).map((r) => r.teamId)
+  ).size;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
-      <div className="bg-gray-50 border-b border-gray-200">
-        <div className="flex items-start justify-between gap-4 p-6">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="flex-1 text-left hover:bg-gray-100 rounded transition-colors -m-1 p-1"
-          >
-            <div className="flex items-center gap-3">
-              <ChevronDown
-                size={20}
-                className={`shrink-0 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-              />
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-bold text-gray-900 truncate">{event.name}</h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  <span className="inline-block bg-gray-200 px-2 py-1 rounded text-xs font-semibold mr-2">
-                    {event.type || 'N/A'}
-                  </span>
-                  <span className="text-gray-700">{totalRegistrations} registration{totalRegistrations !== 1 ? 's' : ''}</span>
-                </p>
-              </div>
-            </div>
-          </button>
+    <div className="group relative bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200 overflow-hidden flex flex-col">
+      {/* Top accent line based on type */}
+      <div className={`h-1 w-full ${typeKey === 'TECHNICAL' ? 'bg-blue-500' :
+          typeKey === 'NON-TECHNICAL' ? 'bg-purple-500' :
+            typeKey === 'WORKSHOP' ? 'bg-amber-500' :
+              typeKey === 'SPECIAL' ? 'bg-pink-500' : 'bg-gray-300'
+        }`} />
+
+      <div className="p-5 flex flex-col gap-4 flex-1">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-2 ${typeBadgeClass}`}>
+              {event.type || 'N/A'}
+            </span>
+            <h3 className="text-base font-bold text-gray-900 leading-tight truncate">
+              {event.name}
+            </h3>
+          </div>
+          {/* CSV download — stops propagation so it doesn't trigger Link */}
           <a
             href={`/api/admin/csv/registrations/export?eventId=${encodeURIComponent(event.id)}`}
-            className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200"
+            onClick={(e) => e.stopPropagation()}
+            title="Download CSV"
+            className="shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors"
           >
-            Download CSV
+            <Download size={15} />
           </a>
         </div>
-      </div>
 
-      {isExpanded && (
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-[600px]">
-          {event.registrations.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-8">No participants yet</p>
-          ) : (
-            <>
-              {teamsInEvent.length > 0 && (
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Teams ({teamsInEvent.length})</p>
-                  <div className="space-y-2">
-                    {teamsInEvent.map((team) => (
-                      <div key={team.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{team.name}</p>
-                          <p className="text-xs text-gray-600">{team.memberCount} member{team.memberCount !== 1 ? 's' : ''}</p>
-                        </div>
-                        <TeamDeleteForm teamId={team.id} teamName={team.name} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {event.registrations.some((reg) => !reg.teamId) && (
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Individual Participants</p>
-                  <div className="space-y-2">
-                    {event.registrations
-                      .filter((reg) => !reg.teamId)
-                      .map((reg) => (
-                        <div key={reg.id} className="rounded-lg border border-gray-200 p-3 flex items-center justify-between gap-2 group hover:bg-gray-50">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-gray-900">
-                              {reg.user.firstName} {reg.user.lastName}
-                            </p>
-                            <p className="text-xs text-gray-600">{reg.user.email}</p>
-                          </div>
-                          <MemberDeleteForm
-                            registrationId={reg.id}
-                            fullName={`${reg.user.firstName} ${reg.user.lastName}`}
-                            hasTeam={Boolean(reg.teamId)}
-                          />
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              {event.registrations.some((reg) => reg.teamId) && (
-                <div className="space-y-3 pt-4 border-t border-gray-200">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Team Members</p>
-                  <div className="space-y-2">
-                    {event.registrations
-                      .filter((reg) => reg.teamId)
-                      .map((reg) => (
-                        <div key={reg.id} className="rounded-lg border border-gray-200 p-3 flex items-start justify-between gap-2 group hover:bg-gray-50">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-gray-900">
-                              {reg.user.firstName} {reg.user.lastName}
-                            </p>
-                            <p className="text-xs text-gray-600">
-                              {reg.teamName} •{' '}
-                              <span className="font-medium">
-                                {reg.memberRole === 'LEADER' || reg.team?.leaderUserId === reg.userId ? 'Leader' : 'Member'}
-                              </span>
-                            </p>
-                          </div>
-                          <MemberDeleteForm
-                            registrationId={reg.id}
-                            fullName={`${reg.user.firstName} ${reg.user.lastName}`}
-                            hasTeam={Boolean(reg.teamId)}
-                          />
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </>
+        {/* Stats row */}
+        <div className="flex items-center gap-4 text-sm text-gray-600">
+          <div className="flex items-center gap-1.5">
+            <Users size={14} className="text-gray-400" />
+            <span className="font-semibold text-gray-800">{totalRegistrations}</span>
+            <span>{totalRegistrations === 1 ? 'participant' : 'participants'}</span>
+          </div>
+          {teamCount > 0 && (
+            <div className="text-gray-400 text-xs">
+              {teamCount} team{teamCount !== 1 ? 's' : ''}
+            </div>
+          )}
+          {attended > 0 && (
+            <div className="flex items-center gap-1 text-emerald-600 text-xs font-medium">
+              <CheckCircle2 size={12} />
+              {attended} attended
+            </div>
           )}
         </div>
-      )}
+
+        {/* Attendance progress bar */}
+        {totalRegistrations > 0 && (
+          <div>
+            <div className="flex justify-between text-xs text-gray-500 mb-1">
+              <span>Attendance</span>
+              <span>{attendancePercent}%</span>
+            </div>
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all"
+                style={{ width: `${attendancePercent}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {totalRegistrations === 0 && (
+          <p className="text-xs text-gray-400 italic">No registrations yet</p>
+        )}
+      </div>
+
+      {/* Footer CTA */}
+      <Link
+        href={`/admin/event-registrations/${event.id}`}
+        className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50 hover:bg-gray-100 transition-colors group/cta"
+      >
+        <span className="text-xs font-semibold text-gray-600 group-hover/cta:text-gray-900 transition-colors">
+          View participants
+        </span>
+        <ArrowRight size={14} className="text-gray-400 group-hover/cta:text-gray-900 group-hover/cta:translate-x-0.5 transition-all" />
+      </Link>
     </div>
   );
 }

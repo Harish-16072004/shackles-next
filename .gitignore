@@ -50,7 +50,9 @@ next-env.d.ts
 /unwanted/
 
 # Private file uploads (local storage provider)
-storage/uploads/
+/storage/uploads/
+!/storage/uploads/.gitkeep
+/storage/qr-codes/
 
 # log and temporary files
 *.log

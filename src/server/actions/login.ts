@@ -4,7 +4,12 @@ import { z } from "zod";
 import { signIn } from "@/auth";
 import { AuthError } from "next-auth";
 import { prisma } from "@/lib/prisma";
+import { createRateLimiter, rateLimitPresets } from "@/lib/rate-limit";
 
+const loginRateLimiter = createRateLimiter({
+  ...rateLimitPresets.auth,
+  keyPrefix: "ratelimit:login",
+});
 
 const LoginSchema = z.object({
   email: z.string().email(),
@@ -21,6 +26,13 @@ export async function loginUser(prevState: unknown, formData: FormData) {
   }
 
   const { email, password } = result.data;
+
+  // FIX 4: Rate limit before DB lookup to prevent brute force
+  const rateLimitResult = await loginRateLimiter.limit(email.toLowerCase());
+  if (!rateLimitResult.success) {
+    return { error: "Too many login attempts. Please try again later." };
+  }
+
   let targetPath = "/userDashboard";
 
   try {

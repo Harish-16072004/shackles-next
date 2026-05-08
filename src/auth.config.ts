@@ -5,8 +5,8 @@ import type { NextAuthConfig } from "next-auth";
  * Used by src/middleware.ts so the Edge runtime never touches Node-only modules.
  * The full config (with PrismaAdapter, bcrypt, events) lives in src/auth.ts.
  *
- * L1: jwt/session callbacks removed — they are defined in auth.ts only.
- * Only the `authorized` callback remains here for middleware route protection.
+ * Note: jwt and session callbacks MUST be defined here, not in auth.ts,
+ * so the Edge runtime (proxy.ts) can map token.role to session.user.role during `authorized()`.
  */
 export const authConfig: NextAuthConfig = {
   secret: process.env.AUTH_SECRET ?? process.env.SESSION_SECRET,
@@ -16,6 +16,32 @@ export const authConfig: NextAuthConfig = {
   },
   providers: [],
   callbacks: {
+    /**
+     * jwt callback — runs when a token is created or updated.
+     * Stores id and role from the user object (available on first sign-in).
+     */
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.role = user.role;
+      }
+      return token;
+    },
+    /**
+     * session callback — shapes the session object exposed to the client.
+     * Reads id and role from the JWT token.
+     */
+    async session({ session, token }) {
+      if (session.user) {
+        if (token.id) {
+          session.user.id = token.id;
+        }
+        if (token.role) {
+          session.user.role = token.role;
+        }
+      }
+      return session;
+    },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const pathname = nextUrl.pathname;
@@ -50,8 +76,8 @@ export const authConfig: NextAuthConfig = {
         return auth.user?.role === "ADMIN";
       }
 
-      // User dashboard and on-spot registration require authentication
-      if (pathname.startsWith("/userDashboard") || pathname.startsWith("/onspot-registration")) {
+      // User dashboard requires authentication
+      if (pathname.startsWith("/userDashboard")) {
         return isLoggedIn;
       }
 

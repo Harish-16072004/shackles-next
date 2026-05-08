@@ -59,34 +59,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
     error: "/login",
   },
-  callbacks: {
-    /**
-     * jwt callback — runs when a token is created or updated.
-     * Stores id and role from the user object (available on first sign-in).
-     */
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.role = user.role;
-      }
-      return token;
-    },
-    /**
-     * session callback — shapes the session object exposed to the client.
-     * Reads id and role from the JWT token.
-     */
-    async session({ session, token }) {
-      if (session.user) {
-        if (token.id) {
-          session.user.id = token.id;
-        }
-        if (token.role) {
-          session.user.role = token.role;
-        }
-      }
-      return session;
-    },
-  },
+  // callbacks are inherited from authConfig
+
   session: {
     strategy: "jwt",
     maxAge: 7 * 24 * 60 * 60, // 7 days

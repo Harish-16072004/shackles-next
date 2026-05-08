@@ -16,6 +16,7 @@ const remoteHosts = Array.from(
   new Set([
     "shackles-dev.sgp1.cdn.digitaloceanspaces.com",
     "ui-avatars.com",
+    "api.qrserver.com",
     activePublicDomain,
     doSpacesEndpointHost,
   ].filter(Boolean))
@@ -66,6 +67,11 @@ const nextConfig = {
   // 5. Security Headers
   async headers() {
     const imgSrcHosts = remoteHosts.map((h) => `https://${h}`).join(" ");
+    const isDev = process.env.NODE_ENV === 'development';
+    const scriptSrc = isDev 
+      ? "'self' 'unsafe-inline' 'unsafe-eval'"
+      : "'self' 'unsafe-inline'";
+
     return [
       {
         source: "/(.*)",
@@ -78,13 +84,17 @@ const nextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self'",
+              `script-src ${scriptSrc}`,
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               `img-src 'self' data: blob: ${imgSrcHosts}`,
               "font-src 'self' https://fonts.gstatic.com",
               "connect-src 'self' blob: https://api.qrserver.com https://*.googleapis.com https://*.upstash.io https://*.digitaloceanspaces.com https://sgp1.digitaloceanspaces.com",
               "worker-src 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
               "frame-ancestors 'none'",
+              "upgrade-insecure-requests",
             ].join("; "),
           },
         ],

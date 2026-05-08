@@ -62,10 +62,10 @@ export async function POST(req: Request) {
 
     // Call the minimal AI service
     return await processChatStream({ messages, userId });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Chat] Endpoint error:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error', message: error?.message || 'Unknown error' },
+      { error: 'An unexpected error occurred. Please try again.' },
       { status: 500 }
     );
   }

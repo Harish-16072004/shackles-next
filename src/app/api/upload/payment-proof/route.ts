@@ -6,6 +6,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { safeLogError } from "@/lib/safe-log";
 import { createRateLimiter, getClientIdentifier, rateLimitPresets } from "@/lib/rate-limit";
+import { auth } from "@/auth";
 
 const paymentProofRateLimiter = createRateLimiter({
   ...rateLimitPresets.upload,
@@ -44,6 +45,12 @@ function toReadableError(message: string) {
 
 export async function POST(request: Request) {
   try {
+    // Authentication check — reject unauthenticated callers immediately
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
     const clientKey = `payment-proof:${getClientIdentifier(request)}`;
     const rateLimitResult = await paymentProofRateLimiter.limit(clientKey);
     if (!rateLimitResult.success) {
@@ -88,9 +95,9 @@ export async function POST(request: Request) {
     const storageProvider = getStorageProvider();
 
     if (shouldUseLocal(storageProvider)) {
-      // Local filesystem storage
-      const publicDir = path.join(process.cwd(), "public", "uploads", "payment-proofs");
-      const fileDir = path.join(publicDir, year.toString(), month);
+      // Local filesystem storage — private directory (NOT in public/)
+      const storageDir = path.join(process.cwd(), "storage", "uploads", "payment-proofs");
+      const fileDir = path.join(storageDir, year.toString(), month);
       const filePath = path.join(fileDir, proofFilename);
       
       // Ensure directory exists
@@ -99,12 +106,12 @@ export async function POST(request: Request) {
       // Write file
       await fs.writeFile(filePath, bytes);
       
-      // Return path relative to public directory for serving
-      const publicPath = `/uploads/payment-proofs/${year}/${month}/${path.basename(filePath)}`;
-      const fullUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}${publicPath}`;
+      // Return path relative to storage directory — served via authenticated API route
+      const storagePath = `payment-proofs/${year}/${month}/${path.basename(filePath)}`;
+      const fullUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/files/payment-proof/${storagePath}`;
       
       return NextResponse.json({
-        proofPath: publicPath,
+        proofPath: storagePath,
         proofUrl: fullUrl,
       });
     } else if (shouldUseDigitalOcean(storageProvider)) {

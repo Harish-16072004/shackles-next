@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Permission } from "@prisma/client";
 import { processQRScan, QRScanPayload } from "@/server/services/qr-management.service";
 import { prisma as db } from "@/lib/prisma";
-import { requireEventPermission } from "@/server/services/scanner-auth.service";
+import { requireEventPermission, authorizeScannerActor } from "@/server/services/scanner-auth.service";
 
 export const maxDuration = 30;
 
@@ -65,6 +65,20 @@ export async function POST(request: NextRequest) {
       const auth = await requireEventPermission(body.eventId, Permission.SCAN_KIT);
       if (!auth.ok) {
         return NextResponse.json({ success: false, error: auth.message }, { status: auth.reason === "NOT_AUTHENTICATED" ? 401 : 403 });
+      }
+    }
+
+    if (body.operationType === "OTHER") {
+      if (body.eventId) {
+        const auth = await requireEventPermission(body.eventId, Permission.SCAN_ATTENDANCE);
+        if (!auth.ok) {
+          return NextResponse.json({ success: false, error: auth.message }, { status: auth.reason === "NOT_AUTHENTICATED" ? 401 : 403 });
+        }
+      } else {
+        const auth = await authorizeScannerActor();
+        if (!auth.ok) {
+          return NextResponse.json({ success: false, error: auth.message }, { status: auth.reason === "NOT_AUTHENTICATED" ? 401 : 403 });
+        }
       }
     }
 

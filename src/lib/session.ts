@@ -14,7 +14,7 @@ export async function getSession() {
   }
 
   // Convert Auth.js session to legacy format
-  const user = session.user as any
+  const user = session.user
   return {
     userId: user.id,
     role: user.role || 'APPLICANT',
@@ -34,7 +34,7 @@ export async function requireSession() {
 
 export async function requireAdmin() {
   const session = await requireSession()
-  const userRole = (session as any)?.role
+  const userRole = session?.role
   if (userRole !== 'ADMIN') {
     redirect('/')
   }

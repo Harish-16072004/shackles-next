@@ -42,10 +42,21 @@ export const authConfig: NextAuthConfig = {
       const isLoggedIn = !!auth?.user;
       const pathname = nextUrl.pathname;
 
-      // Admin routes require ADMIN role
+      // API admin routes require ADMIN role
+      if (pathname.startsWith("/api/admin")) {
+        if (!isLoggedIn) return false;
+        return auth.user?.role === "ADMIN";
+      }
+
+      // Admin page routes require ADMIN role
       if (pathname.startsWith("/admin")) {
         if (!isLoggedIn) return false;
         return auth.user?.role === "ADMIN";
+      }
+
+      // User dashboard and on-spot registration require authentication
+      if (pathname.startsWith("/userDashboard") || pathname.startsWith("/onspot-registration")) {
+        return isLoggedIn;
       }
 
       // Protected routes require any authenticated session

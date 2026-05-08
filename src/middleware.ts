@@ -11,6 +11,11 @@ export const { auth: middleware } = NextAuth(authConfig);
 export default middleware;
 
 export const config = {
-  matcher: ["/admin/:path*", "/(protected)/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/(protected)/:path*",
+    "/userDashboard/:path*",
+    "/onspot-registration/:path*",
+    "/api/admin/:path*",
+  ],
 };
-

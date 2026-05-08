@@ -1,23 +1,21 @@
+import "next-auth"
+
 /**
- * Auth.js type augmentations for custom user fields
+ * Auth.js type augmentations for custom user fields.
  */
 declare module "next-auth" {
   interface User {
-    id: string;
-    role?: string;
+    id: string
+    role?: string
   }
 
   interface Session {
     user: {
-      id?: string;
-      role?: string;
-      email?: string | null;
-      name?: string | null;
-      image?: string | null;
-    };
+      id: string
+      role: string
+      email?: string | null
+      name?: string | null
+      image?: string | null
+    }
   }
 }
-
-
-
-export {};

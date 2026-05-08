@@ -16,6 +16,6 @@ export const config = {
     "/(protected)/:path*",
     "/userDashboard/:path*",
     "/onspot-registration/:path*",
-    "/api/admin/:path*",
+    "/api/:path*",
   ],
 };

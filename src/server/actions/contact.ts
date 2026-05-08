@@ -2,9 +2,16 @@
 
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { createRateLimiter, rateLimitPresets } from "@/lib/rate-limit";
 
 // Initialize Prisma
 // const prisma = new PrismaClient();
+
+// M7: Rate limiter for contact form submissions
+const contactRateLimiter = createRateLimiter({
+  ...rateLimitPresets.registration,
+  keyPrefix: "ratelimit:contact-form",
+});
 
 const ContactSchema = z.object({
   name: z.string().min(2, "Name is too short"),
@@ -22,6 +29,12 @@ export async function submitContactForm(data: unknown) {
   }
 
   const { name, email, mobile, message } = result.data;
+
+  // M7: Rate limit by email to prevent spam
+  const rateLimitResult = await contactRateLimiter.limit(email.toLowerCase());
+  if (!rateLimitResult.success) {
+    return { success: false, error: "Too many requests. Please try again later." };
+  }
 
   try {
     // 1. Try to find a user with this email to link them

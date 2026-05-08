@@ -12,7 +12,7 @@ export const onspotRegistrationSchema = z.object({
   collegeLoc: z.string().min(1, 'College location is required'),
   department: z.string().min(1, 'Department is required'),
   yearOfStudy: z.enum(['I', 'II', 'III', 'IV']),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string().min(1, 'Confirm your password'),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER'], { message: 'Select your gender' }),
   registrationType: z.enum(['GENERAL', 'WORKSHOP', 'COMBO']),

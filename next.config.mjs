@@ -43,7 +43,7 @@ const nextConfig = {
   // 2. Server Packages
   serverExternalPackages: ["sharp", "pdfkit"],
 
-  // 3. Webpack Configuration (Merged and Fixed)
+  // 3. Webpack Configuration
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
@@ -52,27 +52,16 @@ const nextConfig = {
       crypto: false,
     };
 
-    // Webpack externals for sharp
-    config.externals.push({
-      'sharp': 'commonjs sharp',
-    });
-
-    // Alias fixes
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      "sharp$": false,
-    };
-
     return config;
   },
 
-  turbopack: {},
-
-  // 4. Dev Server Settings
-  onDemandEntries: {
-    maxInactiveAge: 60 * 1000,
-    pagesBufferLength: 8,
-  },
+  // 4. Dev Server Settings (development only)
+  ...(process.env.NODE_ENV === 'development' ? {
+    onDemandEntries: {
+      maxInactiveAge: 60 * 1000,
+      pagesBufferLength: 8,
+    },
+  } : {}),
 
   // 5. Security Headers
   async headers() {
@@ -89,11 +78,12 @@ const nextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
+              "script-src 'self'",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               `img-src 'self' data: blob: ${imgSrcHosts}`,
               "font-src 'self' https://fonts.gstatic.com",
-              "connect-src 'self' https://*.googleapis.com https://*.upstash.io https://*.digitaloceanspaces.com https://sgp1.digitaloceanspaces.com",
+              "connect-src 'self' blob: https://api.qrserver.com https://*.googleapis.com https://*.upstash.io https://*.digitaloceanspaces.com https://sgp1.digitaloceanspaces.com",
+              "worker-src 'self'",
               "frame-ancestors 'none'",
             ].join("; "),
           },

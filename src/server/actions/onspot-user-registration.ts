@@ -1,6 +1,7 @@
 'use server'
 
 import { hash } from 'bcryptjs';
+import { BCRYPT_ROUNDS } from '@/lib/crypto-config';
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { PaymentStatus, RegistrationType, Role, Prisma } from '@prisma/client';
@@ -70,7 +71,7 @@ const PublicOnSpotSchema = z.object({
     .refine((value): value is string => Boolean(value), {
       message: 'Invalid Indian mobile number',
     }),
-  password: z.string().min(6),
+  password: z.string().min(8),
   collegeName: z.string().trim().min(2),
   collegeLoc: z.string().trim().min(2),
   department: z.string().trim().min(2),
@@ -138,7 +139,7 @@ export async function registerOnSpotParticipant(input: unknown) {
     };
   }
 
-  const passwordHash = await hash(data.password, 10);
+  const passwordHash = await hash(data.password, BCRYPT_ROUNDS);
   const fallbackTransaction = `ONSPOT-PENDING-${Date.now()}`;
 
   try {

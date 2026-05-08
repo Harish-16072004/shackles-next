@@ -12,6 +12,7 @@ import path from "path";
 import { allocateShacklesId } from "@/server/services/shackles-id.service";
 import { runSerializableTransaction } from "@/server/services/transaction.service";
 import { encodeQrPayload } from "@/server/services/qr.service";
+import { requireAdmin } from "@/lib/session";
 
 type QrUploadResult = {
   qrImageUrl: string | null;
@@ -53,9 +54,9 @@ async function uploadQrToStorage(
   const storageProvider = getStorageProvider();
 
   if (shouldUseLocal(storageProvider)) {
-    // Local filesystem storage
-    const publicDir = path.join(process.cwd(), "public", "uploads", "qr-codes");
-    const fileDir = path.join(publicDir, year.toString(), month, typeSegment);
+    // Local filesystem storage — stored outside public/ to require auth
+    const storageDir = path.join(process.cwd(), "storage", "qr-codes");
+    const fileDir = path.join(storageDir, year.toString(), month, typeSegment);
     const filePath = path.join(fileDir, `${shacklesId}.png`);
     
     // Ensure directory exists
@@ -64,10 +65,10 @@ async function uploadQrToStorage(
     // Write file
     await fs.writeFile(filePath, Buffer.from(qrImageBuffer));
     
-    // Return path relative to public directory
-    const publicPath = `/uploads/qr-codes/${year}/${month}/${typeSegment}/${shacklesId}.png`;
+    // Return path for authenticated API route
+    const qrPath = `qr-codes/${year}/${month}/${typeSegment}/${shacklesId}.png`;
     
-    return { qrPath: publicPath };
+    return { qrPath };
   } else if (shouldUseDigitalOcean(storageProvider)) {
     await uploadToSpaces({
       key: spacesKey,
@@ -94,6 +95,10 @@ async function uploadQrImage(qrValue: string, shacklesId: string, registrationTy
 
 export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJECT') {
   try {
+    // C2: Auth guard — only admins can verify payments
+    await requireAdmin();
+
+
     if (action === 'REJECT') {
       await prisma.payment.update({
         where: { userId },
@@ -196,7 +201,7 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
                 },
               });
             } catch (uploadError) {
-              console.warn('QR upload failed after verification. Continuing with token-only QR access.', uploadError);
+              console.error('QR upload failed after verification. Continuing with token-only QR access.', uploadError);
             }
           }
         } catch (error) {

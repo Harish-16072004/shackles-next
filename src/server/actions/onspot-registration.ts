@@ -6,16 +6,17 @@ import { revalidatePath } from 'next/cache';
 import type { Prisma } from '@prisma/client';
 import { Permission, PaymentCaptureSource, PaymentChannel, PaymentStatus, Role, RegistrationType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { auth } from '@/auth';
 import { verifyUserPayment } from '@/server/actions/admin';
 import { requireGlobalPermission } from '@/server/services/scanner-auth.service';
+import { BCRYPT_ROUNDS } from '@/lib/crypto-config';
 
 const CreateOnSpotParticipantSchema = z.object({
 	firstName: z.string().trim().min(2),
 	lastName: z.string().trim().min(1),
 	email: z.string().trim().email(),
 	phone: z.string().trim().min(10),
-	password: z.string().min(6),
+	password: z.string().min(8),
 	collegeName: z.string().trim().min(2),
 	collegeLoc: z.string().trim().min(2),
 	department: z.string().trim().min(2),
@@ -65,21 +66,14 @@ async function requireOnSpotActor() {
 }
 
 async function requireAdminActor() {
-	const session = await getSession();
-	if (!session?.userId) {
+	const session = await auth();
+	if (!session?.user?.id) {
 		return { ok: false as const, error: 'Authentication required.' };
 	}
-
-	const actor = await prisma.user.findUnique({
-		where: { id: String(session.userId) },
-		select: { id: true, role: true },
-	});
-
-	if (!actor || actor.role !== Role.ADMIN) {
+	if (session.user.role !== Role.ADMIN) {
 		return { ok: false as const, error: 'Admin access required.' };
 	}
-
-	return { ok: true as const, actor };
+	return { ok: true as const, actor: { id: session.user.id, role: session.user.role } };
 }
 
 export async function createOnSpotParticipant(input: unknown) {
@@ -102,7 +96,7 @@ export async function createOnSpotParticipant(input: unknown) {
 		return { success: false, error: 'Online on-spot payment needs transaction reference or proof.' };
 	}
 
-	const passwordHash = await hash(data.password, 10);
+	const passwordHash = await hash(data.password, BCRYPT_ROUNDS);
 	const fallbackTransaction = `ONSPOT-${Date.now()}`;
 
 	const created = await prisma.$transaction(async (tx) => {
@@ -290,7 +284,7 @@ export async function getOnSpotSummary() {
 	}
 
 	const [total, pending, verified, rejected, cash, online] = await Promise.all([
-		prisma.onSpotProfile.count(),
+		prisma.payment.count({ where: { captureSource: PaymentCaptureSource.ON_SPOT } }),
 		prisma.payment.count({ where: { captureSource: PaymentCaptureSource.ON_SPOT, status: PaymentStatus.PENDING } }),
 		prisma.payment.count({ where: { captureSource: PaymentCaptureSource.ON_SPOT, status: PaymentStatus.VERIFIED } }),
 		prisma.payment.count({ where: { captureSource: PaymentCaptureSource.ON_SPOT, status: PaymentStatus.REJECTED } }),

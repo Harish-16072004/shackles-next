@@ -43,10 +43,12 @@ export async function requireAdmin() {
 
 /**
  * Create session via Auth.js signIn
- * Note: In Auth.js, sessions are created automatically after successful authorize
+ * @deprecated Auth.js handles session creation automatically after authorize()
  */
-export async function createSession(userId: string, role: string, displayName?: string) {
-  // No-op: Auth.js handles session creation automatically after authorize()
+export async function createSession(_userId: string, _role: string, _displayName?: string) {
+  throw new Error(
+    "createSession() is deprecated. Auth.js handles session creation automatically after authorize()."
+  );
 }
 
 /**

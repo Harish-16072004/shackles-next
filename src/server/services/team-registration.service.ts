@@ -412,10 +412,27 @@ export async function joinTeamByCode(input: {
     },
   });
 
-  await input.db.team.update({
-    where: { id: team.id },
+  // Atomic increment with capacity guard — prevents concurrent over-join
+  const updated = await input.db.team.updateMany({
+    where: {
+      id: team.id,
+      memberCount: { lt: teamMaxSize }, // only increment if still within capacity
+    },
     data: { memberCount: { increment: 1 } },
   });
+
+  if (updated.count === 0) {
+    // Another concurrent joiner just filled the last slot — rollback by deleting
+    // the registration we just created. This is a rare edge case.
+    await input.db.eventRegistration.deleteMany({
+      where: { userId: input.userId, eventId: event.id },
+    });
+    return {
+      success: false,
+      reason: "TEAM_SIZE_EXCEEDED",
+      error: `Team is now full. Please try again.`,
+    };
+  }
 
   return {
     success: true,
@@ -829,13 +846,15 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     };
   }
 
-  // Package checks
+  // Package checks — uses already-fetched user.payment data (loaded with include: { payment: true })
   for (const id of normalizedIds) {
     const user = userByShacklesId.get(id);
     if (!user) continue;
-    const pkg = await getVerifiedPackage(input.db, user.id, activeYear);
-    if (!pkg) return { success: false, reason: "NO_PACKAGE", error: `User ${id} has no verified package.` };
-    if (!canAccessEventCategory(pkg.packageType, event.category)) {
+    const payment = user.payment;
+    if (!payment || payment.status !== "VERIFIED" || payment.year !== activeYear || !payment.packageType) {
+      return { success: false, reason: "NO_PACKAGE", error: `User ${id} has no verified package.` };
+    }
+    if (!canAccessEventCategory(payment.packageType as Parameters<typeof canAccessEventCategory>[0], event.category)) {
       return {
         success: false,
         reason: "PACKAGE_NOT_ALLOWED",
@@ -955,16 +974,6 @@ export async function bulkRegisterTeamByShacklesIds(input: {
       },
     });
   }
-
-  // Ensure leader role is set correctly
-  await input.db.eventRegistration.updateMany({
-    where: { teamId: team.id },
-    data: { memberRole: TeamMemberRole.MEMBER },
-  });
-  await input.db.eventRegistration.updateMany({
-    where: { teamId: team.id, userId: leaderUser.id },
-    data: { memberRole: TeamMemberRole.LEADER },
-  });
 
   const teamData: Record<string, unknown> = {
     leaderUserId: leaderUser.id,

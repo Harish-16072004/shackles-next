@@ -5,6 +5,15 @@ import { sendResetEmail } from "@/lib/email";
 import crypto from "crypto";
 import { hash } from "bcryptjs";
 import { z } from "zod";
+import { BCRYPT_ROUNDS } from "@/lib/crypto-config";
+import { createRateLimiter, rateLimitPresets } from "@/lib/rate-limit";
+import { headers } from "next/headers";
+
+// M6: Rate limiter for password reset requests
+const resetRateLimiter = createRateLimiter({
+  ...rateLimitPresets.auth,
+  keyPrefix: "ratelimit:password-reset",
+});
 
 // ----------------------------------------------------
 // Action 1: Request Password Reset (Send Email)
@@ -17,6 +26,12 @@ export async function requestPasswordReset(prevState: unknown, formData: FormDat
     return { success: false, error: "Please enter a valid email.", message: "" };
   }
 
+  // M6: Rate limit by email to prevent spam
+  const rateLimitResult = await resetRateLimiter.limit(email.toLowerCase());
+  if (!rateLimitResult.success) {
+    return { success: false, error: "Too many requests. Please try again later.", message: "" };
+  }
+
   try {
     // 1. Check if user exists
     const user = await prisma.user.findUnique({ where: { email } });
@@ -27,25 +42,24 @@ export async function requestPasswordReset(prevState: unknown, formData: FormDat
       return { success: true, message: "If an account exists, we sent a reset link to your email.", error: "" };
     }
 
-    // 2. Generate a secure random token
-    // Generates a random 32-byte hex string (64 chars)
-    const token = crypto.randomBytes(32).toString("hex");
+    // C4: Generate a secure random token and hash it before storing
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
     
     // Set expiry to 15 minutes from now
     const expiry = new Date(Date.now() + 15 * 60 * 1000); 
 
-    // 3. Save token to DB
+    // 3. Save hashed token to DB (raw token is sent in the email)
     await prisma.user.update({
       where: { id: user.id },
       data: { 
-        resetToken: token,
+        resetToken: hashedToken,
         resetTokenExpiry: expiry
       }
     });
 
-    // 4. Send the Email
-    // Using the sendResetEmail function which logs the link for dev environment
-    const emailResult = await sendResetEmail(email, token);
+    // 4. Send the Email with the RAW token (not the hash)
+    const emailResult = await sendResetEmail(email, rawToken);
     
     if (emailResult.success) {
       return { success: true, message: "Check your email for the reset link!", error: "" };
@@ -65,8 +79,8 @@ export async function requestPasswordReset(prevState: unknown, formData: FormDat
 
 const passwordResetSchema = z.object({
   token: z.string().min(10),
-  newPassword: z.string().min(6, "Password must be at least 6 characters"),
-  confirmPassword: z.string().min(6, "Password must be at least 6 characters"),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],
@@ -93,9 +107,12 @@ export async function resetPassword(prevState: unknown, formData: FormData) {
   const { token, newPassword } = validation.data;
 
   try {
-    // 1. Find user with this token
+    // C4: Hash the incoming token before querying the DB
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+    // 1. Find user with this hashed token
     const user = await prisma.user.findUnique({
-      where: { resetToken: token }
+      where: { resetToken: hashedToken }
     });
 
     if (!user) {
@@ -107,8 +124,8 @@ export async function resetPassword(prevState: unknown, formData: FormData) {
       return { success: false, error: "This reset link has expired. Please request a new one.", message: "" };
     }
 
-    // 3. Hash new password
-    const hashedPassword = await hash(newPassword, 10);
+    // 3. Hash new password with centralized cost factor
+    const hashedPassword = await hash(newPassword, BCRYPT_ROUNDS);
 
     // 4. Update user password and clear token
     await prisma.user.update({

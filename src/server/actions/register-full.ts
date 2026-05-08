@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { hash } from "bcryptjs";
+import { BCRYPT_ROUNDS } from "@/lib/crypto-config";
 import { prisma } from "@/lib/prisma";
 
 function normalizeIndianPhone(value: string) {
@@ -25,7 +26,7 @@ const FullRegisterSchema = z.object({
   department: z.string().min(2),
   yearOfStudy: z.string(),
   gender: z.enum(["MALE", "FEMALE", "OTHER"]),
-  password: z.string().min(6),
+  password: z.string().min(8),
   
   // --- NEW FIELDS ---
   registrationType: z.enum(["GENERAL", "WORKSHOP", "COMBO"]),
@@ -60,7 +61,7 @@ export async function registerFullUser(data: unknown) {
     }
 
     // B. Security Prep
-    const hashedPassword = await hash(password, 10);
+    const hashedPassword = await hash(password, BCRYPT_ROUNDS);
 
     const proofPath: string | undefined = inputProofPath;
 

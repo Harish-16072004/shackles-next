@@ -69,7 +69,7 @@ export function ScoringSetup({ eventId, eventName, onSaved }: ScoringSetupProps)
      setError(`Component max marks sum (${sumOfComponentMax}) must equal Total Max Marks (${criteria.maxMarks})`)
      return
     }
-    
+
     if (totalWeight !== 100) {
       setError(`Component weights must sum to 100% (currently ${totalWeight}%)`)
       return
@@ -89,7 +89,7 @@ export function ScoringSetup({ eventId, eventName, onSaved }: ScoringSetupProps)
         body: JSON.stringify({
           eventId,
           ...criteria,
-          components,
+          components: components.map(({ uid, ...rest }) => rest),
         }),
       })
 

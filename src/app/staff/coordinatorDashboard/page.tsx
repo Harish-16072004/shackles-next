@@ -125,12 +125,20 @@ export default async function CoordinatorDashboard() {
                 <div key={event.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
                   <p className="font-semibold text-gray-900 mb-1">{event.name}</p>
                   <p className="text-sm text-gray-600 mb-4">{new Date(event.date).toLocaleDateString()}</p>
-                  <Link
-                    href={`/admin/scanner?eventId=${event.id}`}
-                    className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition text-sm"
-                  >
-                    Start Scanner
-                  </Link>
+                  <div className="flex gap-2 flex-wrap">
+                    <Link
+                      href={`/admin/scanner?eventId=${event.id}`}
+                      className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition text-sm"
+                    >
+                      Start Scanner
+                    </Link>
+                    <Link
+                      href={`/admin/marking?eventId=${event.id}`}
+                      className="inline-block bg-violet-600 hover:bg-violet-700 text-white font-semibold py-2 px-4 rounded-lg transition text-sm"
+                    >
+                      Allocate Marks
+                    </Link>
+                  </div>
                 </div>
               ))}
             </div>
@@ -174,6 +182,3 @@ export default async function CoordinatorDashboard() {
     </div>
   )
 }
-
-
-

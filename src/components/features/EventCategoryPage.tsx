@@ -1,673 +1,614 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState, Suspense, ReactNode } from "react";
-import Link from "next/link";
-import { X } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from 'react';
+import { ChevronLeft, MapPin, Calendar, Users, User } from 'lucide-react';
+import { InviteModal } from '@/components/features/InviteModal';
 
-type EventItem = {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Event {
   id: string;
   name: string;
-  type: string | null;
-  dayLabel: string | null;
-  date: string | null;
-  endDate: string | null;
-  description: string | null;
-  rulesUrl: string | null;
-  coordinatorName: string | null;
-  coordinatorPhone: string | null;
-  trainerName: string | null;
-  contactName: string | null;
-  contactPhone: string | null;
-  participationMode: "INDIVIDUAL" | "TEAM";
-  isAllDay: boolean;
-  teamMinSize: number | null;
-  teamMaxSize: number | null;
-  maxTeams: number | null;
-  maxParticipants: number | null;
-  isActive: boolean;
-  registeredTeams: number;
-  registeredCount: number;
-  teamsLeft: number | null;
-  spotsLeft: number | null;
-};
+  description?: string | null;
+  venue?: string | null;
+  date?: string | null;
+  endDate?: string | null;
+  participationMode: 'SOLO' | 'TEAM';
+  teamMinSize?: number | null;
+  teamMaxSize?: number | null;
+  trainerName?: string | null;
+  coordinatorName?: string | null;
+  coordinatorPhone?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  prizePool?: string | null;
+  entryFee?: number | null;
+}
 
-type Props = {
+interface MyTeamEntry {
+  eventId: string;
+  teamId: string | null;
+  teamName: string;
+  teamCode: string | null;
+  joinCode: string | null;
+  isLeader: boolean;
+  memberCount: number;
+  teamMaxSize: number;
+  teamStatus: string;
+  canInvite: boolean;
+}
+
+interface EventCategoryPageProps {
   category: string;
-  title: string;
-  subtitle: string;
-  accent: "red" | "cyan" | "emerald";
-  fallback?: ReactNode;
-};
-
-const accentStyles = {
-  red: {
-    cardBorder: "hover:border-red-600/30",
-    modalBorder: "border-red-900/50",
-    closeButton: "border-red-600 text-red-600 hover:bg-red-600 hover:text-white",
-    rules: "border-red-600 text-red-500 hover:bg-red-600/10",
-    contact: "text-red-500 hover:text-red-400",
-  },
-  cyan: {
-    cardBorder: "hover:border-cyan-600/30",
-    modalBorder: "border-cyan-900/50",
-    closeButton: "border-cyan-600 text-cyan-600 hover:bg-cyan-600 hover:text-white",
-    rules: "border-cyan-600 text-cyan-500 hover:bg-cyan-600/10",
-    contact: "text-cyan-500 hover:text-cyan-400",
-  },
-  emerald: {
-    cardBorder: "hover:border-emerald-600/30",
-    modalBorder: "border-emerald-900/50",
-    closeButton: "border-emerald-600 text-emerald-600 hover:bg-emerald-600 hover:text-white",
-    rules: "border-emerald-600 text-emerald-500 hover:bg-emerald-600/10",
-    contact: "text-emerald-500 hover:text-emerald-400",
-  },
-};
-
-function formatSchedule(date: string | null, endDate: string | null) {
-  if (!date) return null;
-
-  const start = new Date(date);
-  if (Number.isNaN(start.getTime())) return null;
-
-  const startText = new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(start);
-
-  if (!endDate) return startText;
-
-  const end = new Date(endDate);
-  if (Number.isNaN(end.getTime()) || end.getTime() === start.getTime()) return startText;
-
-  const endText = new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(end);
-
-  return `${startText} → ${endText}`;
+  subtitle?: string;
+  events?: Event[];
 }
 
-const PAYMENT_PENDING_POPUP = "Your payment verification is pending by organizers. Please try after sometime.";
-const LOGIN_REQUIRED_POPUP = "Please login to register for events.";
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function shouldShowPaymentPendingPopup(status: number, message: string) {
-  const normalized = message.toLowerCase();
-  return status === 403 && (
-    normalized.includes("payment-verified") ||
-    normalized.includes("payment verified") ||
-    normalized.includes("payment")
-  );
+function formatSchedule(date?: string | null, endDate?: string | null): string {
+  if (!date) return 'TBD';
+  const start = new Date(date).toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  if (!endDate) return start;
+  const end = new Date(endDate).toLocaleString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${start} – ${end}`;
 }
 
-function shouldShowLoginPopup(status: number): boolean {
-  return status === 401;
+const TEAM_NAME_REGEX = /^[A-Za-z0-9 _-]{3,40}$/;
+
+function validateTeamName(name: string): string | null {
+  const trimmed = name.trim();
+  if (!trimmed) return 'Team name is required.';
+  if (!TEAM_NAME_REGEX.test(trimmed))
+    return 'Team name must be 3–40 characters (letters, numbers, spaces, - or _).';
+  return null;
 }
 
-function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props, 'fallback'>) {
-  const searchParams = useSearchParams();
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
-  const [teamName, setTeamName] = useState("");
-  const [teamCode, setTeamCode] = useState("");
-  const [inviteToken, setInviteToken] = useState("");
-  const [latestTeamCode, setLatestTeamCode] = useState("");
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function EventCategoryPage({
+  category,
+  subtitle,
+  events = [],
+}: EventCategoryPageProps) {
+  // Detail panel
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+
+  // Registration form state
+  const [teamName, setTeamName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [latestTeamCode, setLatestTeamCode] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
-  const [creatingTeam, setCreatingTeam] = useState(false);
-  const [completingTeam, setCompletingTeam] = useState(false);
-  const [feedback, setFeedback] = useState("");
-  const styles = accentStyles[accent];
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('error');
 
-  const [myTeamsByEventId, setMyTeamsByEventId] = useState<Record<string, any>>({});
-  const [inviteEmails, setInviteEmails] = useState<string[]>([]);
-  const [inviting, setInviting] = useState(false);
+  // My registrations
+  const [myTeamsByEventId, setMyTeamsByEventId] = useState<Record<string, MyTeamEntry>>({});
+  const [soloEventIds, setSoloEventIds] = useState<string[]>([]);
 
-  useEffect(() => {
-    const incomingToken = searchParams.get("inviteToken") || "";
-    const incomingCode = searchParams.get("teamCode") || "";
+  // Invite modal
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
-    if (incomingToken) setInviteToken(incomingToken);
-    if (incomingCode) setTeamCode(incomingCode);
-  }, [searchParams]);
+  // ── Fetch my registrations ─────────────────────────────────────────────────
 
-  const loadEvents = useCallback(async () => {
+  const fetchMyRegistrations = useCallback(async () => {
     try {
-      const response = await fetch(`/api/events/public-stats?category=${encodeURIComponent(category)}`, {
-        cache: "no-store",
+      const res = await fetch('/api/events/my-registrations');
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const map: Record<string, MyTeamEntry> = {};
+      (data.teams ?? []).forEach((t: MyTeamEntry) => {
+        map[t.eventId] = t;
       });
-      if (!response.ok) return;
-      const body = await response.json();
-      setEvents(Array.isArray(body.events) ? body.events : []);
+      setMyTeamsByEventId(map);
+      setSoloEventIds(data.soloEventIds ?? []);
     } catch {
-      setEvents([]);
-    }
-  }, [category]);
-
-  const loadMyTeams = useCallback(async () => {
-    try {
-      const response = await fetch("/api/events/my-registrations", {
-        headers: { "Content-Type": "application/json" }
-      });
-      if (!response.ok) return;
-      const data = await response.json();
-      if (data.registrations && Array.isArray(data.registrations)) {
-        const mapping: Record<string, any> = {};
-        for (const reg of data.registrations) {
-          mapping[reg.eventId] = reg;
-        }
-        setMyTeamsByEventId(mapping);
-      }
-    } catch (e) {
-      // Ignore
+      // silently ignore — user may not be logged in
     }
   }, []);
 
   useEffect(() => {
-    void loadEvents();
-    void loadMyTeams();
+    fetchMyRegistrations();
+  }, [fetchMyRegistrations]);
 
-    let source: EventSource | null = null;
-    let fallbackInterval: ReturnType<typeof setInterval> | null = null;
-
-    const setupFallback = () => {
-      if (!fallbackInterval) {
-        fallbackInterval = setInterval(() => {
-          void loadEvents();
-        }, 12000);
-      }
-    };
-
-    try {
-      source = new EventSource("/api/live-sync");
-      source.onmessage = () => {
-        void loadEvents();
-      };
-      source.onerror = () => {
-        setupFallback();
-      };
-    } catch {
-      setupFallback();
-    }
-
-    return () => {
-      if (source) {
-        source.close();
-      }
-      if (fallbackInterval) {
-        clearInterval(fallbackInterval);
-      }
-    };
-  }, [loadEvents]);
+  // ── Clear form when panel changes ─────────────────────────────────────────
 
   useEffect(() => {
-    if (!selectedEvent) {
-      setTeamName("");
-      setTeamCode("");
-      setInviteToken("");
-      setLatestTeamCode("");
-      return;
-    }
+    setTeamName('');
+    setJoinCode('');
+    setLatestTeamCode(null);
+    setFeedback(null);
+    setRegistering(false);
+  }, [selectedEvent?.id]);
 
-    if (selectedEvent.participationMode !== "TEAM") {
-      setTeamName("");
-      setTeamCode("");
-      setInviteToken("");
-      setLatestTeamCode("");
-      return;
-    }
-  }, [selectedEvent]);
+  // ── Handlers ───────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (!selectedEvent) return;
-    const updated = events.find((event) => event.id === selectedEvent.id);
-    if (updated) {
-      setSelectedEvent(updated);
-    }
-  }, [events, selectedEvent]);
-
-  async function handleRegister(event: EventItem) {
+  async function handleRegister(eventId: string) {
+    setRegistering(true);
+    setFeedback(null);
     try {
-      setRegistering(true);
-      setFeedback("");
-
-      const response = await fetch("/api/events/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "joinTeam",
-          eventName: event.name,
-          teamName: teamName.trim() || undefined,
-          teamCode: teamCode.trim() || undefined,
-          inviteToken: inviteToken.trim() || undefined,
-        }),
+      const res = await fetch('/api/events/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId }),
       });
-
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const errorMessage = typeof body.error === "string" ? body.error : "Unable to register now.";
-        setFeedback(errorMessage);
-        if (shouldShowLoginPopup(response.status)) {
-          alert(LOGIN_REQUIRED_POPUP);
-        } else if (shouldShowPaymentPendingPopup(response.status, errorMessage)) {
-          alert(PAYMENT_PENDING_POPUP);
-        }
-      } else {
-        if (body.teamCode) {
-          setLatestTeamCode(String(body.teamCode));
-          setTeamCode(String(body.teamCode));
-        }
-        const message = typeof body.message === "string" ? body.message : "";
-        if (message.toLowerCase().includes("already registered")) {
-          setFeedback(message);
-        } else {
-          setFeedback("Joined team successfully.");
-        }
-        await loadEvents();
+      const data = await res.json();
+      if (!res.ok) {
+        setFeedbackType('error');
+        setFeedback(data.error ?? 'Registration failed.');
+        return;
       }
+      setFeedbackType('success');
+      setFeedback('Registered successfully!');
+      await fetchMyRegistrations();
+    } catch {
+      setFeedbackType('error');
+      setFeedback('Network error. Please try again.');
     } finally {
       setRegistering(false);
     }
   }
 
-  async function handleCreateTeam(event: EventItem) {
-    const trimmedTeamName = teamName.trim();
-    if (!trimmedTeamName) {
-      setFeedback("Team name is required to create a team.");
+  async function handleCreateTeam() {
+    if (!selectedEvent) return;
+    const nameError = validateTeamName(teamName);
+    if (nameError) {
+      setFeedbackType('error');
+      setFeedback(nameError);
       return;
     }
-
+    setRegistering(true);
+    setFeedback(null);
     try {
-      setCreatingTeam(true);
-      setFeedback("");
-      const response = await fetch("/api/events/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "createTeam",
-          eventName: event.name,
-          teamName: trimmedTeamName,
-        }),
+      const res = await fetch('/api/events/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: selectedEvent.id, teamName: teamName.trim() }),
       });
-
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const errorMessage = typeof body.error === "string" ? body.error : "Unable to create team right now.";
-        setFeedback(errorMessage);
-        if (shouldShowLoginPopup(response.status)) {
-          alert(LOGIN_REQUIRED_POPUP);
-        } else if (shouldShowPaymentPendingPopup(response.status, errorMessage)) {
-          alert(PAYMENT_PENDING_POPUP);
-        }
-      } else {
-        if (body.teamCode) {
-          setLatestTeamCode(String(body.teamCode));
-          setTeamCode(String(body.teamCode));
-        }
-        const message = typeof body.message === "string" ? body.message : "";
-        if (message.toLowerCase().includes("already registered")) {
-          setFeedback(message);
-        } else {
-          setFeedback("Team created successfully.");
-        }
-        await loadEvents();
+      const data = await res.json();
+      if (!res.ok) {
+        setFeedbackType('error');
+        setFeedback(data.error ?? 'Failed to create team.');
+        return;
       }
+      setLatestTeamCode(data.teamCode ?? null);
+      setFeedbackType('success');
+      setFeedback('Team created! Share the code below with teammates.');
+      await fetchMyRegistrations();
+    } catch {
+      setFeedbackType('error');
+      setFeedback('Network error. Please try again.');
     } finally {
-      setCreatingTeam(false);
+      setRegistering(false);
     }
   }
 
-  async function handleCompleteTeam(event: EventItem) {
-    const trimmedTeamName = teamName.trim();
-    const trimmedTeamCode = teamCode.trim();
-    if (!trimmedTeamName && !trimmedTeamCode) {
-      setFeedback("Provide Team Name or Team Code to complete team registration.");
+  async function handleJoinTeam() {
+    if (!selectedEvent) return;
+    const code = joinCode.trim();
+    if (!code) {
+      setFeedbackType('error');
+      setFeedback('Enter a join code.');
       return;
     }
-
+    setRegistering(true);
+    setFeedback(null);
     try {
-      setCompletingTeam(true);
-      setFeedback("");
-
-      const response = await fetch("/api/events/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "completeTeam",
-          eventName: event.name,
-          teamName: trimmedTeamName || undefined,
-          teamCode: trimmedTeamCode || undefined,
-        }),
+      const res = await fetch('/api/events/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: selectedEvent.id, joinCode: code }),
       });
-
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const errorMessage = typeof body.error === "string" ? body.error : "Unable to complete team registration now.";
-        setFeedback(errorMessage);
-        if (shouldShowLoginPopup(response.status)) {
-          alert(LOGIN_REQUIRED_POPUP);
-        } else if (shouldShowPaymentPendingPopup(response.status, errorMessage)) {
-          alert(PAYMENT_PENDING_POPUP);
-        }
-      } else {
-        if (body.teamCode) {
-          setLatestTeamCode(String(body.teamCode));
-          setTeamCode(String(body.teamCode));
-        }
-        setFeedback(body.message || "Team registration completed.");
-        await loadEvents();
+      const data = await res.json();
+      if (!res.ok) {
+        setFeedbackType('error');
+        setFeedback(data.error ?? 'Failed to join team.');
+        return;
       }
+      setFeedbackType('success');
+      setFeedback('Joined team successfully!');
+      setJoinCode('');
+      await fetchMyRegistrations();
+    } catch {
+      setFeedbackType('error');
+      setFeedback('Network error. Please try again.');
     } finally {
-      setCompletingTeam(false);
+      setRegistering(false);
     }
   }
 
-  async function handleInviteTeammates(eventId: string, teamCode: string) {
-    const validEmails = inviteEmails.map(e => e.trim()).filter(Boolean);
-    if (validEmails.length === 0) {
-      setFeedback("Please enter at least one valid email to invite.");
-      return;
-    }
-
-    try {
-      setInviting(true);
-      setFeedback("");
-
-      const response = await fetch("/api/team/invite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId,
-          teamCode,
-          emails: validEmails
-        })
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setFeedback(data.error || "Failed to send invites.");
-      } else {
-        setFeedback(data.message || `Successfully sent ${data.sentCount} invites.`);
-        setInviteEmails([]); // Clear form on success
-      }
-
-    } catch (e) {
-      setFeedback("An error occurred while sending invites.");
-    } finally {
-      setInviting(false);
-    }
-  }
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-12 pb-8">
-      <section className="flex flex-col items-center gap-3 text-center">
-        <h1 className="text-4xl font-semibold text-gray-900">{title}</h1>
-        <p className="text-lg text-gray-600">{subtitle}</p>
-        <Link href="/events" className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900">
-          <span>←</span>
-          <span>Back to events</span>
-        </Link>
-      </section>
+    <div className="min-h-screen bg-gray-950 text-white">
+      {/* Header */}
+      <div className="border-b border-gray-800 px-6 py-8">
+        <h1 className="text-2xl font-bold tracking-tight">{category}</h1>
+        {subtitle && <p className="mt-1 text-sm text-gray-400">{subtitle}</p>}
+      </div>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        {events.map((event) => {
-          const isClosed = !event.isActive || (event.spotsLeft != null && event.spotsLeft <= 0) || (event.teamsLeft != null && event.teamsLeft <= 0);
-          const eventRegInfo = myTeamsByEventId[event.id];
-
-          return (
-            <button
-              key={event.id}
-              onClick={() => {
-                setSelectedEvent(event);
-                setFeedback("");
-                const regInfo = myTeamsByEventId[event.id];
-                if (regInfo?.teamCode) {
-                  setTeamCode(regInfo.teamCode);
-                  setLatestTeamCode(regInfo.teamCode);
-                }
-              }}
-              className={`flex h-full flex-col gap-3 rounded-2xl border-2 border-gray-200 bg-white p-6 text-left shadow-xs transition-all hover:-translate-y-0.5 ${styles.cardBorder}`}
-            >
-              <div className="flex justify-between items-start w-full">
-                <div className="h-4 w-4 rounded-full bg-white/50" />
-                {eventRegInfo?.isLeader && (
-                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">Team Leader</span>
-                )}
-                {eventRegInfo && !eventRegInfo.isLeader && (
-                  <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-semibold text-cyan-700">Registered</span>
-                )}
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900 leading-tight">{event.name}</h2>
-              <p className="text-sm text-gray-600 leading-relaxed">{(event.description || "No description available").substring(0, 120)}...</p>
-              <p className="text-xs text-gray-500 mt-auto">{isClosed ? "Closed" : "Open"}</p>
-            </button>
-          );
-        })}
-
-        {events.length === 0 && (
-          <div className="col-span-full rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-            No events configured by admin yet.
-          </div>
-        )}
-      </section>
-
-      {selectedEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8">
-          <div className={`relative w-full max-w-2xl rounded-2xl border-2 bg-gray-900 p-8 text-white max-h-[90vh] overflow-y-auto ${styles.modalBorder}`}>
-            <button
-              onClick={() => setSelectedEvent(null)}
-              className={`absolute right-4 top-4 rounded-sm border p-1 ${styles.closeButton}`}
-            >
-              <X size={20} />
-            </button>
-
-            <div className="mb-6 flex items-center gap-3">
-              <div className="h-6 w-6 rounded-full bg-white/20" />
-              <h2 className="text-2xl font-bold text-gray-100">{selectedEvent.name}</h2>
+      <div className="flex h-[calc(100vh-89px)]">
+        {/* ── Event list ──────────────────────────────────────────────────── */}
+        <div className="w-full overflow-y-auto border-r border-gray-800 md:w-80 lg:w-96">
+          {events.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <Calendar size={40} className="mb-3 text-gray-700" />
+              <p className="text-sm text-gray-500">No events in this category yet.</p>
             </div>
+          ) : (
+            <ul className="divide-y divide-gray-800/60">
+              {events.map(event => {
+                const myTeam = myTeamsByEventId[event.id];
+                const isSoloReg = soloEventIds.includes(event.id);
+                const isRegistered = !!myTeam || isSoloReg;
 
-            {formatSchedule(selectedEvent.date, selectedEvent.endDate) && (
-              <p className="mb-4 rounded-sm border border-gray-700 bg-gray-800/40 px-3 py-2 text-xs text-gray-200">
-                Schedule: {formatSchedule(selectedEvent.date, selectedEvent.endDate)}
-              </p>
-            )}
-
-            <p className="mb-6 text-sm leading-relaxed text-gray-300">{selectedEvent.description || "No description available."}</p>
-
-            {selectedEvent.participationMode === "TEAM" && (
-              <div className="mb-6 rounded-sm border border-gray-700 bg-gray-800/40 p-4">
-                <p className="mb-3 text-sm font-semibold text-gray-100">Team Registration</p>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-sm border border-gray-700 bg-gray-900/50 p-3">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-300">Create Team</p>
-                    <input
-                      value={teamName}
-                      onChange={(event) => setTeamName(event.target.value)}
-                      placeholder="Team name"
-                      disabled={!!myTeamsByEventId[selectedEvent.id]}
-                      className="w-full rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
+                return (
+                  <li key={event.id}>
                     <button
-                      disabled={creatingTeam || registering || completingTeam || !selectedEvent.isActive || !!myTeamsByEventId[selectedEvent.id]}
-                      onClick={() => handleCreateTeam(selectedEvent)}
-                      className="mt-3 w-full rounded-lg border border-emerald-500 bg-emerald-600/20 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-600/30 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => setSelectedEvent(event)}
+                      className={`w-full px-5 py-4 text-left transition hover:bg-gray-800/60 ${
+                        selectedEvent?.id === event.id ? 'bg-gray-800/80' : ''
+                      }`}
                     >
-                      {creatingTeam ? "CREATING TEAM..." : myTeamsByEventId[selectedEvent.id] ? "ALREADY REGISTERED" : "CREATE TEAM (LEADER)"}
-                    </button>
-                  </div>
-                  <div className="rounded-sm border border-gray-700 bg-gray-900/50 p-3">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-300">Join Team</p>
-                    <div className="grid gap-2">
-                      <input
-                        value={teamCode}
-                        onChange={(event) => setTeamCode(event.target.value.toUpperCase())}
-                        placeholder="Team code"
-                        disabled={!!myTeamsByEventId[selectedEvent.id]}
-                        className="rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                      />
-                      <input
-                        value={inviteToken}
-                        onChange={(event) => setInviteToken(event.target.value)}
-                        placeholder="Invite token (optional)"
-                        disabled={!!myTeamsByEventId[selectedEvent.id]}
-                        className="rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                      />
-                    </div>
-                    <button
-                      disabled={registering || creatingTeam || completingTeam || !selectedEvent.isActive || !!myTeamsByEventId[selectedEvent.id]}
-                      onClick={() => handleRegister(selectedEvent)}
-                      className="mt-3 w-full rounded-lg border border-cyan-500 bg-cyan-600/20 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-600/30 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {registering ? "JOINING TEAM..." : myTeamsByEventId[selectedEvent.id] ? "ALREADY REGISTERED" : "JOIN TEAM"}
-                    </button>
-                  </div>
-                </div>
-                {latestTeamCode && (
-                  <p className="mt-3 rounded-sm border border-emerald-700 bg-emerald-900/30 px-3 py-2 text-xs text-emerald-200">
-                    Team created. Share this code: <span className="font-mono font-semibold">{latestTeamCode}</span>
-                  </p>
-                )}
-                {(selectedEvent.teamMinSize != null || selectedEvent.teamMaxSize != null) && (
-                  <p className="mt-2 text-xs text-gray-400">
-                    Team size required to complete: {selectedEvent.teamMinSize ?? 2} - {selectedEvent.teamMaxSize ?? 4}. Members should join with Team Code or Invite Token.
-                  </p>
-                )}
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-medium leading-snug text-white">
+                          {event.name}
+                        </p>
 
-                {myTeamsByEventId[selectedEvent.id]?.isLeader && (
-                  <div className="mt-4 border-t border-gray-700 pt-4">
-                    <p className="mb-2 text-sm font-semibold text-gray-100">Invite Teammates</p>
-                    <p className="mb-3 text-xs text-gray-400">
-                      You are the leader. Current members: {myTeamsByEventId[selectedEvent.id].memberCount} / {selectedEvent.teamMaxSize || "∞"}.
-                    </p>
-                    <div className="grid gap-2">
-                      {Array.from({ length: Math.max(1, (selectedEvent.teamMaxSize || 4) - (myTeamsByEventId[selectedEvent.id]?.memberCount || 1)) }).map((_, i) => (
-                        <input
-                          key={`invite-${i}`}
-                          type="email"
-                          placeholder={`Teammate ${i + 1} Email`}
-                          value={inviteEmails[i] || ""}
-                          onChange={(e) => {
-                            const newEmails = [...inviteEmails];
-                            newEmails[i] = e.target.value;
-                            setInviteEmails(newEmails);
+                        {/* CTA badge */}
+                        {isRegistered ? (
+                          <span className="shrink-0 rounded-full bg-green-900/60 px-2.5 py-0.5 text-[10px] font-medium text-green-400">
+                            ✓ Registered
+                          </span>
+                        ) : (
+                          <span className="shrink-0 rounded-full border border-gray-700 px-2.5 py-0.5 text-[10px] text-gray-400">
+                            Register
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                        {event.participationMode === 'TEAM' ? (
+                          <span className="flex items-center gap-1">
+                            <Users size={11} /> Team
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <User size={11} /> Solo
+                          </span>
+                        )}
+                        {event.venue && (
+                          <span className="flex items-center gap-1">
+                            <MapPin size={11} /> {event.venue}
+                          </span>
+                        )}
+                        {event.date && (
+                          <span className="flex items-center gap-1">
+                            <Calendar size={11} />
+                            {new Date(event.date).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                            })}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Inline invite shortcut on card */}
+                      {myTeam?.canInvite && (
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            setSelectedEvent(event);
+                            setShowInviteModal(true);
                           }}
-                          className="rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400"
-                        />
-                      ))}
-                    </div>
-                    <button
-                      disabled={inviting || !selectedEvent.isActive}
-                      onClick={() => handleInviteTeammates(selectedEvent.id, myTeamsByEventId[selectedEvent.id].teamCode)}
-                      className="mt-3 w-full rounded-lg border border-purple-500 bg-purple-600/20 py-2 text-sm font-semibold text-purple-100 hover:bg-purple-600/30 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {inviting ? "SENDING INVITES..." : "SEND INVITES"}
+                          className="mt-2 text-[10px] text-gray-400 underline underline-offset-2 transition hover:text-white"
+                        >
+                          + Invite teammates
+                        </button>
+                      )}
                     </button>
-                  </div>
-                )}
-              </div>
-            )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
 
-            <div className="mb-6 flex flex-col gap-4 border-t border-gray-700 pt-6">
-              {selectedEvent.rulesUrl && (
-                <div>
-                  <h3 className="text-lg font-semibold text-white mb-3">Rules & Regulations</h3>
-                  <a
-                    href={selectedEvent.rulesUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`inline-flex items-center gap-2 rounded-sm border px-4 py-2 font-medium ${styles.rules}`}
-                  >
-                    <span>📄</span>
-                    <span>VIEW RULES & REGULATIONS</span>
-                  </a>
+        {/* ── Detail panel ────────────────────────────────────────────────── */}
+        <div className="hidden flex-1 overflow-y-auto md:block">
+          {selectedEvent ? (
+            <div className="mx-auto max-w-2xl px-8 py-8">
+              {/* Back (mobile fallback) */}
+              <button
+                onClick={() => setSelectedEvent(null)}
+                className="mb-4 flex items-center gap-1 text-xs text-gray-500 transition hover:text-white md:hidden"
+              >
+                <ChevronLeft size={14} /> Back to events
+              </button>
+
+              {/* Event header */}
+              <h2 className="text-xl font-bold">{selectedEvent.name}</h2>
+
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
+                {selectedEvent.venue && (
+                  <span className="flex items-center gap-1">
+                    <MapPin size={12} /> {selectedEvent.venue}
+                  </span>
+                )}
+                {(selectedEvent.date || selectedEvent.endDate) && (
+                  <span className="flex items-center gap-1">
+                    <Calendar size={12} />
+                    {formatSchedule(selectedEvent.date, selectedEvent.endDate)}
+                  </span>
+                )}
+                <span className="flex items-center gap-1">
+                  {selectedEvent.participationMode === 'TEAM' ? (
+                    <><Users size={12} /> Team Event</>
+                  ) : (
+                    <><User size={12} /> Solo Event</>
+                  )}
+                </span>
+              </div>
+
+              {/* Description */}
+              <p className="mt-5 text-sm leading-relaxed text-gray-300">
+                {selectedEvent.description || 'No description available.'}
+              </p>
+
+              {/* Prize / Fee */}
+              {(selectedEvent.prizePool || selectedEvent.entryFee != null) && (
+                <div className="mt-4 flex flex-wrap gap-3">
+                  {selectedEvent.prizePool && (
+                    <div className="rounded-lg border border-gray-700 bg-gray-800/50 px-4 py-2.5">
+                      <p className="text-[10px] uppercase tracking-wider text-gray-500">Prize Pool</p>
+                      <p className="mt-0.5 text-sm font-semibold text-white">{selectedEvent.prizePool}</p>
+                    </div>
+                  )}
+                  {selectedEvent.entryFee != null && (
+                    <div className="rounded-lg border border-gray-700 bg-gray-800/50 px-4 py-2.5">
+                      <p className="text-[10px] uppercase tracking-wider text-gray-500">Entry Fee</p>
+                      <p className="mt-0.5 text-sm font-semibold text-white">
+                        {selectedEvent.entryFee === 0 ? 'Free' : `₹${selectedEvent.entryFee}`}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {(selectedEvent.coordinatorName || selectedEvent.coordinatorPhone || selectedEvent.contactName || selectedEvent.contactPhone || selectedEvent.trainerName) && (
-                <div>
-                  <h3 className="text-lg font-semibold text-white mb-3">Contacts</h3>
-                  <div className="rounded-sm border border-gray-700 bg-gray-800/50 p-4 space-y-2">
-                    {selectedEvent.trainerName && <p className="text-sm text-gray-300">Trainer: {selectedEvent.trainerName}</p>}
-                    {selectedEvent.coordinatorName && <p className="text-sm font-semibold text-gray-200">{selectedEvent.coordinatorName}</p>}
-                    {selectedEvent.coordinatorPhone && (
-                      <a href={`tel:${selectedEvent.coordinatorPhone}`} className={`block font-mono text-sm ${styles.contact}`}>
-                        {selectedEvent.coordinatorPhone}
-                      </a>
+              {/* ── Registration section ─────────────────────────────────── */}
+              <div className="mt-6 border-t border-gray-800 pt-6">
+                {selectedEvent.participationMode === 'TEAM' ? (
+                  // ── Team event ─────────────────────────────────────────
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-300">Team Registration</h3>
+
+                    {myTeamsByEventId[selectedEvent.id] ? (
+                      // Already in a team
+                      <div className="space-y-2">
+                        {/* Registered status card */}
+                        <div className="rounded-lg border border-green-800/60 bg-green-950/30 px-4 py-3">
+                          <p className="text-xs font-medium text-green-400">✓ Registered for this event</p>
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <p className="text-xs text-gray-400">
+                              Team:{' '}
+                              <span className="font-medium text-gray-200">
+                                {myTeamsByEventId[selectedEvent.id].teamName}
+                              </span>
+                            </p>
+                            {myTeamsByEventId[selectedEvent.id].isLeader && (
+                              <span className="rounded-full bg-gray-700 px-2 py-0.5 text-[10px] font-medium text-gray-300">
+                                Leader
+                              </span>
+                            )}
+                          </div>
+                          {myTeamsByEventId[selectedEvent.id].teamCode && (
+                            <p className="mt-1.5 font-mono text-lg font-bold tracking-widest text-white">
+                              {myTeamsByEventId[selectedEvent.id].teamCode}
+                            </p>
+                          )}
+                          <p className="mt-0.5 text-xs text-gray-500">
+                            {myTeamsByEventId[selectedEvent.id].memberCount} /{' '}
+                            {selectedEvent.teamMaxSize ?? '∞'} members joined
+                          </p>
+                        </div>
+
+                        {/* Invite card — leader only, team open */}
+                        {myTeamsByEventId[selectedEvent.id].canInvite && (
+                          <button
+                            onClick={() => setShowInviteModal(true)}
+                            className="w-full rounded-lg border border-dashed border-gray-600 bg-gray-800/40 px-4 py-3 text-left transition hover:border-gray-400 hover:bg-gray-800"
+                          >
+                            <p className="text-sm font-medium text-white">+ Invite Teammates</p>
+                            <p className="mt-0.5 text-xs text-gray-400">
+                              Send email invites with team code &amp; join link
+                            </p>
+                          </button>
+                        )}
+
+                        {/* Non-leader notice */}
+                        {!myTeamsByEventId[selectedEvent.id].isLeader && (
+                          <p className="text-xs text-gray-500">
+                            You joined as a member. Only the team leader can invite others.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      // Not yet registered
+                      <>
+                        {/* Create team */}
+                        <div className="flex gap-2">
+                          <input
+                            value={teamName}
+                            onChange={e => setTeamName(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleCreateTeam()}
+                            placeholder="Team name (3–40 chars)"
+                            disabled={registering}
+                            className="w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-500 outline-none transition focus:border-gray-400 disabled:cursor-not-allowed disabled:opacity-50"
+                          />
+                          <button
+                            onClick={handleCreateTeam}
+                            disabled={registering || !teamName.trim()}
+                            className="shrink-0 rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Create
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="h-px flex-1 bg-gray-800" />
+                          <span className="text-xs text-gray-600">or join existing</span>
+                          <div className="h-px flex-1 bg-gray-800" />
+                        </div>
+
+                        {/* Join team */}
+                        <div className="flex gap-2">
+                          <input
+                            value={joinCode}
+                            onChange={e => setJoinCode(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleJoinTeam()}
+                            placeholder="Enter join code"
+                            disabled={registering}
+                            className="w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-500 outline-none transition focus:border-gray-400 disabled:cursor-not-allowed disabled:opacity-50"
+                          />
+                          <button
+                            onClick={handleJoinTeam}
+                            disabled={registering || !joinCode.trim()}
+                            className="shrink-0 rounded-md border border-gray-700 px-4 py-2 text-sm text-white transition hover:border-gray-400 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Join
+                          </button>
+                        </div>
+
+                        {/* Newly created team code */}
+                        {latestTeamCode && (
+                          <div className="rounded-lg border border-gray-700 bg-gray-800 px-4 py-3">
+                            <p className="text-xs text-gray-400">Team created! Share this code:</p>
+                            <p className="mt-1 font-mono text-2xl font-bold tracking-widest text-white">
+                              {latestTeamCode}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Team size info */}
+                        {(selectedEvent.teamMinSize != null || selectedEvent.teamMaxSize != null) && (
+                          <p className="text-xs text-gray-500">
+                            Team size:{' '}
+                            {selectedEvent.teamMinSize ?? 2}–{selectedEvent.teamMaxSize ?? 4} members.
+                            Others join using the team code or invite link.
+                          </p>
+                        )}
+                      </>
                     )}
-                    {selectedEvent.contactName && <p className="text-sm font-semibold text-gray-200">{selectedEvent.contactName}</p>}
-                    {selectedEvent.contactPhone && (
-                      <a href={`tel:${selectedEvent.contactPhone}`} className={`block font-mono text-sm ${styles.contact}`}>
-                        {selectedEvent.contactPhone}
-                      </a>
+                  </div>
+                ) : (
+                  // ── Solo event ─────────────────────────────────────────
+                  <div>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-300">Registration</h3>
+                    {soloEventIds.includes(selectedEvent.id) ? (
+                      <div className="rounded-lg border border-green-800/60 bg-green-950/30 px-4 py-3">
+                        <p className="text-xs font-medium text-green-400">✓ Registered for this event</p>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleRegister(selectedEvent.id)}
+                        disabled={registering}
+                        className="rounded-md bg-white px-5 py-2.5 text-sm font-medium text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {registering ? 'Registering…' : 'Register Now'}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Feedback message */}
+                {feedback && (
+                  <p
+                    className={`mt-2 text-xs ${
+                      feedbackType === 'error' ? 'text-red-400' : 'text-green-400'
+                    }`}
+                  >
+                    {feedback}
+                  </p>
+                )}
+              </div>
+
+              {/* ── Contacts ─────────────────────────────────────────────── */}
+              {(selectedEvent.trainerName ||
+                selectedEvent.coordinatorName ||
+                selectedEvent.contactName) && (
+                <div className="mt-6 border-t border-gray-800 pt-6">
+                  <h3 className="mb-3 text-sm font-semibold text-gray-300">Contacts</h3>
+                  <div className="space-y-2 text-xs text-gray-400">
+                    {selectedEvent.trainerName && (
+                      <p>
+                        <span className="text-gray-500">Trainer: </span>
+                        {selectedEvent.trainerName}
+                      </p>
+                    )}
+                    {selectedEvent.coordinatorName && (
+                      <p>
+                        <span className="text-gray-500">Coordinator: </span>
+                        {selectedEvent.coordinatorName}
+                        {selectedEvent.coordinatorPhone && (
+                          <a
+                            href={`tel:${selectedEvent.coordinatorPhone}`}
+                            className="ml-2 text-gray-300 underline underline-offset-2 transition hover:text-white"
+                          >
+                            {selectedEvent.coordinatorPhone}
+                          </a>
+                        )}
+                      </p>
+                    )}
+                    {selectedEvent.contactName && (
+                      <p>
+                        <span className="text-gray-500">Contact: </span>
+                        {selectedEvent.contactName}
+                        {selectedEvent.contactPhone && (
+                          <a
+                            href={`tel:${selectedEvent.contactPhone}`}
+                            className="ml-2 text-gray-300 underline underline-offset-2 transition hover:text-white"
+                          >
+                            {selectedEvent.contactPhone}
+                          </a>
+                        )}
+                      </p>
                     )}
                   </div>
                 </div>
               )}
             </div>
-
-            <button
-              disabled={
-                registering ||
-                creatingTeam ||
-                completingTeam ||
-                !selectedEvent.isActive ||
-                (selectedEvent.spotsLeft != null && selectedEvent.spotsLeft <= 0) ||
-                (selectedEvent.teamsLeft != null && selectedEvent.teamsLeft <= 0) ||
-                !!myTeamsByEventId[selectedEvent.id]
-              }
-              onClick={() => handleRegister(selectedEvent)}
-              className="w-full rounded-lg bg-gray-100 py-3 font-semibold text-gray-900 hover:bg-gray-200 disabled:cursor-not-allowed disabled:bg-gray-300"
-            >
-              {!selectedEvent.isActive
-                ? "REGISTRATION CLOSED"
-                : selectedEvent.spotsLeft != null && selectedEvent.spotsLeft <= 0
-                ? "EVENT FULL"
-                : selectedEvent.teamsLeft != null && selectedEvent.teamsLeft <= 0
-                ? "TEAM SLOTS FULL"
-                : myTeamsByEventId[selectedEvent.id]
-                ? "ALREADY REGISTERED"
-                : registering
-                ? selectedEvent.participationMode === "TEAM"
-                  ? "JOINING TEAM..."
-                  : "REGISTERING..."
-                : selectedEvent.participationMode === "TEAM"
-                ? "JOIN TEAM"
-                : "REGISTER FOR THIS EVENT"}
-            </button>
-            {selectedEvent.participationMode === "TEAM" && (
-              <button
-                disabled={completingTeam || registering || creatingTeam || !selectedEvent.isActive || (myTeamsByEventId[selectedEvent.id] && !myTeamsByEventId[selectedEvent.id].isLeader)}
-                onClick={() => handleCompleteTeam(selectedEvent)}
-                className="mt-3 w-full rounded-lg border border-gray-500 py-3 font-semibold text-gray-100 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {completingTeam ? "COMPLETING TEAM..." : "COMPLETE & LOCK TEAM (LEADER)"}
-              </button>
-            )}
-            {feedback && <p className="mt-3 text-xs text-gray-300">{feedback}</p>}
-          </div>
+          ) : (
+            // Empty state
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <Calendar size={48} className="mb-4 text-gray-800" />
+              <p className="text-sm text-gray-600">Select an event to view details</p>
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* ── Invite modal ──────────────────────────────────────────────────── */}
+      {showInviteModal && selectedEvent && myTeamsByEventId[selectedEvent.id] && (
+        <InviteModal
+          eventId={selectedEvent.id}
+          teamCode={myTeamsByEventId[selectedEvent.id].teamCode!}
+          teamName={myTeamsByEventId[selectedEvent.id].teamName}
+          eventName={selectedEvent.name}
+          memberCount={myTeamsByEventId[selectedEvent.id].memberCount}
+          teamMaxSize={selectedEvent.teamMaxSize ?? 4}
+          onClose={() => setShowInviteModal(false)}
+          onSuccess={fetchMyRegistrations}
+        />
       )}
     </div>
-  );
-}
-
-export default function EventCategoryPage(props: Props) {
-  const { fallback, ...rest } = props;
-  
-  const defaultFallback = (
-    <div className="flex justify-center py-20 text-gray-500">
-      Loading events...
-    </div>
-  );
-
-  return (
-    <Suspense fallback={fallback || defaultFallback}>
-      <EventCategoryContent {...rest} />
-    </Suspense>
   );
 }

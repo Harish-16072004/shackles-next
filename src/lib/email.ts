@@ -1,47 +1,34 @@
 import nodemailer from 'nodemailer';
-import { getRequiredEnv } from '@/lib/env';
 import { safeLogError } from '@/lib/safe-log';
 
-// Resend API key (optional, for fallback)
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const resendApiKey = process.env.RESEND_API_KEY;
-
-// SMTP Configuration for Nodemailer fallback
-// We use process.env instead of getRequiredEnv so we can use Ethereal in dev if missing
 const smtpHost = process.env.SMTP_HOST || '';
 const smtpPort = Number(process.env.SMTP_PORT || 587);
 const smtpSecure = process.env.SMTP_SECURE === 'true';
 const smtpUser = process.env.SMTP_USER || '';
 const smtpPass = process.env.SMTP_PASS || '';
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const fromAddress = process.env.SMTP_FROM || '"Shackles Symposium" <noreply@shacklessymposium.com>';
 
-let transporter: nodemailer.Transporter | null = null;
-
-async function getTransporter() {
-  if (transporter) return transporter;
-
-  transporter = nodemailer.createTransport({
-    host: smtpHost,
-    port: smtpPort,
-    secure: smtpSecure,
-    auth: {
-      user: smtpUser,
-      pass: smtpPass,
-    },
-  });
-  return transporter;
+// Lazy-create transporter only when first needed
+let _transporter: nodemailer.Transporter | null = null;
+function getTransporter(): nodemailer.Transporter {
+  if (!_transporter) {
+    if (!smtpHost) throw new Error('SMTP_HOST is not configured');
+    _transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      auth: { user: smtpUser, pass: smtpPass },
+    });
+  }
+  return _transporter;
 }
 
-/**
- * Send email via Resend (primary) or Nodemailer (fallback)
- * Returns success status and which service was used
- */
-async function sendViaResend(email: string, subject: string, html: string) {
-  if (!resendApiKey) {
-    return { success: false, service: null, error: 'Resend API key not configured' };
-  }
-
+async function sendViaResend(to: string, subject: string, html: string): Promise<{ success: boolean; error?: string }> {
+  if (!resendApiKey) return { success: false, error: 'Resend API key not configured' };
   try {
-    const response = await fetch('https://api.resend.com/emails', {
+    const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -49,98 +36,83 @@ async function sendViaResend(email: string, subject: string, html: string) {
       },
       body: JSON.stringify({
         from: process.env.RESEND_FROM_EMAIL || 'noreply@shackles.com',
-        to: email,
+        to,
         subject,
         html,
       }),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      return { success: false, service: 'resend', error: JSON.stringify(error) };
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { success: false, error: JSON.stringify(err) };
     }
-
-    return { success: true, service: 'resend' };
+    return { success: true };
   } catch (err) {
-    return { success: false, service: 'resend', error: String(err) };
+    return { success: false, error: String(err) };
   }
 }
 
-/**
- * Send email via Nodemailer
- */
-async function sendViaNodemailer(email: string, subject: string, html: string) {
+async function sendViaNodemailer(to: string, subject: string, html: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const tp = await getTransporter();
-    const info = await tp.sendMail({
-      from: '"Shackles Symposium" <noreply@shacklessymposium.com>',
-      to: email,
-      subject,
-      html,
-    });
-    
-    return { success: true, service: 'nodemailer' };
-  } catch (error) {
-    return { success: false, service: 'nodemailer', error: String(error) };
+    const transport = getTransporter();
+    await transport.sendMail({ from: fromAddress, to, subject, html });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: String(err) };
   }
 }
 
-/**
- * Hybrid send: Try Resend first, fall back to Nodemailer
- */
-async function sendEmailHybrid(email: string, subject: string, html: string) {
-  // Try Resend first in production if API key exists
+async function sendEmailHybrid(to: string, subject: string, html: string): Promise<{ success: boolean; error?: string }> {
+  // In production try Resend first
   if (resendApiKey && process.env.NODE_ENV !== 'development') {
-    const result = await sendViaResend(email, subject, html);
+    const result = await sendViaResend(to, subject, html);
     if (result.success) {
-      console.log(`[EMAIL] Sent via ${result.service} to ${email}`);
-      return { success: true, service: result.service };
+      console.log(`[EMAIL] Sent via Resend to ${to}`);
+      return { success: true };
     }
-    console.warn(`[EMAIL] Resend failed: ${result.error}, falling back to Nodemailer`);
+    console.warn(`[EMAIL] Resend failed (${result.error}), falling back to Nodemailer`);
   }
-
-  // Fall back to Nodemailer (always used in development via Ethereal)
-  const result = await sendViaNodemailer(email, subject, html);
+  const result = await sendViaNodemailer(to, subject, html);
   if (result.success) {
-    console.log(`[EMAIL] Sent via ${result.service} to ${email}`);
-    return { success: true, service: result.service };
+    console.log(`[EMAIL] Sent via Nodemailer to ${to}`);
+    return { success: true };
   }
-
-  console.error(`[EMAIL] Both Resend and Nodemailer failed for ${email}. Error: ${result.error}`);
+  console.error(`[EMAIL] Both transports failed for ${to}: ${result.error}`);
   return { success: false, error: result.error };
 }
 
-export const sendResetEmail = async (email: string, token: string) => {
+// ─── Password Reset ───────────────────────────────────────────────────────────
+
+export async function sendResetEmail(email: string, token: string): Promise<{ success: boolean; error?: string }> {
   const resetLink = `${appUrl}/reset-password?token=${token}`;
 
-  // For development, log the link
   if (process.env.NODE_ENV !== 'production') {
-    console.log('----------------------------------------');
-    console.log(`Reset Password Link for ${email}:`);
-    console.log(resetLink);
-    console.log('----------------------------------------');
+    console.log('--- Reset Link ---');
+    console.log(`${email}: ${resetLink}`);
+    console.log('-----------------');
   }
 
   const html = `
-    <div style="font-family: sans-serif; padding: 20px;">
-      <h2>Password Reset Request</h2>
+    <div style="font-family:sans-serif;padding:24px;max-width:480px">
+      <h2 style="margin-bottom:8px">Password Reset</h2>
       <p>You requested a password reset for your Shackles Symposium account.</p>
-      <p>Click the button below to set a new password:</p>
-      <a href="${resetLink}" style="display: inline-block; padding: 10px 20px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px;">Reset Password</a>
-      <p style="margin-top: 20px; font-size: 12px; color: #666;">This link expires in 15 minutes.</p>
-    </div>
-  `;
+      <a href="${resetLink}"
+         style="display:inline-block;margin-top:16px;padding:10px 24px;background:#000;color:#fff;text-decoration:none;border-radius:6px">
+        Reset Password
+      </a>
+      <p style="margin-top:20px;font-size:12px;color:#666">This link expires in 15 minutes.</p>
+    </div>`;
 
   try {
-    const result = await sendEmailHybrid(email, 'Reset Your Password', html);
-    return result.success ? { success: true } : { success: false, error: result.error };
-  } catch (error) {
-    safeLogError("Email send error", error, { email });
-    return { success: false, error: "Failed to send email" };
+    return await sendEmailHybrid(email, 'Reset Your Password — Shackles Symposium', html);
+  } catch (err) {
+    safeLogError('sendResetEmail error', err, { email });
+    return { success: false, error: 'Failed to send email' };
   }
-};
+}
 
-export const sendTeamInviteEmail = async (params: {
+// ─── Team Invite ──────────────────────────────────────────────────────────────
+
+export async function sendTeamInviteEmail(params: {
   toEmail: string;
   leaderName: string;
   eventName: string;
@@ -148,37 +120,44 @@ export const sendTeamInviteEmail = async (params: {
   teamCode: string;
   inviteToken: string;
   expiresAt: Date;
-}) => {
-  const inviteLink = `${appUrl}/events?inviteToken=${encodeURIComponent(params.inviteToken)}&teamCode=${encodeURIComponent(params.teamCode)}&event=${encodeURIComponent(params.eventName)}`;
+}): Promise<{ success: boolean; inviteLink: string; error?: string }> {
+  // Clean join link — no event name in URL (avoids encoding issues)
+  const inviteLink = `${appUrl}/events?inviteToken=${encodeURIComponent(params.inviteToken)}&teamCode=${encodeURIComponent(params.teamCode)}`;
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log('----------------------------------------');
-    console.log(`Team Invite Link for ${params.toEmail}:`);
-    console.log(inviteLink);
-    console.log('----------------------------------------');
+    console.log('--- Team Invite Link ---');
+    console.log(`${params.toEmail}: ${inviteLink}`);
+    console.log('------------------------');
   }
 
   const html = `
-    <div style="font-family: sans-serif; padding: 20px;">
-      <h2>You're invited to join a team</h2>
-      <p><strong>${params.leaderName}</strong> invited you to join team <strong>${params.teamName}</strong> for <strong>${params.eventName}</strong>.</p>
-      <p>Team Code: <strong>${params.teamCode}</strong></p>
-      <p>Click below, login, then join using this invite:</p>
-      <a href="${inviteLink}" style="display: inline-block; padding: 10px 20px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px;">Open Join Link</a>
-      <p style="margin-top: 14px; font-size: 12px; color: #666;">Invite expires at ${params.expiresAt.toUTCString()}.</p>
-    </div>
-  `;
+    <div style="font-family:sans-serif;padding:24px;max-width:480px">
+      <h2 style="margin-bottom:8px">You're invited to join a team!</h2>
+      <p><strong>${params.leaderName}</strong> has invited you to join team
+         <strong>${params.teamName}</strong> for <strong>${params.eventName}</strong>.</p>
+      <p style="margin-top:12px">
+        <span style="font-size:13px;color:#555">Team Code:</span><br>
+        <strong style="font-size:20px;letter-spacing:2px;font-family:monospace">${params.teamCode}</strong>
+      </p>
+      <p style="margin-top:8px;font-size:13px;color:#555">
+        Click the button below to open the event page. Log in and the invite will auto-apply.
+      </p>
+      <a href="${inviteLink}"
+         style="display:inline-block;margin-top:16px;padding:10px 24px;background:#000;color:#fff;text-decoration:none;border-radius:6px">
+        Join Team
+      </a>
+      <p style="margin-top:20px;font-size:12px;color:#666">
+        Invite expires at ${params.expiresAt.toUTCString()}.
+      </p>
+    </div>`;
 
   try {
-    const result = await sendEmailHybrid(params.toEmail, `Team Invite: ${params.eventName}`, html);
-    return { success: result.success, inviteLink, error: result.error };
-  } catch (error) {
-    safeLogError("Team invite email send error", error, { email: params.toEmail, teamCode: params.teamCode });
-    return { success: false, error: "Failed to send invite email", inviteLink };
+    const result = await sendEmailHybrid(params.toEmail, `Team Invite: ${params.eventName} — Shackles`, html);
+    return { ...result, inviteLink };
+  } catch (err) {
+    safeLogError('sendTeamInviteEmail error', err, { email: params.toEmail });
+    return { success: false, error: 'Failed to send invite email', inviteLink };
   }
-};
+}
 
-/**
- * Export sendEmailHybrid for use in other email functions
- */
 export { sendEmailHybrid };

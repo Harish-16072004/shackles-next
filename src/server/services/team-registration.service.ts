@@ -45,6 +45,31 @@ export function normalizeTeamName(name: string) {
   return name.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
+export function validateTeamName(name: string, normalizedName: string): { isValid: boolean; error?: string; reason?: string } {
+  const NAME_REGEX = /^[A-Z0-9 _-]{3,40}$/;
+  
+  if (!NAME_REGEX.test(normalizedName)) {
+    return {
+      isValid: false,
+      reason: "INVALID_TEAM_NAME",
+      error: "Team name must be 3-40 characters and contain only letters, numbers, spaces, hyphens or underscores."
+    };
+  }
+
+  const bannedWords = ["TEST", "ADMIN", "FUCK", "SHIT", "DUMMY", "BITCH", "CUNT", "MODERATOR", "ROOT"];
+  for (const word of bannedWords) {
+    if (normalizedName.includes(word)) {
+      return {
+        isValid: false,
+        reason: "INAPPROPRIATE_TEAM_NAME",
+        error: "Please choose a professional team name."
+      };
+    }
+  }
+
+  return { isValid: true };
+}
+
 export function normalizeName(name: string) {
   return name.trim().toUpperCase();
 }
@@ -89,7 +114,7 @@ export async function generateUniqueTeamCode(
  * Generate a short, URL-safe join code (8 uppercase alphanumeric chars).
  * Globally unique across all teams.
  */
-async function generateUniqueJoinCode(db: DbClient): Promise<string> {
+export async function generateUniqueJoinCode(db: DbClient): Promise<string> {
   const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I ambiguity
   for (let attempt = 0; attempt < 10; attempt += 1) {
     let code = "";
@@ -144,6 +169,11 @@ export async function createTeam(input: {
   const normalizedTeam = normalizeTeamName(input.teamName);
   if (!normalizedTeam) {
     return { success: false, reason: "INVALID_INPUT", error: "Team name is required." };
+  }
+
+  const nameCheck = validateTeamName(input.teamName, normalizedTeam);
+  if (!nameCheck.isValid) {
+    return { success: false, reason: nameCheck.reason!, error: nameCheck.error! };
   }
 
   // Validate leader
@@ -592,6 +622,11 @@ export async function addMemberToTeamEvent(input: {
     return { success: false, reason: "INVALID_INPUT", error: "Team name is required." };
   }
 
+  const nameCheck = validateTeamName(input.teamName, normalizedTeam);
+  if (!nameCheck.isValid) {
+    return { success: false, reason: nameCheck.reason!, error: nameCheck.error! };
+  }
+
   const user = await input.db.user.findUnique({
     where: { id: input.userId },
     include: { payment: true },
@@ -752,6 +787,11 @@ export async function bulkRegisterTeamByShacklesIds(input: {
   const normalizedTeam = normalizeTeamName(input.teamName || "");
   if (!normalizedTeam) {
     return { success: false, reason: "INVALID_INPUT", error: "Team name is required." };
+  }
+
+  const nameCheck = validateTeamName(input.teamName || "", normalizedTeam);
+  if (!nameCheck.isValid) {
+    return { success: false, reason: nameCheck.reason!, error: nameCheck.error! };
   }
 
   const normalizedIds = parseUniqueShacklesIds(
@@ -1037,6 +1077,11 @@ export async function completeExistingTeamRegistration(input: {
   const normalizedTeam = normalizeTeamName(input.teamName);
   if (!normalizedTeam) {
     return { success: false, reason: "INVALID_INPUT", error: "Team name is required." };
+  }
+
+  const nameCheck = validateTeamName(input.teamName, normalizedTeam);
+  if (!nameCheck.isValid) {
+    return { success: false, reason: nameCheck.reason!, error: nameCheck.error! };
   }
 
   const event = await input.db.event.findFirst({

@@ -124,6 +124,10 @@ function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props,
   const [feedback, setFeedback] = useState("");
   const styles = accentStyles[accent];
 
+  const [myTeamsByEventId, setMyTeamsByEventId] = useState<Record<string, any>>({});
+  const [inviteEmails, setInviteEmails] = useState<string[]>([]);
+  const [inviting, setInviting] = useState(false);
+
   useEffect(() => {
     const incomingToken = searchParams.get("inviteToken") || "";
     const incomingCode = searchParams.get("teamCode") || "";
@@ -145,8 +149,28 @@ function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props,
     }
   }, [category]);
 
+  const loadMyTeams = useCallback(async () => {
+    try {
+      const response = await fetch("/api/events/my-registrations", {
+        headers: { "Content-Type": "application/json" }
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.registrations && Array.isArray(data.registrations)) {
+        const mapping: Record<string, any> = {};
+        for (const reg of data.registrations) {
+          mapping[reg.eventId] = reg;
+        }
+        setMyTeamsByEventId(mapping);
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }, []);
+
   useEffect(() => {
     void loadEvents();
+    void loadMyTeams();
 
     let source: EventSource | null = null;
     let fallbackInterval: ReturnType<typeof setInterval> | null = null;
@@ -343,6 +367,42 @@ function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props,
     }
   }
 
+  async function handleInviteTeammates(eventId: string, teamCode: string) {
+    const validEmails = inviteEmails.map(e => e.trim()).filter(Boolean);
+    if (validEmails.length === 0) {
+      setFeedback("Please enter at least one valid email to invite.");
+      return;
+    }
+
+    try {
+      setInviting(true);
+      setFeedback("");
+
+      const response = await fetch("/api/team/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId,
+          teamCode,
+          emails: validEmails
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setFeedback(data.error || "Failed to send invites.");
+      } else {
+        setFeedback(data.message || `Successfully sent ${data.sentCount} invites.`);
+        setInviteEmails([]); // Clear form on success
+      }
+
+    } catch (e) {
+      setFeedback("An error occurred while sending invites.");
+    } finally {
+      setInviting(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-12 pb-8">
       <section className="flex flex-col items-center gap-3 text-center">
@@ -357,16 +417,31 @@ function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props,
       <section className="grid gap-4 md:grid-cols-3">
         {events.map((event) => {
           const isClosed = !event.isActive || (event.spotsLeft != null && event.spotsLeft <= 0) || (event.teamsLeft != null && event.teamsLeft <= 0);
+          const eventRegInfo = myTeamsByEventId[event.id];
+
           return (
             <button
               key={event.id}
               onClick={() => {
                 setSelectedEvent(event);
                 setFeedback("");
+                const regInfo = myTeamsByEventId[event.id];
+                if (regInfo?.teamCode) {
+                  setTeamCode(regInfo.teamCode);
+                  setLatestTeamCode(regInfo.teamCode);
+                }
               }}
               className={`flex h-full flex-col gap-3 rounded-2xl border-2 border-gray-200 bg-white p-6 text-left shadow-xs transition-all hover:-translate-y-0.5 ${styles.cardBorder}`}
             >
-              <div className="h-4 w-4 rounded-full bg-white/50" />
+              <div className="flex justify-between items-start w-full">
+                <div className="h-4 w-4 rounded-full bg-white/50" />
+                {eventRegInfo?.isLeader && (
+                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">Team Leader</span>
+                )}
+                {eventRegInfo && !eventRegInfo.isLeader && (
+                  <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-semibold text-cyan-700">Registered</span>
+                )}
+              </div>
               <h2 className="text-xl font-semibold text-gray-900 leading-tight">{event.name}</h2>
               <p className="text-sm text-gray-600 leading-relaxed">{(event.description || "No description available").substring(0, 120)}...</p>
               <p className="text-xs text-gray-500 mt-auto">{isClosed ? "Closed" : "Open"}</p>
@@ -414,14 +489,15 @@ function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props,
                       value={teamName}
                       onChange={(event) => setTeamName(event.target.value)}
                       placeholder="Team name"
-                      className="w-full rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400"
+                      disabled={!!myTeamsByEventId[selectedEvent.id]}
+                      className="w-full rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     <button
-                      disabled={creatingTeam || registering || completingTeam || !selectedEvent.isActive}
+                      disabled={creatingTeam || registering || completingTeam || !selectedEvent.isActive || !!myTeamsByEventId[selectedEvent.id]}
                       onClick={() => handleCreateTeam(selectedEvent)}
                       className="mt-3 w-full rounded-lg border border-emerald-500 bg-emerald-600/20 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-600/30 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {creatingTeam ? "CREATING TEAM..." : "CREATE TEAM (LEADER)"}
+                      {creatingTeam ? "CREATING TEAM..." : myTeamsByEventId[selectedEvent.id] ? "ALREADY REGISTERED" : "CREATE TEAM (LEADER)"}
                     </button>
                   </div>
                   <div className="rounded-sm border border-gray-700 bg-gray-900/50 p-3">
@@ -431,21 +507,23 @@ function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props,
                         value={teamCode}
                         onChange={(event) => setTeamCode(event.target.value.toUpperCase())}
                         placeholder="Team code"
-                        className="rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400"
+                        disabled={!!myTeamsByEventId[selectedEvent.id]}
+                        className="rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                       <input
                         value={inviteToken}
                         onChange={(event) => setInviteToken(event.target.value)}
                         placeholder="Invite token (optional)"
-                        className="rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400"
+                        disabled={!!myTeamsByEventId[selectedEvent.id]}
+                        className="rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                     </div>
                     <button
-                      disabled={registering || creatingTeam || completingTeam || !selectedEvent.isActive}
+                      disabled={registering || creatingTeam || completingTeam || !selectedEvent.isActive || !!myTeamsByEventId[selectedEvent.id]}
                       onClick={() => handleRegister(selectedEvent)}
                       className="mt-3 w-full rounded-lg border border-cyan-500 bg-cyan-600/20 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-600/30 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {registering ? "JOINING TEAM..." : "JOIN TEAM"}
+                      {registering ? "JOINING TEAM..." : myTeamsByEventId[selectedEvent.id] ? "ALREADY REGISTERED" : "JOIN TEAM"}
                     </button>
                   </div>
                 </div>
@@ -458,6 +536,38 @@ function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props,
                   <p className="mt-2 text-xs text-gray-400">
                     Team size required to complete: {selectedEvent.teamMinSize ?? 2} - {selectedEvent.teamMaxSize ?? 4}. Members should join with Team Code or Invite Token.
                   </p>
+                )}
+
+                {myTeamsByEventId[selectedEvent.id]?.isLeader && (
+                  <div className="mt-4 border-t border-gray-700 pt-4">
+                    <p className="mb-2 text-sm font-semibold text-gray-100">Invite Teammates</p>
+                    <p className="mb-3 text-xs text-gray-400">
+                      You are the leader. Current members: {myTeamsByEventId[selectedEvent.id].memberCount} / {selectedEvent.teamMaxSize || "∞"}.
+                    </p>
+                    <div className="grid gap-2">
+                      {Array.from({ length: Math.max(1, (selectedEvent.teamMaxSize || 4) - (myTeamsByEventId[selectedEvent.id]?.memberCount || 1)) }).map((_, i) => (
+                        <input
+                          key={`invite-${i}`}
+                          type="email"
+                          placeholder={`Teammate ${i + 1} Email`}
+                          value={inviteEmails[i] || ""}
+                          onChange={(e) => {
+                            const newEmails = [...inviteEmails];
+                            newEmails[i] = e.target.value;
+                            setInviteEmails(newEmails);
+                          }}
+                          className="rounded-sm border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white outline-hidden focus:border-gray-400"
+                        />
+                      ))}
+                    </div>
+                    <button
+                      disabled={inviting || !selectedEvent.isActive}
+                      onClick={() => handleInviteTeammates(selectedEvent.id, myTeamsByEventId[selectedEvent.id].teamCode)}
+                      className="mt-3 w-full rounded-lg border border-purple-500 bg-purple-600/20 py-2 text-sm font-semibold text-purple-100 hover:bg-purple-600/30 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {inviting ? "SENDING INVITES..." : "SEND INVITES"}
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -507,7 +617,8 @@ function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props,
                 completingTeam ||
                 !selectedEvent.isActive ||
                 (selectedEvent.spotsLeft != null && selectedEvent.spotsLeft <= 0) ||
-                (selectedEvent.teamsLeft != null && selectedEvent.teamsLeft <= 0)
+                (selectedEvent.teamsLeft != null && selectedEvent.teamsLeft <= 0) ||
+                !!myTeamsByEventId[selectedEvent.id]
               }
               onClick={() => handleRegister(selectedEvent)}
               className="w-full rounded-lg bg-gray-100 py-3 font-semibold text-gray-900 hover:bg-gray-200 disabled:cursor-not-allowed disabled:bg-gray-300"
@@ -518,6 +629,8 @@ function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props,
                 ? "EVENT FULL"
                 : selectedEvent.teamsLeft != null && selectedEvent.teamsLeft <= 0
                 ? "TEAM SLOTS FULL"
+                : myTeamsByEventId[selectedEvent.id]
+                ? "ALREADY REGISTERED"
                 : registering
                 ? selectedEvent.participationMode === "TEAM"
                   ? "JOINING TEAM..."
@@ -528,7 +641,7 @@ function EventCategoryContent({ category, title, subtitle, accent }: Omit<Props,
             </button>
             {selectedEvent.participationMode === "TEAM" && (
               <button
-                disabled={completingTeam || registering || creatingTeam || !selectedEvent.isActive}
+                disabled={completingTeam || registering || creatingTeam || !selectedEvent.isActive || (myTeamsByEventId[selectedEvent.id] && !myTeamsByEventId[selectedEvent.id].isLeader)}
                 onClick={() => handleCompleteTeam(selectedEvent)}
                 className="mt-3 w-full rounded-lg border border-gray-500 py-3 font-semibold text-gray-100 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
               >

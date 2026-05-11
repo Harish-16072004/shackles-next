@@ -7,14 +7,14 @@ import { createRateLimiter, rateLimitPresets } from "@/lib/rate-limit";
 import { TeamMemberRole, TeamStatus } from "@prisma/client";
 import { sendTeamInviteEmail } from "@/lib/email";
 import { getActiveYear } from "@/lib/edition";
+import { normalizeTeamName, validateTeamName, generateUniqueJoinCode } from "@/server/services/team-registration.service";
+import { sendTeamCreatedEmail } from "@/server/services/email.service";
 
 function normalizeName(name: string) {
   return name.trim().toUpperCase();
 }
 
-function normalizeTeamName(name: string) {
-  return name.trim().replace(/\s+/g, " ").toUpperCase();
-}
+// Replaced with import: function normalizeTeamName(name: string) {
 
 function normalizeTeamCode(code: string) {
   return code.trim().toUpperCase().replace(/\s+/g, "");
@@ -273,6 +273,11 @@ export async function POST(request: Request) {
         }
 
         const normalizedTeam = normalizeTeamName(teamNameInput);
+        const nameCheck = validateTeamName(teamNameInput, normalizedTeam);
+        if (!nameCheck.isValid) {
+          return { ok: false as const, code: 400, error: nameCheck.error || "Invalid team name" };
+        }
+
         const byName = await tx.team.findUnique({
           where: {
             eventId_nameNormalized: {
@@ -301,6 +306,7 @@ export async function POST(request: Request) {
         }
 
         const teamCode = await generateUniqueTeamCode(tx, event.id);
+        const joinCode = await generateUniqueJoinCode(tx);
 
         const team = await tx.team.create({
           data: {
@@ -308,6 +314,7 @@ export async function POST(request: Request) {
             name: teamNameInput,
             nameNormalized: normalizedTeam,
             teamCode,
+            joinCode,
             memberCount: 1,
             status: TeamStatus.DRAFT,
             leaderUserId: user.id,
@@ -333,6 +340,15 @@ export async function POST(request: Request) {
           code: 200,
           message: `Team created. Share Team Code: ${team.teamCode}`,
           teamCode: team.teamCode,
+          teamCreatedPayload: {
+            leaderEmail: user.email,
+            leaderName: [user.firstName, user.lastName].filter(Boolean).join(" "),
+            teamName: team.name,
+            eventName: event.name,
+            teamCode: team.teamCode,
+            joinCode: joinCode,
+            joinUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/events?joinCode=${joinCode}`
+          }
         };
       }
 
@@ -611,6 +627,13 @@ export async function POST(request: Request) {
     }
 
     const invitePayload = "inviteToSend" in result ? result.inviteToSend : null;
+    const teamCreatedPayload = "teamCreatedPayload" in result ? result.teamCreatedPayload : null;
+
+    if (teamCreatedPayload && teamCreatedPayload.leaderEmail) {
+      // Intentionally not awaiting so it doesn't block the response, or we can await. 
+      // The snippet showed synchronous await for invite send, let's keep it consistent.
+      await sendTeamCreatedEmail(teamCreatedPayload);
+    }
 
     if (invitePayload) {
       const emailResult = await sendTeamInviteEmail(invitePayload);

@@ -2,6 +2,7 @@
     "chat.tools.terminal.autoApprove": {
         "npx prisma": true,
         "npm install": true,
-        "docker-compose": true
+        "docker-compose": true,
+        "Set-Content": true
     }
 }

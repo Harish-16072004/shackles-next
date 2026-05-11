@@ -76,9 +76,15 @@ export default function StaffManagementPage() {
         const res = await listStaffUsers()
         if (res.success) setStaffUsers(res.data || [])
       } else {
+        const errorText = typeof result.error === 'string' 
+          ? result.error 
+          : typeof result.error === 'object' && result.error !== null
+            ? Object.values(result.error).flat().join(', ')
+            : 'Failed to create staff user'
+            
         setMessage({
           type: 'error',
-          text: typeof result.error === 'string' ? result.error : 'Failed to create staff user',
+          text: errorText,
         })
       }
     } catch (error) {

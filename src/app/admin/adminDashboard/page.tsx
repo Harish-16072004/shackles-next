@@ -353,18 +353,18 @@ export default async function AdminDashboard() {
               </div>
               <p className="text-gray-900 font-semibold text-sm">Live Dashboard</p>
             </a>
+
+            {/* Staff Assignment */}
+            <a href="/admin/staff-management" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
+              <div className="bg-yellow-100 w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <svg className="w-8 h-8 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
+                </svg>
+              </div>
+              <p className="text-gray-900 font-semibold text-sm">Staff Assignment</p>
+            </a>
           </div>
         </div>
-
-        {/* Staff Assignment */}
-        <a href="/admin/staff-management" className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center">
-          <div className="bg-yellow-100 w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-3">
-            <svg className="w-8 h-8 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
-            </svg>
-          </div>
-          <p className="text-gray-900 font-semibold text-sm">Staff Assignment</p>
-        </a>
 
 
         {/* Event-wise Registrations */}

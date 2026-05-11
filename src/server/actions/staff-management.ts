@@ -92,9 +92,9 @@ export async function createStaffUser(input: z.infer<typeof CreateStaffUserSchem
     // Log audit
     await logAdminAudit({
       action: 'CREATE_STAFF_USER',
-      targetId: staffUser.id,
-      details: `Created ${role} user: ${email}`,
-      performedBy: session.userId,
+      target: staffUser.id,
+      details: { message: `Created ${role} user: ${email}` },
+      actorId: session.userId,
     })
 
     return {
@@ -184,9 +184,9 @@ export async function assignStaffToEvent(input: z.infer<typeof AssignStaffToEven
     // Log audit
     await logAdminAudit({
       action: 'ASSIGN_STAFF_TO_EVENT',
-      targetId: userId,
-      details: `Assigned ${user.email} as ${staffRole} to event: ${event.name}`,
-      performedBy: session.userId,
+      target: assignment.id,
+      details: { message: `Assigned ${user.email} as ${staffRole} to event ${event.name}` },
+      actorId: session.userId,
     })
 
     return {
@@ -239,9 +239,9 @@ export async function removeStaffFromEvent(input: z.infer<typeof RemoveStaffFrom
     // Log audit
     await logAdminAudit({
       action: 'REMOVE_STAFF_FROM_EVENT',
-      targetId: userId,
-      details: `Removed ${assignment.user.email} from event: ${assignment.event.name}`,
-      performedBy: session.userId,
+      target: userId,
+      details: { message: `Removed ${assignment.user.email} from event: ${assignment.event.name}` },
+      actorId: session.userId,
     })
 
     return {

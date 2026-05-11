@@ -68,6 +68,16 @@ export const authConfig: NextAuthConfig = {
       // Admin page routes require ADMIN role
       if (pathname.startsWith("/admin")) {
         if (!isLoggedIn) return false;
+
+        // Coordinators and Volunteers need access to specific admin routes like marking or scanner
+        if (pathname.startsWith("/admin/marking") || pathname.startsWith("/admin/scanner")) {
+          return (
+            auth.user?.role === "ADMIN" ||
+            auth.user?.role === "COORDINATOR" ||
+            auth.user?.role === "VOLUNTEER"
+          );
+        }
+
         return auth.user?.role === "ADMIN";
       }
 

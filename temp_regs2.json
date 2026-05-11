@@ -1,0 +1,22 @@
+[
+  {
+    "id": "cmoyeu35o0017vb1psmrldvya",
+    "userId": "cmoydxfkb0007vb1p2z8qb5dt",
+    "eventId": "cmoyesl22000mvb1pmz50dzi0",
+    "teamId": null,
+    "memberRole": null,
+    "teamName": null,
+    "teamSize": 1,
+    "attended": false,
+    "attendedAt": null,
+    "source": "ONLINE",
+    "syncStatus": "APPLIED",
+    "stationId": null,
+    "clientOperationId": null,
+    "syncError": null,
+    "syncedAt": null,
+    "createdAt": "2026-05-09T13:59:14.555Z",
+    "updatedAt": null,
+    "year": null
+  }
+]

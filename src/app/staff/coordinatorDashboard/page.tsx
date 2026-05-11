@@ -133,7 +133,7 @@ export default async function CoordinatorDashboard() {
                       Start Scanner
                     </Link>
                     <Link
-                      href={`/admin/marking?eventId=${event.id}`}
+                      href={`/admin/marking/allocate?eventId=${event.id}`}
                       className="inline-block bg-violet-600 hover:bg-violet-700 text-white font-semibold py-2 px-4 rounded-lg transition text-sm"
                     >
                       Allocate Marks
@@ -144,9 +144,7 @@ export default async function CoordinatorDashboard() {
             </div>
           </div>
         )}
-        <a href={`/admin/marking?event=${event.id}`} className="...your button styles...">
-        Allocate Marks
-        </a>
+
         {/* Quick Actions */}
         {assignedEvents.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-6">

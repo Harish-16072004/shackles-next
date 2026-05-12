@@ -316,7 +316,7 @@ export async function POST(request: Request) {
             teamCode,
             joinCode,
             memberCount: 1,
-            status: TeamStatus.DRAFT,
+            status: TeamStatus.OPEN,
             leaderUserId: user.id,
             leaderContactPhoneSnapshot: user.phone,
             leaderContactEmailSnapshot: user.email,
@@ -388,7 +388,7 @@ export async function POST(request: Request) {
           return { ok: false as const, code: 403, error: "Only team leader can send invites." };
         }
 
-        if (team.status !== TeamStatus.DRAFT) {
+        if (team.status !== TeamStatus.DRAFT && team.status !== TeamStatus.OPEN) {
           return { ok: false as const, code: 409, error: "Team is already locked." };
         }
 
@@ -494,7 +494,7 @@ export async function POST(request: Request) {
           return { ok: false as const, code: 404, error: "Team not found." };
         }
 
-        if (team.status !== TeamStatus.DRAFT) {
+        if (team.status !== TeamStatus.DRAFT && team.status !== TeamStatus.OPEN) {
           return {
             ok: false as const,
             code: 409,
@@ -533,7 +533,7 @@ export async function POST(request: Request) {
         await tx.team.update({
           where: { id: team.id },
           data: {
-            status: "LOCKED",
+            status: TeamStatus.LOCKED,
             lockedAt: new Date(),
             lockedBy: user.shacklesId,
           },
@@ -559,7 +559,7 @@ export async function POST(request: Request) {
         };
       }
 
-      if (team.status !== TeamStatus.DRAFT) {
+      if (team.status !== TeamStatus.DRAFT && team.status !== TeamStatus.OPEN) {
         return {
           ok: false as const,
           code: 409,

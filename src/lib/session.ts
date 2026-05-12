@@ -322,6 +322,80 @@ export async function requireMarkSubmissionAccess(eventId: string) {
 }
 
 /**
+ * Check if user can manage registrations (add/delete members/teams, change leader) for an event
+ * ADMIN can always manage; COORDINATOR only for their assigned events
+ * Non-redirecting version for API routes
+ */
+export async function checkCanManageRegistrations(
+  eventId: string
+): Promise<{ allowed: boolean; session?: Awaited<ReturnType<typeof getSession>>; error?: string }> {
+  const session = await getSession()
+  if (!session) {
+    return { allowed: false, error: 'Not authenticated' }
+  }
+
+  // ADMIN can always manage
+  if (session.role === 'ADMIN') {
+    return { allowed: true, session }
+  }
+
+  // Only COORDINATOR (and ADMIN, covered above) can manage
+  if (session.role !== 'COORDINATOR') {
+    return { allowed: false, error: 'Only coordinators and admins can manage registrations' }
+  }
+
+  // Check if COORDINATOR is assigned to this event
+  const assignment = await prisma.eventStaffAssignment.findFirst({
+    where: {
+      eventId,
+      userId: session.userId,
+      staffRole: 'COORDINATOR',
+    },
+    select: { id: true },
+  })
+
+  if (!assignment) {
+    return { allowed: false, error: 'Not assigned as coordinator to this event' }
+  }
+
+  return { allowed: true, session }
+}
+
+/**
+ * Require registration management access for event
+ * Redirecting version for pages
+ */
+export async function requireManageRegistrationsAccess(eventId: string) {
+  const session = await requireSession()
+
+  // ADMIN has access
+  if (session.role === 'ADMIN') {
+    return session
+  }
+
+  // Only COORDINATOR can manage in redirecting context
+  if (session.role !== 'COORDINATOR') {
+    redirect('/')
+  }
+
+  // Check if COORDINATOR is assigned to this event
+  const assignment = await prisma.eventStaffAssignment.findFirst({
+    where: {
+      eventId,
+      userId: session.userId,
+      staffRole: 'COORDINATOR',
+    },
+    select: { id: true },
+  })
+
+  if (!assignment) {
+    redirect('/')
+  }
+
+  return session
+}
+
+/**
  * Delete session via Auth.js signOut
  */
 export async function deleteSession() {

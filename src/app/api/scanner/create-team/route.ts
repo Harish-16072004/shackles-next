@@ -3,15 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { checkEventStaff } from "@/lib/session";
 import { Permission } from "@prisma/client";
 import { getActiveYear } from "@/lib/edition";
+import { generateUniqueTeamCode, normalizeTeamName, normalizeShacklesId } from "@/server/services/team-registration.service";
+import { getSession } from "@/lib/session";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { scannedShacklesId, memberShacklesIds, eventId } = body;
+    const { scannedShacklesId, memberShacklesIds, eventId, teamName, lockStatus } = body;
 
-    if (!scannedShacklesId || !memberShacklesIds || !eventId) {
+    if (!scannedShacklesId || !memberShacklesIds || !eventId || !teamName) {
       return NextResponse.json(
-        { success: false, error: "Missing scannedShacklesId, memberShacklesIds, or eventId" },
+        { success: false, error: "Missing scannedShacklesId, memberShacklesIds, eventId, or teamName" },
         { status: 400 }
       );
     }
@@ -47,8 +49,9 @@ export async function POST(request: Request) {
     }
 
     // Find captain by shacklesId
+    const normalizedCaptainId = normalizeShacklesId(scannedShacklesId);
     const captain = await prisma.user.findUnique({
-      where: { shacklesId: scannedShacklesId },
+      where: { shacklesId: normalizedCaptainId },
       select: { id: true },
     });
 
@@ -60,14 +63,15 @@ export async function POST(request: Request) {
     }
 
     // Find all members by shacklesIds
+    const normalizedMemberIds = memberShacklesIds.map(id => normalizeShacklesId(id));
     const members = await prisma.user.findMany({
-      where: { shacklesId: { in: memberShacklesIds } },
+      where: { shacklesId: { in: normalizedMemberIds } },
       select: { id: true, shacklesId: true },
     });
 
-    if (members.length !== memberShacklesIds.length) {
+    if (members.length !== normalizedMemberIds.length) {
       const foundIds = new Set(members.map((m) => m.shacklesId));
-      const missingIds = memberShacklesIds.filter((id) => !foundIds.has(id));
+      const missingIds = normalizedMemberIds.filter((id) => !foundIds.has(id));
       return NextResponse.json(
         { success: false, error: `Members not found: ${missingIds.join(", ")}` },
         { status: 404 }
@@ -75,7 +79,7 @@ export async function POST(request: Request) {
     }
 
     // Validate team size
-    const totalSize = 1 + memberShacklesIds.length;
+    const totalSize = 1 + normalizedMemberIds.length;
     if (event.teamMinSize && totalSize < event.teamMinSize) {
       return NextResponse.json(
         { success: false, error: `Team size ${totalSize} is below minimum ${event.teamMinSize}` },
@@ -124,12 +128,42 @@ export async function POST(request: Request) {
       }
     }
 
+    // Generate name and code
+    const normalizedName = normalizeTeamName(teamName);
+    const teamCode = await generateUniqueTeamCode(prisma, eventId);
+
+    // Check for duplicate team name
+    const existingTeamName = await prisma.team.findUnique({
+      where: {
+        eventId_nameNormalized: {
+          eventId,
+          nameNormalized: normalizedName,
+        },
+      },
+    });
+
+    if (existingTeamName) {
+      return NextResponse.json(
+        { success: false, error: "A team with this name already exists" },
+        { status: 400 }
+      );
+    }
+
+    const session = await getSession();
+    const isLocked = lockStatus === "LOCKED";
+
     // Transaction: create team and registrations
     const team = await prisma.team.create({
       data: {
         eventId,
-        status: "OPEN", // Teams start OPEN; volunteer must manually lock before attendance marking
-        year: activeYear,
+        name: teamName,
+        nameNormalized: normalizedName,
+        teamCode,
+        status: isLocked ? "LOCKED" : "OPEN",
+        leaderUserId: captain.id,
+        memberCount: totalSize,
+        lockedAt: isLocked ? new Date() : null,
+        lockedBy: isLocked ? String(session?.userId || "") : null,
       },
     });
 
@@ -142,6 +176,11 @@ export async function POST(request: Request) {
         teamId: team.id,
         year: activeYear,
         attended: false,
+        memberRole: userId === captain.id ? "LEADER" : "MEMBER",
+        teamName: teamName,
+        teamSize: totalSize,
+        source: "ONLINE",
+        syncStatus: "APPLIED",
       })),
     });
 
@@ -149,7 +188,7 @@ export async function POST(request: Request) {
       success: true,
       teamId: team.id,
       totalMembers: totalSize,
-      message: "Team created successfully. Team must be locked before marking attendance.",
+      message: isLocked ? "Team created and locked successfully." : `Draft team "${teamName}" saved successfully.`,
     });
   } catch (error) {
     console.error("Create Team Error:", error);

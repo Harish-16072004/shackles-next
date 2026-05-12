@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
+import { checkCanManageRegistrations } from "@/lib/session";
 import { createRateLimiter } from "@/lib/rate-limit";
 
 const adminDeleteTeamRateLimiter = createRateLimiter({
@@ -9,18 +9,22 @@ const adminDeleteTeamRateLimiter = createRateLimiter({
   keyPrefix: "api:admin:event-registrations:delete-team",
 });
 
-async function getAdminUserId() {
-  const session = await getSession();
-  if (!session?.userId) return null;
-  const user = await prisma.user.findUnique({ where: { id: String(session.userId) } });
-  return user?.role === "ADMIN" ? user.id : null;
-}
-
 export async function POST(request: Request) {
-  const adminUserId = await getAdminUserId();
-  if (!adminUserId) {
+  const formData = await request.formData();
+  const teamId = String(formData.get("teamId") || "").trim();
+  const eventId = String(formData.get("eventId") || "").trim();
+  const baseUrl = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || request.url;
+
+  if (!eventId) {
+    return Response.redirect(new URL("/admin/event-registrations?error=missing-fields", baseUrl), 303);
+  }
+
+  const { allowed, session } = await checkCanManageRegistrations(eventId);
+  if (!allowed || !session) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  const adminUserId = session.userId;
 
   const rateLimitResult = await adminDeleteTeamRateLimiter.limit(`admin:event-registrations:delete-team:${adminUserId}`);
   if (!rateLimitResult.success) {
@@ -39,16 +43,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const formData = await request.formData();
-  const teamId = String(formData.get("teamId") || "").trim();
-
   if (!teamId) {
-    return Response.redirect(new URL("/admin/event-registrations?error=missing-team", request.url), 303);
+    return Response.redirect(new URL(`/admin/event-registrations/${eventId}?error=missing-team`, baseUrl), 303);
   }
 
   const existingTeam = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } });
   if (!existingTeam) {
-    return Response.redirect(new URL("/admin/event-registrations?error=team-not-found", request.url), 303);
+    return Response.redirect(new URL("/admin/event-registrations?error=team-not-found", baseUrl), 303);
   }
 
   await prisma.$transaction(async (tx) => {
@@ -67,5 +68,5 @@ export async function POST(request: Request) {
     ? `/admin/event-registrations/${formData.get("eventId")}?success=team-deleted`
     : "/admin/event-registrations?success=team-deleted";
 
-  return Response.redirect(new URL(redirectUrl, request.url), 303);
+  return Response.redirect(new URL(redirectUrl, baseUrl), 303);
 }

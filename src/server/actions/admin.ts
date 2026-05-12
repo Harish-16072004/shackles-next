@@ -182,7 +182,7 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
               const qrValue = encodeQrPayload({
                 v: 1,
                 type: 'USER',
-                uid: userId,
+                uid: qrUploadContext.qrToken,
                 sid: qrUploadContext.shacklesId,
                 y: activeYear,
               });

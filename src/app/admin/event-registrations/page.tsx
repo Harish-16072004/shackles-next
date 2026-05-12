@@ -10,7 +10,24 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
   const session = await getSession();
   if (!session?.userId) redirect("/login");
   const user = await prisma.user.findUnique({ where: { id: session.userId as string } });
-  if (!user || user.role !== "ADMIN") redirect("/login");
+  if (!user || (user.role !== "ADMIN" && user.role !== "COORDINATOR")) redirect("/login");
+
+  let allowedEventIds: string[] | null = null;
+  if (user.role === "COORDINATOR") {
+    // Only fetch events assigned to this coordinator
+    const assignments = await prisma.eventStaffAssignment.findMany({
+      where: {
+        userId: user.id,
+        staffRole: "COORDINATOR",
+      },
+      select: { eventId: true },
+    });
+    allowedEventIds = assignments.map((a) => a.eventId);
+    if (allowedEventIds.length === 0) {
+      // Coordinator has no assigned events
+      allowedEventIds = ["NONE"]; // Use a dummy ID to force empty results
+    }
+  }
 
   const resolvedSearchParams = (await searchParams) ?? {};
   const typeFilter = typeof resolvedSearchParams?.type === "string" ? resolvedSearchParams.type : "";
@@ -19,6 +36,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
   const error = typeof resolvedSearchParams?.error === "string" ? resolvedSearchParams.error : "";
 
   const events = await prisma.event.findMany({
+    where: allowedEventIds ? { id: { in: allowedEventIds } } : undefined,
     orderBy: { name: "asc" },
     include: {
       registrations: {

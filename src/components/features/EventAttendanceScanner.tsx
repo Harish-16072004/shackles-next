@@ -12,6 +12,7 @@ interface EventInfo {
   id: string
   name: string
   type: string
+  participationMode: string
   minTeamSize?: number
   maxTeamSize?: number
 }
@@ -36,6 +37,7 @@ export default function EventAttendanceScanner({
   const [scannedToday, setScannedToday] = useState(0)
   const [showTeamModal, setShowTeamModal] = useState(false)
   const [teamMembers, setTeamMembers] = useState<string[]>([])
+  const [teamName, setTeamName] = useState('')
   const scannerRef = useRef<boolean>(false)
   const [scannerEnabled, setScannerEnabled] = useState(true)
 
@@ -142,7 +144,7 @@ export default function EventAttendanceScanner({
   const handleRegisterForEvent = async () => {
     if (!participant || !event) return
 
-    if (event.type === 'TEAM') {
+    if (event.participationMode === 'TEAM') {
       // Open modal for team members
       setTeamMembers(new Array(Math.max(1, (event.maxTeamSize || 2) - 1)).fill(''))
       setShowTeamModal(true)
@@ -186,13 +188,20 @@ export default function EventAttendanceScanner({
     }
   }
 
-  const handleCreateTeam = async () => {
+  const handleCreateTeam = async (lockStatus: 'OPEN' | 'LOCKED') => {
     if (!participant) return
 
-    const memberIds = teamMembers.filter((id) => id.trim())
-    if (memberIds.length === 0) {
-      setMessage({ type: 'error', text: 'At least one team member required' })
+    if (!teamName.trim()) {
+      setMessage({ type: 'error', text: 'Team Name is required' })
       return
+    }
+
+    const memberIds = teamMembers.filter((id) => id.trim())
+    
+    // Check for vacancies if completing registration
+    if (lockStatus === 'LOCKED' && memberIds.length < teamMembers.length) {
+      const confirmLock = window.confirm('Do you want to lock the team? The team still has vacancy.')
+      if (!confirmLock) return
     }
 
     setLoading(true)
@@ -204,6 +213,8 @@ export default function EventAttendanceScanner({
           scannedShacklesId: participant.shacklesId,
           memberShacklesIds: memberIds,
           eventId,
+          teamName: teamName.trim(),
+          lockStatus,
         }),
       })
 
@@ -214,13 +225,14 @@ export default function EventAttendanceScanner({
       } else {
         setMessage({
           type: 'success',
-          text: `Team created with ${data.totalMembers} members. Lock before marking attendance.`,
+          text: data.message || `Team created with ${data.totalMembers} members.`,
         })
         setParticipant(null)
         setEvent(null)
         setRegistered(null)
         setShowTeamModal(false)
         setTeamMembers([])
+        setTeamName('')
       }
     } catch (error) {
       console.error('Create team error:', error)
@@ -299,7 +311,7 @@ export default function EventAttendanceScanner({
                 disabled={loading}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-4 rounded-lg transition"
               >
-                {loading ? 'Processing...' : 'REGISTER FOR EVENT'}
+                {loading ? 'Processing...' : (event?.participationMode === 'TEAM' ? 'REGISTER A TEAM' : 'REGISTER FOR EVENT')}
               </button>
             )}
 
@@ -309,6 +321,7 @@ export default function EventAttendanceScanner({
                 setEvent(null)
                 setRegistered(null)
                 setQrData(null)
+                setTeamName('')
                 scannerRef.current = false
                 setScannerEnabled(true)
               }}
@@ -324,57 +337,73 @@ export default function EventAttendanceScanner({
       {showTeamModal && event && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4">Enter Team Members</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Enter Shackles IDs for other team members (Captain is already included)
-            </p>
-
-            <div className="space-y-3 mb-6 max-h-64 overflow-y-auto">
-              {teamMembers.map((id, index) => (
+            <h3 className="text-xl font-bold mb-4">Register a Team</h3>
+            
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="text-sm text-gray-600 block mb-1">Team Name <span className="text-red-500">*</span></label>
                 <input
-                  key={index}
                   type="text"
-                  placeholder={`Member ${index + 1} Shackles ID`}
-                  value={id}
-                  onChange={(e) => {
-                    const newMembers = [...teamMembers]
-                    newMembers[index] = e.target.value
-                    setTeamMembers(newMembers)
-                  }}
+                  placeholder="Enter team name"
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                 />
-              ))}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600 block mb-1">Enter Shackles IDs for other team members (Captain is already included)</label>
+                <div className="space-y-3 max-h-48 overflow-y-auto">
+                  {teamMembers.map((id, index) => (
+                    <input
+                      key={index}
+                      type="text"
+                      placeholder={`Member ${index + 1} Shackles ID`}
+                      value={id}
+                      onChange={(e) => {
+                        const newMembers = [...teamMembers]
+                        newMembers[index] = e.target.value
+                        setTeamMembers(newMembers)
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => {
                   setShowTeamModal(false)
                   setTeamMembers([])
+                  setTeamName('')
                   scannerRef.current = false
                   setScannerEnabled(true)
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
-                onClick={handleCreateTeam}
+                onClick={() => handleCreateTeam('OPEN')}
                 disabled={loading}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-semibold"
+                className="flex-1 px-3 py-2 text-sm bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white rounded-lg font-semibold"
               >
-                {loading ? 'Creating...' : 'Create Team'}
+                {loading ? '...' : 'Save as Draft'}
+              </button>
+              <button
+                onClick={() => handleCreateTeam('LOCKED')}
+                disabled={loading}
+                className="flex-1 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-semibold"
+              >
+                {loading ? 'Processing...' : 'Complete Registration'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Stats Footer */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
-        <p className="text-sm text-gray-600">Scanned today for this event:</p>
-        <p className="text-2xl font-bold text-gray-900">{scannedToday}</p>
-      </div>
     </div>
   )
 }

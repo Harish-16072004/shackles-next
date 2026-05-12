@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
+import { checkCanManageRegistrations } from "@/lib/session";
 import { createRateLimiter } from "@/lib/rate-limit";
 
 const rateLimiter = createRateLimiter({
@@ -9,16 +9,23 @@ const rateLimiter = createRateLimiter({
     keyPrefix: "api:admin:event-registrations:change-leader",
 });
 
-async function getAdminUserId() {
-    const session = await getSession();
-    if (!session?.userId) return null;
-    const user = await prisma.user.findUnique({ where: { id: String(session.userId) } });
-    return user?.role === "ADMIN" ? user.id : null;
-}
-
 export async function POST(request: Request) {
-    const adminUserId = await getAdminUserId();
-    if (!adminUserId) return new Response("Unauthorized", { status: 401 });
+    const formData = await request.formData();
+    const teamId = String(formData.get("teamId") || "").trim();
+    const newLeaderUserId = String(formData.get("newLeaderUserId") || "").trim();
+    const eventId = String(formData.get("eventId") || "").trim();
+
+    const baseUrl = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || request.url;
+    if (!teamId || !newLeaderUserId || !eventId) {
+        return Response.redirect(
+            new URL(`/admin/event-registrations/${eventId}?error=missing-fields`, baseUrl), 303
+        );
+    }
+
+    const { allowed, session } = await checkCanManageRegistrations(eventId);
+    if (!allowed || !session) return new Response("Unauthorized", { status: 401 });
+
+    const adminUserId = session.userId;
 
     const rl = await rateLimiter.limit(`admin:change-leader:${adminUserId}`);
     if (!rl.success) {
@@ -37,16 +44,7 @@ export async function POST(request: Request) {
         );
     }
 
-    const formData = await request.formData();
-    const teamId = String(formData.get("teamId") || "").trim();
-    const newLeaderUserId = String(formData.get("newLeaderUserId") || "").trim();
-    const eventId = String(formData.get("eventId") || "").trim();
 
-    if (!teamId || !newLeaderUserId || !eventId) {
-        return Response.redirect(
-            new URL(`/admin/event-registrations/${eventId}?error=missing-fields`, request.url), 303
-        );
-    }
 
     // Verify team exists and new leader is actually a member of that team
     const team = await prisma.team.findUnique({
@@ -56,20 +54,20 @@ export async function POST(request: Request) {
 
     if (!team) {
         return Response.redirect(
-            new URL(`/admin/event-registrations/${eventId}?error=team-not-found`, request.url), 303
+            new URL(`/admin/event-registrations/${eventId}?error=team-not-found`, baseUrl), 303
         );
     }
 
     const isMember = team.members.some((m) => m.userId === newLeaderUserId);
     if (!isMember) {
         return Response.redirect(
-            new URL(`/admin/event-registrations/${eventId}?error=not-a-member`, request.url), 303
+            new URL(`/admin/event-registrations/${eventId}?error=not-a-member`, baseUrl), 303
         );
     }
 
     if (team.leaderUserId === newLeaderUserId) {
         return Response.redirect(
-            new URL(`/admin/event-registrations/${eventId}?error=already-leader`, request.url), 303
+            new URL(`/admin/event-registrations/${eventId}?error=already-leader`, baseUrl), 303
         );
     }
 
@@ -100,6 +98,6 @@ export async function POST(request: Request) {
     revalidatePath(`/admin/event-registrations/${eventId}`);
 
     return Response.redirect(
-        new URL(`/admin/event-registrations/${eventId}?success=leader-changed`, request.url), 303
+        new URL(`/admin/event-registrations/${eventId}?success=leader-changed`, baseUrl), 303
     );
 }

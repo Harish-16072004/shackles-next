@@ -21,7 +21,7 @@ function formatDate(date?: Date | null) {
   }).format(date);
 }
 
-export default async function PaymentVerificationPage({ searchParams }: { searchParams?: { status?: string } }) {
+export default async function PaymentVerificationPage({ searchParams }: { searchParams?: Promise<{ status?: string }> }) {
   const session = await getSession();
   if (!session?.userId) {
     redirect("/login");
@@ -32,8 +32,9 @@ export default async function PaymentVerificationPage({ searchParams }: { search
     redirect("/login");
   }
 
+  const resolvedParams = (await searchParams) ?? {};
   const activeStatus: PaymentStatus = (() => {
-    const raw = (searchParams?.status || "pending").toUpperCase();
+    const raw = (resolvedParams.status || "pending").toUpperCase();
     if (raw === "VERIFIED") return "VERIFIED";
     if (raw === "REJECTED") return "REJECTED";
     return "PENDING";

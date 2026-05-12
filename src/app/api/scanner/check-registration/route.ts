@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkEventStaff } from "@/lib/session";
 import { Permission } from "@prisma/client";
+import { normalizeShacklesId } from "@/server/services/team-registration.service";
 
 export async function GET(request: Request) {
   try {
@@ -23,8 +24,9 @@ export async function GET(request: Request) {
     }
 
     // Find user by shacklesId
+    const normalizedId = normalizeShacklesId(shacklesId);
     const user = await prisma.user.findUnique({
-      where: { shacklesId },
+      where: { shacklesId: normalizedId },
       select: {
         id: true,
         firstName: true,
@@ -53,6 +55,7 @@ export async function GET(request: Request) {
         id: true,
         name: true,
         type: true,
+        participationMode: true,
         teamMinSize: true,
         teamMaxSize: true,
       },
@@ -76,6 +79,7 @@ export async function GET(request: Request) {
         id: event.id,
         name: event.name,
         type: event.type,
+        participationMode: event.participationMode,
         minTeamSize: event.teamMinSize,
         maxTeamSize: event.teamMaxSize,
       },

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { getSession, requireManageRegistrationsAccess } from '@/lib/session';
 import { MemberDeleteForm, TeamDeleteForm } from '@/components/features/admin/EventRegistrationDeleteForms';
 import { ChangeLeaderForm } from '@/components/features/admin/ChangeLeaderForm';
 import { ArrowLeft, Download, Users, CheckCircle2, Trophy } from 'lucide-react';
@@ -26,12 +26,8 @@ export default async function EventRegistrationDetailPage({
     params: Promise<{ eventId: string }>;
     searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-    const session = await getSession();
-    if (!session?.userId) redirect('/login');
-    const user = await prisma.user.findUnique({ where: { id: session.userId as string } });
-    if (!user || user.role !== 'ADMIN') redirect('/login');
-
     const { eventId } = await params;
+    await requireManageRegistrationsAccess(eventId);
     const resolvedSearchParams = (await searchParams) ?? {};
     const success = typeof resolvedSearchParams?.success === 'string' ? resolvedSearchParams.success : '';
     const error = typeof resolvedSearchParams?.error === 'string' ? resolvedSearchParams.error : '';
@@ -69,6 +65,7 @@ export default async function EventRegistrationDetailPage({
         {
             id: string;
             name: string;
+            status: string;
             leaderUserId: string | null;
             members: typeof event.registrations;
         }
@@ -83,6 +80,7 @@ export default async function EventRegistrationDetailPage({
             teamMap.set(reg.teamId, {
                 id: reg.teamId,
                 name: reg.team?.name || reg.teamName || 'Team',
+                status: reg.team?.status || 'OPEN',
                 leaderUserId: reg.team?.leaderUserId ?? null,
                 members: [reg],
             });
@@ -192,11 +190,20 @@ export default async function EventRegistrationDetailPage({
                                 >
                                     {/* Team header row */}
                                     <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 gap-3 flex-wrap">
-                                        <div>
-                                            <p className="font-bold text-gray-900">{team.name}</p>
-                                            <p className="text-xs text-gray-500">
-                                                {team.members.length} member{team.members.length !== 1 ? 's' : ''}
-                                            </p>
+                                        <div className="flex items-center gap-3">
+                                            <div>
+                                                <p className="font-bold text-gray-900">{team.name}</p>
+                                                <p className="text-xs text-gray-500">
+                                                    {team.members.length} member{team.members.length !== 1 ? 's' : ''}
+                                                </p>
+                                            </div>
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                                team.status === 'LOCKED' 
+                                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+                                                    : 'bg-amber-100 text-amber-700 border border-amber-200 animate-pulse'
+                                            }`}>
+                                                {team.status === 'LOCKED' ? 'Locked' : 'Draft / Open'}
+                                            </span>
                                         </div>
 
                                         {/* Action buttons */}

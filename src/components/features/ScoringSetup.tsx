@@ -144,7 +144,7 @@ export function ScoringSetup({ eventId, eventName, onSaved }: ScoringSetupProps)
                 <Input
                   type="number"
                   value={criteria.maxMarks}
-                  onChange={e => setCriteria({ ...criteria, maxMarks: parseInt(e.target.value) })}
+                  onChange={e => setCriteria({ ...criteria, maxMarks: parseInt(e.target.value) || 0 })}
                   min={1}
                 />
               </div>
@@ -153,7 +153,7 @@ export function ScoringSetup({ eventId, eventName, onSaved }: ScoringSetupProps)
                 <Input
                   type="number"
                   value={criteria.numberOfJudges}
-                  onChange={e => setCriteria({ ...criteria, numberOfJudges: parseInt(e.target.value) })}
+                  onChange={e => setCriteria({ ...criteria, numberOfJudges: parseInt(e.target.value) || 0 })}
                   min={1}
                 />
               </div>
@@ -182,7 +182,7 @@ export function ScoringSetup({ eventId, eventName, onSaved }: ScoringSetupProps)
                           <Input
                             type="number"
                             value={comp.order}
-                            onChange={e => handleComponentChange(comp.uid, 'order', parseInt(e.target.value))}
+                            onChange={e => handleComponentChange(comp.uid, 'order', parseInt(e.target.value) || 0)}
                             min={0}
                           />
                         </div>
@@ -201,7 +201,7 @@ export function ScoringSetup({ eventId, eventName, onSaved }: ScoringSetupProps)
                           <Input
                             type="number"
                             value={comp.weightPercentage}
-                            onChange={e => handleComponentChange(comp.uid, 'weightPercentage', parseFloat(e.target.value))}
+                            onChange={e => handleComponentChange(comp.uid, 'weightPercentage', parseFloat(e.target.value) || 0)}
                             min={0}
                             max={100}
                             step={0.01}
@@ -212,7 +212,7 @@ export function ScoringSetup({ eventId, eventName, onSaved }: ScoringSetupProps)
                           <Input
                             type="number"
                             value={comp.maxMarksForComponent}
-                            onChange={e => handleComponentChange(comp.uid, 'maxMarksForComponent', parseInt(e.target.value))}
+                            onChange={e => handleComponentChange(comp.uid, 'maxMarksForComponent', parseInt(e.target.value) || 0)}
                             min={1}
                           />
                         </div>

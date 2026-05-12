@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ChevronLeft, MapPin, Calendar, Users, User } from 'lucide-react';
 import { InviteModal } from '@/components/features/InviteModal';
 
@@ -68,7 +69,7 @@ function validateTeamName(name: string): string | null {
   const trimmed = name.trim();
   if (!trimmed) return 'Team name is required.';
   if (!TEAM_NAME_REGEX.test(trimmed))
-    return 'Team name must be 3–40 characters (letters, numbers, spaces, - or _).';
+    return 'Team Name should be Technical or Legit, 3-40 characters consisting of letters, numbers, spaces, - or _ only.';
   return null;
 }
 
@@ -79,13 +80,24 @@ export default function EventCategoryPage({
   subtitle,
   events = [],
 }: EventCategoryPageProps) {
+  const searchParams = useSearchParams();
+
   // Detail panel
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
   // Registration form state
   const [teamName, setTeamName] = useState('');
   const [joinCode, setJoinCode] = useState('');
+  const [inviteToken, setInviteToken] = useState('');
   const [latestTeamCode, setLatestTeamCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    const incomingCode = searchParams.get("teamCode");
+    const incomingToken = searchParams.get("inviteToken");
+    if (incomingCode) setJoinCode(incomingCode);
+    if (incomingToken) setInviteToken(incomingToken);
+  }, [searchParams]);
+
   const [registering, setRegistering] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('error');
@@ -206,7 +218,7 @@ export default function EventCategoryPage({
       const res = await fetch('/api/events/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId: selectedEvent.id, joinCode: code }),
+        body: JSON.stringify({ eventId: selectedEvent.id, joinCode: code, inviteToken: inviteToken || undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -217,6 +229,7 @@ export default function EventCategoryPage({
       setFeedbackType('success');
       setFeedback('Joined team successfully!');
       setJoinCode('');
+      setInviteToken('');
       await fetchMyRegistrations();
     } catch {
       setFeedbackType('error');
@@ -450,7 +463,7 @@ export default function EventCategoryPage({
                             value={teamName}
                             onChange={e => setTeamName(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handleCreateTeam()}
-                            placeholder="Team name (3–40 chars)"
+                            placeholder="Team name (Technical or Legit ONLY, 3-40 chars)"
                             disabled={registering}
                             className="w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-500 outline-none transition focus:border-gray-400 disabled:cursor-not-allowed disabled:opacity-50"
                           />

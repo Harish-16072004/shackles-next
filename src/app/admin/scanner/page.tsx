@@ -4,11 +4,10 @@ import { prisma } from '@/lib/prisma'
 import ScannerWidget from '@/components/features/ScannerWidget'
 import EventAttendanceScanner from '@/components/features/EventAttendanceScanner'
 
-export default async function AdminScannerPage({
-  searchParams,
-}: {
-  searchParams: { eventId?: string }
+export default async function AdminScannerPage(props: {
+  searchParams: Promise<{ eventId?: string }>
 }) {
+  const searchParams = await props.searchParams
   const session = await getSession()
   if (!session?.userId) {
     redirect('/login')

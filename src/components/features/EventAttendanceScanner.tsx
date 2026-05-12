@@ -2,7 +2,6 @@
 
 import { useState, useRef } from 'react'
 import { Scanner } from '@yudiel/react-qr-scanner'
-import { decodeQrPayload } from '@/server/services/qr.service'
 
 interface ParticipantInfo {
   name: string
@@ -31,6 +30,7 @@ export default function EventAttendanceScanner({
   const [participant, setParticipant] = useState<ParticipantInfo | null>(null)
   const [event, setEvent] = useState<EventInfo | null>(null)
   const [registered, setRegistered] = useState<boolean | null>(null)
+  const [qrData, setQrData] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
   const [scannedToday, setScannedToday] = useState(0)
@@ -46,8 +46,21 @@ export default function EventAttendanceScanner({
     setScannerEnabled(false)
 
     try {
-      // Decode QR payload
-      const decoded = decodeQrPayload(result[0].rawValue)
+      // Decode QR payload using browser APIs
+      let decoded: any
+      try {
+        const raw = result[0].rawValue.trim()
+        let base64 = raw.replace(/-/g, '+').replace(/_/g, '/')
+        while (base64.length % 4) {
+          base64 += '='
+        }
+        decoded = JSON.parse(atob(base64))
+      } catch (e) {
+        setMessage({ type: 'error', text: 'Failed to decode QR code.' })
+        scannerRef.current = false
+        setTimeout(() => setScannerEnabled(true), 2000)
+        return
+      }
 
       if (decoded.type !== 'USER') {
         setMessage({ type: 'error', text: 'Invalid QR code. Must be a participant QR.' })
@@ -75,6 +88,7 @@ export default function EventAttendanceScanner({
       setParticipant(data.participant)
       setEvent(data.event)
       setRegistered(data.registered)
+      setQrData(result[0].rawValue)
       setScannedToday((prev) => prev + 1)
     } catch (error) {
       console.error('Scan error:', error)
@@ -87,7 +101,7 @@ export default function EventAttendanceScanner({
   }
 
   const handleMarkPresent = async () => {
-    if (!participant) return
+    if (!participant || !qrData) return
 
     setLoading(true)
     try {
@@ -97,7 +111,7 @@ export default function EventAttendanceScanner({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          shacklesId: participant.shacklesId,
+          qrData,
           eventId,
           operationType: 'ATTENDANCE',
           stationId: 'event-scanner', // Generic station ID for event scanning
@@ -113,6 +127,7 @@ export default function EventAttendanceScanner({
         setParticipant(null)
         setEvent(null)
         setRegistered(null)
+        setQrData(null)
       }
     } catch (error) {
       console.error('Mark attendance error:', error)
@@ -245,9 +260,10 @@ export default function EventAttendanceScanner({
         <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden mb-6">
           {scannerEnabled && (
             <Scanner
-              onDecode={handleScan}
+              onScan={handleScan}
               onError={(error) => console.error('QR Scanner error:', error)}
               constraints={{ facingMode: 'environment' }}
+              components={{ audio: false }}
              />
           )}
         </div>
@@ -292,6 +308,7 @@ export default function EventAttendanceScanner({
                 setParticipant(null)
                 setEvent(null)
                 setRegistered(null)
+                setQrData(null)
                 scannerRef.current = false
                 setScannerEnabled(true)
               }}

@@ -112,7 +112,8 @@ const nextConfig = {
       `img-src 'self' data: blob: ${imgSrcHosts} https://*.digitaloceanspaces.com`,
       "font-src 'self' https://fonts.gstatic.com",
       // Allow XHR/WebSocket/fetch to these origins (DO Spaces + QR API, etc.)
-      "connect-src 'self' blob: https://api.qrserver.com https://*.googleapis.com https://*.upstash.io https://*.digitaloceanspaces.com https://sgp1.digitaloceanspaces.com",
+      "connect-src 'self' blob: https://api.qrserver.com https://*.googleapis.com https://*.upstash.io https://*.digitaloceanspaces.com https://sgp1.digitaloceanspaces.com https://fastly.jsdelivr.net",
+      "media-src 'self' data:",
       "frame-src 'self' https://www.google.com",
       "worker-src 'self'",
       "object-src 'none'",

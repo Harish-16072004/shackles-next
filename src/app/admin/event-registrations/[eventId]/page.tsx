@@ -1,5 +1,3 @@
-'use server'
-
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
@@ -216,7 +214,7 @@ export default async function EventRegistrationDetailPage({
                                                     }))}
                                                 />
                                             )}
-                                            <TeamDeleteForm teamId={team.id} teamName={team.name} />
+                                            <TeamDeleteForm teamId={team.id} teamName={team.name} eventId={eventId} />
                                         </div>
                                     </div>
 
@@ -262,6 +260,7 @@ export default async function EventRegistrationDetailPage({
                                                             registrationId={reg.id}
                                                             fullName={`${reg.user.firstName} ${reg.user.lastName}`}
                                                             hasTeam={true}
+                                                            eventId={eventId}
                                                         />
                                                     </div>
                                                 </div>
@@ -308,6 +307,7 @@ export default async function EventRegistrationDetailPage({
                                                 registrationId={reg.id}
                                                 fullName={`${reg.user.firstName} ${reg.user.lastName}`}
                                                 hasTeam={false}
+                                                eventId={eventId}
                                             />
                                         </div>
                                     </div>

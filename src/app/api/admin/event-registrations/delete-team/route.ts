@@ -56,12 +56,16 @@ export async function POST(request: Request) {
     await tx.team.delete({ where: { id: teamId } });
   });
 
-  revalidatePath("/admin/event-registrations");
+  revalidatePath("/admin/event-registrations", "layout");
   revalidatePath("/admin/events");
   revalidatePath("/admin/adminDashboard");
   revalidatePath("/userDashboard");
   revalidatePath("/events");
   revalidatePath("/workshops");
 
-  return Response.redirect(new URL("/admin/event-registrations?success=team-deleted", request.url), 303);
+  const redirectUrl = formData.get("eventId")
+    ? `/admin/event-registrations/${formData.get("eventId")}?success=team-deleted`
+    : "/admin/event-registrations?success=team-deleted";
+
+  return Response.redirect(new URL(redirectUrl, request.url), 303);
 }

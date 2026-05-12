@@ -126,7 +126,7 @@ export default function EventCategoryPage({
   category,
   subtitle,
   events = [],
-  inviteToken,
+  inviteToken: inviteTokenFromUrl,
   teamCode: teamCodeFromUrl,
 }: EventCategoryPageProps) {
   const searchParams = useSearchParams();
@@ -216,7 +216,7 @@ export default function EventCategoryPage({
     setJoinCode(teamCodeFromUrl);
 
     // Auto-submit the join request if we have an inviteToken
-    if (inviteToken) {
+    if (inviteTokenFromUrl) {
       (async () => {
         setRegistering(true);
         setFeedback(null);
@@ -227,7 +227,7 @@ export default function EventCategoryPage({
             body: JSON.stringify({
               eventName: teamEvent.name,
               teamCode: teamCodeFromUrl,
-              inviteToken,
+              inviteToken: inviteTokenFromUrl,
               action: 'jointeam',
             }),
           });
@@ -248,7 +248,7 @@ export default function EventCategoryPage({
         }
       })();
     }
-  }, [teamCodeFromUrl, inviteToken, events, inviteHandled, fetchMyRegistrations]);
+  }, [teamCodeFromUrl, inviteTokenFromUrl, events, inviteHandled, fetchMyRegistrations]);
 
   // Close modal on Escape
   useEffect(() => {

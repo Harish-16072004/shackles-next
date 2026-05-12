@@ -106,12 +106,16 @@ export async function POST(request: Request) {
     });
   });
 
-  revalidatePath("/admin/event-registrations");
+  revalidatePath("/admin/event-registrations", "layout");
   revalidatePath("/admin/events");
   revalidatePath("/admin/adminDashboard");
   revalidatePath("/userDashboard");
   revalidatePath("/events");
   revalidatePath("/workshops");
 
-  return Response.redirect(new URL("/admin/event-registrations?success=member-deleted", request.url), 303);
+  const redirectUrl = formData.get("eventId")
+    ? `/admin/event-registrations/${formData.get("eventId")}?success=member-deleted`
+    : "/admin/event-registrations?success=member-deleted";
+
+  return Response.redirect(new URL(redirectUrl, request.url), 303);
 }

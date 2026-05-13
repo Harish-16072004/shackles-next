@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Scanner } from '@yudiel/react-qr-scanner'
+import { AlertCircle, CheckCircle2, QrCode, Users, Plus, ShieldCheck, X } from 'lucide-react'
 
 interface ParticipantInfo {
   name: string
   shacklesId: string
+  college?: string
 }
 
 interface EventInfo {
@@ -48,7 +50,6 @@ export default function EventAttendanceScanner({
     setScannerEnabled(false)
 
     try {
-      // Decode QR payload using browser APIs
       let decoded: any
       try {
         const raw = result[0].rawValue.trim()
@@ -58,14 +59,14 @@ export default function EventAttendanceScanner({
         }
         decoded = JSON.parse(atob(base64))
       } catch (e) {
-        setMessage({ type: 'error', text: 'Failed to decode QR code.' })
+        setMessage({ type: 'error', text: 'INVALID QR PAYLOAD' })
         scannerRef.current = false
         setTimeout(() => setScannerEnabled(true), 2000)
         return
       }
 
       if (decoded.type !== 'USER') {
-        setMessage({ type: 'error', text: 'Invalid QR code. Must be a participant QR.' })
+        setMessage({ type: 'error', text: 'INVALID ENTITY TYPE' })
         scannerRef.current = false
         setTimeout(() => setScannerEnabled(true), 2000)
         return
@@ -73,7 +74,6 @@ export default function EventAttendanceScanner({
 
       const shacklesId = decoded.sid
 
-      // Check registration status
       setLoading(true)
       const response = await fetch(
         `/api/scanner/check-registration?shacklesId=${shacklesId}&eventId=${eventId}`
@@ -81,7 +81,7 @@ export default function EventAttendanceScanner({
       const data = await response.json()
 
       if (!data.success) {
-        setMessage({ type: 'error', text: data.error || 'Error checking registration' })
+        setMessage({ type: 'error', text: data.error || 'REGISTRATION CHECK FAILED' })
         scannerRef.current = false
         setTimeout(() => setScannerEnabled(true), 2000)
         return
@@ -92,9 +92,9 @@ export default function EventAttendanceScanner({
       setRegistered(data.registered)
       setQrData(result[0].rawValue)
       setScannedToday((prev) => prev + 1)
+      setMessage(null)
     } catch (error) {
-      console.error('Scan error:', error)
-      setMessage({ type: 'error', text: 'Failed to process QR code' })
+      setMessage({ type: 'error', text: 'SYSTEM ERROR' })
       scannerRef.current = false
       setTimeout(() => setScannerEnabled(true), 2000)
     } finally {
@@ -107,8 +107,6 @@ export default function EventAttendanceScanner({
 
     setLoading(true)
     try {
-      // Assuming qrData is needed; we'll need to pass decoded data structure
-      // This depends on your existing qr-scan endpoint expectations
       const response = await fetch('/api/scanner/qr-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,24 +114,20 @@ export default function EventAttendanceScanner({
           qrData,
           eventId,
           operationType: 'ATTENDANCE',
-          stationId: 'event-scanner', // Generic station ID for event scanning
+          stationId: 'event-scanner',
         }),
       })
 
       const data = await response.json()
 
       if (!data.success) {
-        setMessage({ type: 'error', text: data.error || 'Failed to mark attendance' })
+        setMessage({ type: 'error', text: data.error || 'MARKING FAILED' })
       } else {
-        setMessage({ type: 'success', text: `${participant.name} marked present` })
-        setParticipant(null)
-        setEvent(null)
-        setRegistered(null)
-        setQrData(null)
+        setMessage({ type: 'success', text: `${participant.name.toUpperCase()} MARKED PRESENT` })
+        resetScannerState()
       }
     } catch (error) {
-      console.error('Mark attendance error:', error)
-      setMessage({ type: 'error', text: 'Failed to mark attendance' })
+      setMessage({ type: 'error', text: 'MARKING FAILED' })
     } finally {
       setLoading(false)
       scannerRef.current = false
@@ -145,11 +139,9 @@ export default function EventAttendanceScanner({
     if (!participant || !event) return
 
     if (event.participationMode === 'TEAM') {
-      // Open modal for team members
       setTeamMembers(new Array(Math.max(1, (event.maxTeamSize || 2) - 1)).fill(''))
       setShowTeamModal(true)
     } else {
-      // Individual event - register directly
       await registerIndividual()
     }
   }
@@ -171,16 +163,13 @@ export default function EventAttendanceScanner({
       const data = await response.json()
 
       if (!data.success) {
-        setMessage({ type: 'error', text: data.error || 'Failed to register' })
+        setMessage({ type: 'error', text: data.error || 'REGISTRATION FAILED' })
       } else {
-        setMessage({ type: 'success', text: `${participant.name} registered for event` })
-        setParticipant(null)
-        setEvent(null)
-        setRegistered(null)
+        setMessage({ type: 'success', text: `${participant.name.toUpperCase()} REGISTERED` })
+        resetScannerState()
       }
     } catch (error) {
-      console.error('Registration error:', error)
-      setMessage({ type: 'error', text: 'Failed to register participant' })
+      setMessage({ type: 'error', text: 'REGISTRATION FAILED' })
     } finally {
       setLoading(false)
       scannerRef.current = false
@@ -192,15 +181,14 @@ export default function EventAttendanceScanner({
     if (!participant) return
 
     if (!teamName.trim()) {
-      setMessage({ type: 'error', text: 'Team Name is required' })
+      setMessage({ type: 'error', text: 'TEAM NAME REQUIRED' })
       return
     }
 
     const memberIds = teamMembers.filter((id) => id.trim())
     
-    // Check for vacancies if completing registration
     if (lockStatus === 'LOCKED' && memberIds.length < teamMembers.length) {
-      const confirmLock = window.confirm('Do you want to lock the team? The team still has vacancy.')
+      const confirmLock = window.confirm('LOCK TEAM WITH VACANCIES?')
       if (!confirmLock) return
     }
 
@@ -221,22 +209,19 @@ export default function EventAttendanceScanner({
       const data = await response.json()
 
       if (!data.success) {
-        setMessage({ type: 'error', text: data.error || 'Failed to create team' })
+        setMessage({ type: 'error', text: data.error || 'TEAM CREATION FAILED' })
       } else {
         setMessage({
           type: 'success',
-          text: data.message || `Team created with ${data.totalMembers} members.`,
+          text: `TEAM "${teamName.toUpperCase()}" CREATED`,
         })
-        setParticipant(null)
-        setEvent(null)
-        setRegistered(null)
+        resetScannerState()
         setShowTeamModal(false)
         setTeamMembers([])
         setTeamName('')
       }
     } catch (error) {
-      console.error('Create team error:', error)
-      setMessage({ type: 'error', text: 'Failed to create team' })
+      setMessage({ type: 'error', text: 'TEAM CREATION FAILED' })
     } finally {
       setLoading(false)
       scannerRef.current = false
@@ -244,168 +229,224 @@ export default function EventAttendanceScanner({
     }
   }
 
+  const resetScannerState = () => {
+    setParticipant(null)
+    setEvent(null)
+    setRegistered(null)
+    setQrData(null)
+  }
+
   return (
-    <div className="w-full max-w-2xl mx-auto p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <p className="text-sm text-gray-600 uppercase tracking-wide">FOR ATTENDANCE</p>
-        <h2 className="text-2xl font-bold text-gray-900">{eventName}</h2>
+    <div className="w-full max-w-2xl mx-auto space-y-6">
+      {/* Platform Header */}
+      <div className="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 overflow-hidden">
+        <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+             <div className="p-2 bg-blue-600/10 rounded-lg">
+                <QrCode className="w-5 h-5 text-blue-500" />
+             </div>
+             <div>
+                <h2 className="text-xs font-black text-white tracking-widest uppercase">{eventName}</h2>
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em]">Live Attendance Terminal</p>
+             </div>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 rounded-full">
+             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+             <span className="text-[9px] font-black text-emerald-500 tracking-wider">ONLINE</span>
+          </div>
+        </div>
+
+        <div className="p-6 sm:p-8">
+           {/* Message Alert */}
+           {message && (
+             <div className={`mb-6 p-4 rounded-2xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${
+               message.type === 'success' 
+                 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' 
+                 : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
+             }`}>
+               {message.type === 'success' ? <CheckCircle2 className="w-5 h-5 flex-shrink-0" /> : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
+               <p className="text-xs font-black tracking-widest uppercase">{message.text}</p>
+             </div>
+           )}
+
+           {/* Scanner Area */}
+           {!participant ? (
+             <div className="relative group">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-violet-600 rounded-3xl blur opacity-10 group-hover:opacity-20 transition duration-1000" />
+                <div className="relative border-2 border-slate-800 bg-slate-950 rounded-3xl overflow-hidden aspect-video sm:aspect-[16/9] flex items-center justify-center">
+                   {scannerEnabled ? (
+                      <Scanner
+                        onScan={handleScan}
+                        onError={(error) => console.error(error)}
+                        constraints={{ facingMode: 'environment' }}
+                        components={{ finder: true }}
+                      />
+                   ) : (
+                      <div className="flex flex-col items-center gap-4">
+                         <div className="w-12 h-12 border-2 border-slate-800 border-t-blue-500 rounded-full animate-spin" />
+                         <p className="text-[10px] font-black text-slate-500 tracking-[0.3em] uppercase">Ready for next scan</p>
+                      </div>
+                   )}
+                   {/* HUD Overlay */}
+                   <div className="absolute inset-0 pointer-events-none border-[20px] border-slate-950/20" />
+                </div>
+             </div>
+           ) : (
+             <div className="space-y-6 animate-in zoom-in-95 duration-300">
+                {/* Participant Data Card */}
+                <div className="bg-slate-950/50 rounded-3xl border border-slate-800 p-6 relative overflow-hidden">
+                   <div className="absolute top-0 right-0 p-6 opacity-5">
+                      <Users size={80} />
+                   </div>
+                   
+                   <div className="flex flex-col sm:flex-row justify-between gap-6 relative z-10">
+                      <div className="space-y-4">
+                         <div>
+                            <p className="text-[9px] font-black text-slate-500 tracking-[0.2em] uppercase mb-1">Full Name</p>
+                            <p className="text-xl font-black text-white tracking-tight">{participant.name}</p>
+                         </div>
+                         <div>
+                            <p className="text-[9px] font-black text-slate-500 tracking-[0.2em] uppercase mb-1">Identity Token</p>
+                            <code className="text-sm font-mono text-blue-400 bg-blue-400/5 px-2 py-1 rounded-md border border-blue-400/10">{participant.shacklesId}</code>
+                         </div>
+                      </div>
+                      
+                      <div className="flex flex-col justify-end text-right">
+                         <p className="text-[9px] font-black text-slate-500 tracking-[0.2em] uppercase mb-1">Status</p>
+                         {registered ? (
+                            <div className="flex items-center gap-2 text-emerald-500 justify-end">
+                               <ShieldCheck className="w-5 h-5" />
+                               <span className="text-sm font-black tracking-widest uppercase">Registered</span>
+                            </div>
+                         ) : (
+                            <div className="flex items-center gap-2 text-amber-500 justify-end">
+                               <AlertCircle className="w-5 h-5" />
+                               <span className="text-sm font-black tracking-widest uppercase">Not Registered</span>
+                            </div>
+                         )}
+                      </div>
+                   </div>
+                </div>
+
+                {/* Action Controls */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                   {registered ? (
+                      <button
+                        onClick={handleMarkPresent}
+                        disabled={loading}
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white font-black py-4 px-6 rounded-2xl transition-all shadow-lg shadow-emerald-950/20 text-xs tracking-widest uppercase flex items-center justify-center gap-2"
+                      >
+                        {loading ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        {loading ? 'PROCESSING...' : 'MARK ATTENDANCE'}
+                      </button>
+                   ) : (
+                      <button
+                        onClick={handleRegisterForEvent}
+                        disabled={loading}
+                        className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-black py-4 px-6 rounded-2xl transition-all shadow-lg shadow-blue-950/20 text-xs tracking-widest uppercase flex items-center justify-center gap-2"
+                      >
+                        {loading ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <Plus className="w-4 h-4" />}
+                        {loading ? 'PROCESSING...' : (event?.participationMode === 'TEAM' ? 'ON-SPOT TEAM REG' : 'ON-SPOT REGISTER')}
+                      </button>
+                   )}
+
+                   <button
+                     onClick={() => {
+                        resetScannerState()
+                        scannerRef.current = false
+                        setScannerEnabled(true)
+                     }}
+                     className="px-8 py-4 border border-slate-800 text-slate-400 font-black rounded-2xl hover:bg-slate-800 transition-all text-xs tracking-widest uppercase"
+                   >
+                     CANCEL
+                   </button>
+                </div>
+             </div>
+           )}
+        </div>
       </div>
 
-      {/* Message Alert */}
-      {message && (
-        <div
-          className={`mb-4 p-4 rounded-lg ${
-            message.type === 'success'
-              ? 'bg-green-50 text-green-800 border border-green-200'
-              : message.type === 'error'
-                ? 'bg-red-50 text-red-800 border border-red-200'
-                : 'bg-blue-50 text-blue-800 border border-blue-200'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+      {/* Stats / Footer */}
+      <div className="flex justify-between items-center px-6">
+         <p className="text-[10px] font-black text-slate-500 tracking-widest uppercase">Sessions Scanned: {scannedToday}</p>
+         <p className="text-[10px] font-black text-slate-500 tracking-widest uppercase">Terminal ID: {eventId.slice(-8).toUpperCase()}</p>
+      </div>
 
-      {/* Scanner */}
-      {!participant ? (
-        <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden mb-6">
-          {scannerEnabled && (
-            <Scanner
-              onScan={handleScan}
-              onError={(error) => console.error('QR Scanner error:', error)}
-              constraints={{ facingMode: 'environment' }}
-              components={{}}
-             />
-          )}
-        </div>
-      ) : null}
-
-      {/* Participant Info */}
-      {participant && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div>
-              <p className="text-sm text-gray-600">Name</p>
-              <p className="text-lg font-semibold text-gray-900">{participant.name}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Shackles ID</p>
-              <p className="text-lg font-semibold text-gray-900">{participant.shacklesId}</p>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3">
-            {registered ? (
-              <button
-                onClick={handleMarkPresent}
-                disabled={loading}
-                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-3 px-4 rounded-lg transition"
-              >
-                {loading ? 'Processing...' : 'MARK PRESENT'}
-              </button>
-            ) : (
-              <button
-                onClick={handleRegisterForEvent}
-                disabled={loading}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-4 rounded-lg transition"
-              >
-                {loading ? 'Processing...' : (event?.participationMode === 'TEAM' ? 'REGISTER A TEAM' : 'REGISTER FOR EVENT')}
-              </button>
-            )}
-
-            <button
-              onClick={() => {
-                setParticipant(null)
-                setEvent(null)
-                setRegistered(null)
-                setQrData(null)
-                setTeamName('')
-                scannerRef.current = false
-                setScannerEnabled(true)
-              }}
-              className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Team Member Modal */}
+      {/* Team Modal Reimagined */}
       {showTeamModal && event && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4">Register a Team</h3>
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] shadow-2xl p-8 max-w-md w-full relative animate-in zoom-in-95 duration-300">
+            <button 
+               onClick={() => setShowTeamModal(false)}
+               className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors"
+            >
+               <X size={24} />
+            </button>
+
+            <div className="mb-8">
+               <h3 className="text-2xl font-black text-white tracking-tight mb-2 uppercase">Create Team</h3>
+               <p className="text-xs font-bold text-slate-500 tracking-widest uppercase">Team Registration Console</p>
+            </div>
             
-            <div className="space-y-4 mb-6">
+            <div className="space-y-6 mb-10">
               <div>
-                <label className="text-sm text-gray-600 block mb-1">Team Name <span className="text-red-500">*</span></label>
+                <label className="text-[10px] font-black text-slate-500 tracking-widest uppercase block mb-2 ml-1">Team Designation</label>
                 <input
                   type="text"
-                  placeholder="Enter team name"
+                  placeholder="E.G. THE VINTAGE CREW"
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-5 py-4 bg-slate-950 border border-slate-800 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-bold text-sm tracking-wide"
                 />
               </div>
 
               <div>
-                <label className="text-sm text-gray-600 block mb-1">Enter Shackles IDs for other team members (Captain is already included)</label>
-                <div className="space-y-3 max-h-48 overflow-y-auto">
+                <label className="text-[10px] font-black text-slate-500 tracking-widest uppercase block mb-2 ml-1">Member Shackles IDs</label>
+                <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                   {teamMembers.map((id, index) => (
-                    <input
-                      key={index}
-                      type="text"
-                      placeholder={`Member ${index + 1} Shackles ID`}
-                      value={id}
-                      onChange={(e) => {
-                        const newMembers = [...teamMembers]
-                        newMembers[index] = e.target.value
-                        setTeamMembers(newMembers)
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                     />
+                    <div key={index} className="relative group">
+                       <input
+                         type="text"
+                         placeholder={`MEMBER ${index + 1} ID`}
+                         value={id}
+                         onChange={(e) => {
+                           const newMembers = [...teamMembers]
+                           newMembers[index] = e.target.value
+                           setTeamMembers(newMembers)
+                         }}
+                         className="w-full px-5 py-4 bg-slate-950 border border-slate-800 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-bold text-sm tracking-wide"
+                       />
+                       <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-20">
+                          <Users size={16} />
+                       </div>
+                    </div>
                   ))}
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-3">
               <button
-                onClick={() => {
-                  setShowTeamModal(false)
-                  setTeamMembers([])
-                  setTeamName('')
-                  scannerRef.current = false
-                  setScannerEnabled(true)
-                }}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                onClick={() => handleCreateTeam('LOCKED')}
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-blue-900/20 text-xs tracking-widest uppercase"
               >
-                Cancel
+                {loading ? 'PROCESSING...' : 'FINALIZE REGISTRATION'}
               </button>
               <button
                 onClick={() => handleCreateTeam('OPEN')}
                 disabled={loading}
-                className="flex-1 px-3 py-2 text-sm bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white rounded-lg font-semibold"
+                className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 text-slate-300 font-black py-4 rounded-2xl transition-all text-xs tracking-widest uppercase"
               >
-                {loading ? '...' : 'Save as Draft'}
-              </button>
-              <button
-                onClick={() => handleCreateTeam('LOCKED')}
-                disabled={loading}
-                className="flex-1 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-semibold"
-              >
-                {loading ? 'Processing...' : 'Complete Registration'}
+                {loading ? '...' : 'SAVE AS DRAFT'}
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   )
 }
+
 
 

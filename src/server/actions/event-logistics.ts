@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
 import { getActiveYear } from "@/lib/edition";
 import { isScannerBulkTeamFlowEnabled } from "@/lib/env";
 import { logAdminAudit } from "@/lib/admin-audit";
+import { getSession } from "@/lib/session";
 import {
   addMemberToTeamEvent,
   bulkRegisterTeamByShacklesIds,
@@ -15,23 +15,20 @@ import {
 } from "@/server/services/team-registration.service";
 import { runSerializableTransaction } from "@/server/services/transaction.service";
 import { decodeQrPayload } from "@/server/services/qr.service";
+import { executeSafeAction } from "@/lib/safe-action";
+import { Permission, Role } from "@prisma/client";
 
 // --- 1. SCAN LOGIC (For Volunteers) ---
 // Input: Scanned QR Token string
 // Output: Safe User Details + Event Status
 export async function scanParticipantQR(token: string) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return { success: false, error: "Authentication required." };
-  }
-
-  try {
+  return executeSafeAction({ permission: Permission.SCAN_ATTENDANCE }, async (session) => {
     // 1. Decode the structured QR payload
     let userQrToken: string;
     try {
       const decoded = decodeQrPayload(token);
       if (decoded.type !== 'USER') {
-        return { success: false, error: "Invalid QR type. Must be a user QR." };
+        throw new Error("Invalid QR type. Must be a user QR.");
       }
       userQrToken = decoded.uid;
     } catch (e) {
@@ -49,43 +46,32 @@ export async function scanParticipantQR(token: string) {
     });
 
     if (!user) {
-      return { success: false, error: "Invalid QR Code" };
+      throw new Error("Invalid QR Code");
     }
 
     // Return ONLY what's needed for the volunteer
     return {
-      success: true,
-      data: {
-        id: user.id,
-        shacklesId: user.shacklesId,
-        firstName: user.firstName, // Just first name to confirm identity
-        role: user.role,
-        kitStatus: user.kitStatus,
-        registrationType: user.registrationType,
-        events: user.registrations.map(r => ({
-          eventName: r.event.name,
-          attended: r.attended,
-          teamName: r.teamName,
-          memberRole: r.memberRole
-        }))
-      }
+      id: user.id,
+      shacklesId: user.shacklesId,
+      firstName: user.firstName, // Just first name to confirm identity
+      role: user.role,
+      kitStatus: user.kitStatus,
+      registrationType: user.registrationType,
+      events: user.registrations.map(r => ({
+        eventName: r.event.name,
+        attended: r.attended,
+        teamName: r.teamName,
+        memberRole: r.memberRole
+      }))
     };
-  } catch (error) {
-    console.error("Scan Error:", error);
-    return { success: false, error: "System Error during Scan" };
-  }
+  })
 }
 
 export async function scanParticipantByShacklesId(shacklesId: string) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return { success: false, error: "Authentication required." };
-  }
-
-  try {
+  return executeSafeAction({ permission: Permission.SCAN_ATTENDANCE }, async (session) => {
     const normalized = shacklesId.trim();
     if (!normalized) {
-      return { success: false, error: "Shackles ID is required" };
+      throw new Error("Shackles ID is required");
     }
 
     const user = await prisma.user.findUnique({
@@ -98,40 +84,29 @@ export async function scanParticipantByShacklesId(shacklesId: string) {
     });
 
     if (!user) {
-      return { success: false, error: "Participant not found for Shackles ID" };
+      throw new Error("Participant not found for Shackles ID");
     }
 
     return {
-      success: true,
-      data: {
-        id: user.id,
-        shacklesId: user.shacklesId,
-        firstName: user.firstName,
-        role: user.role,
-        kitStatus: user.kitStatus,
-        registrationType: user.registrationType,
-        events: user.registrations.map(r => ({
-          eventName: r.event.name,
-          attended: r.attended,
-          teamName: r.teamName,
-          memberRole: r.memberRole
-        }))
-      }
+      id: user.id,
+      shacklesId: user.shacklesId,
+      firstName: user.firstName,
+      role: user.role,
+      kitStatus: user.kitStatus,
+      registrationType: user.registrationType,
+      events: user.registrations.map(r => ({
+        eventName: r.event.name,
+        attended: r.attended,
+        teamName: r.teamName,
+        memberRole: r.memberRole
+      }))
     };
-  } catch (error) {
-    console.error("Scan by Shackles ID Error:", error);
-    return { success: false, error: "System Error during scan" };
-  }
+  })
 }
 
 // --- 2. KIT DISTRIBUTION ---
 export async function updateKitStatus(userId: string) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return { success: false, error: "Authentication required." };
-  }
-
-  try {
+  return executeSafeAction({ permission: Permission.SCAN_KIT }, async (session) => {
     await prisma.user.update({
       where: { id: userId },
       data: { 
@@ -140,12 +115,9 @@ export async function updateKitStatus(userId: string) {
       }
     });
     
-    // Revalidate dashboard logic if needed
     revalidatePath('/admin'); 
-    return { success: true, message: "Kit Issued Successfully" };
-  } catch {
-    return { success: false, error: "Failed to update kit status" };
-  }
+    return { message: "Kit Issued Successfully" };
+  })
 }
 
 export async function getKitsIssuedCount() {
@@ -164,12 +136,7 @@ export async function getKitsIssuedCount() {
 
 // --- 3. EVENT ATTENDANCE ---
 export async function markEventAttendance(userId: string, eventName: string) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return { success: false, error: "Authentication required." };
-  }
-
-  try {
+  return executeSafeAction({ permission: Permission.SCAN_ATTENDANCE }, async (session) => {
     const activeYear = getActiveYear();
 
     // 1. Find Event ID
@@ -185,7 +152,7 @@ export async function markEventAttendance(userId: string, eventName: string) {
       },
     });
 
-    if (!event) return { success: false, error: "Event not found" };
+    if (!event) throw new Error("Event not found");
 
     // 2. Check Registration
     const registration = await prisma.eventRegistration.findUnique({
@@ -197,18 +164,14 @@ export async function markEventAttendance(userId: string, eventName: string) {
       }
     });
 
-    // 3. Scenario: Not Registered -> "Prompt to Register"
+    // 3. Scenario: Not Registered
     if (!registration) {
-      return { 
-        success: false, 
-        code: "NOT_REGISTERED",
-        error: `User is not registered for ${eventName}. Please register first.` 
-      };
+      throw new Error(`User is not registered for ${eventName}. Please register first.`);
     }
 
     // 4. Scenario: Already Attended
     if (registration.attended) {
-      return { success: true, message: "Already marked present." };
+      return { message: "Already marked present." };
     }
 
     // 5. Scenario: Registered -> Mark Present
@@ -220,83 +183,60 @@ export async function markEventAttendance(userId: string, eventName: string) {
       }
     });
 
-    return { success: true, message: `Marked present for ${eventName}` };
-
-  } catch {
-    return { success: false, error: "Attendance failed" };
-  }
+    return { message: `Marked present for ${eventName}` };
+  })
 }
 
 // --- 4. QUICK REGISTRATION (On-Spot) ---
 export async function quickRegisterForEvent(userId: string, eventName: string) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return { success: false, error: "Authentication required." };
-  }
-
-  try {
+  return executeSafeAction({ permission: Permission.ONSPOT_INDIVIDUAL_REG }, async (session) => {
     const activeYear = getActiveYear();
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { payment: true },
-    });
-    if (!user) return { success: false, error: "User not found" };
-    if (user.payment?.status !== "VERIFIED") {
-      return { success: false, error: "Only verified users can be registered." };
-    }
-
-    const event = await prisma.event.findFirst({
-      where: {
-        name: { equals: eventName, mode: "insensitive" },
-        year: activeYear,
-        isActive: true,
-        isArchived: false,
-        isTemplate: false,
-      },
-    });
-    if (!event) return { success: false, error: "Event not found" };
-
-    if (event.participationMode === "TEAM") {
-      return {
-        success: false,
-        error: "Team events require full team registration flow with leader assignment.",
-      };
-    }
-
-    const registeredTeams = await prisma.eventRegistration.count({ where: { eventId: event.id } });
-    if (event.maxTeams != null && registeredTeams >= event.maxTeams) {
-      return { success: false, error: "Team slots are full" };
-    }
-
-    const participants = await prisma.eventRegistration.findMany({
-      where: { eventId: event.id },
-      select: { teamId: true, teamSize: true },
-    });
-    const participantCount = participants.reduce((sum, registration) => {
-      return sum + (registration.teamId ? 1 : registration.teamSize || 1);
-    }, 0);
-
-    if (event.maxParticipants != null && participantCount + 1 > event.maxParticipants) {
-      return { success: false, error: "Event is full" };
-    }
-
-    // Create Registration
-    await prisma.eventRegistration.create({
-      data: {
-        userId: userId,
-        eventId: event.id,
-        teamSize: 1,
-        attended: true, // Auto-mark present since they are standing right there
-        attendedAt: new Date()
+    return await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        include: { payment: true },
+      });
+      if (!user) throw new Error("User not found");
+      if (user.payment?.status !== "VERIFIED") {
+        throw new Error("Only verified users can be registered.");
       }
+
+      const event = await tx.event.findFirst({
+        where: {
+          name: { equals: eventName, mode: "insensitive" },
+          year: activeYear,
+          isActive: true,
+          isArchived: false,
+          isTemplate: false,
+        },
+      });
+      if (!event) throw new Error("Event not found");
+
+      if (event.participationMode === "TEAM") {
+        throw new Error("Team events require full team registration flow with leader assignment.");
+      }
+
+      const participantCount = await tx.eventRegistration.count({ where: { eventId: event.id } });
+
+      if (event.maxParticipants != null && participantCount + 1 > event.maxParticipants) {
+        throw new Error("Event is full");
+      }
+
+      // Create Registration
+      await tx.eventRegistration.create({
+        data: {
+          userId: userId,
+          eventId: event.id,
+          teamSize: 1,
+          attended: true,
+          attendedAt: new Date()
+        }
+      });
+
+      return { message: `Successfully registered & marked present for ${eventName}` };
     });
-
-    return { success: true, message: `Successfully registered & marked present for ${eventName}` };
-
-  } catch {
-    return { success: false, error: "Registration failed" };
-  }
+  })
 }
 
 // --- 5. GET ALL EVENTS ---
@@ -403,12 +343,7 @@ export async function getScannerJoinableTeams(input: {
 }
 
 export async function scannerRegisterTeamMember(userId: string, eventName: string, teamName: string) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return { success: false, error: "Authentication required." };
-  }
-
-  try {
+  return executeSafeAction({ permission: Permission.ONSPOT_TEAM_REG }, async (session) => {
     const result = await runSerializableTransaction(prisma, async (tx) => addMemberToTeamEvent({
       db: tx,
       userId,
@@ -417,7 +352,7 @@ export async function scannerRegisterTeamMember(userId: string, eventName: strin
       stationId: selectedStationId(eventName),
     }));
 
-    if (!result.success) return { success: false, error: result.error, reason: result.reason, details: result.details };
+    if (!result.success) throw new Error(result.error || "Team registration failed");
 
     revalidatePath("/admin/event-registrations");
     revalidatePath("/admin/events");
@@ -426,20 +361,11 @@ export async function scannerRegisterTeamMember(userId: string, eventName: strin
     revalidatePath("/workshops");
 
     return result;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[scannerRegisterTeamMember]", msg);
-    return { success: false, error: `Team registration failed: ${msg}` };
-  }
+  })
 }
 
 export async function scannerCompleteTeamRegistration(eventName: string, teamName: string, leaderUserId?: string) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return { success: false, error: "Authentication required." };
-  }
-
-  try {
+  return executeSafeAction({ permission: Permission.ONSPOT_TEAM_REG }, async (session) => {
     const result = await runSerializableTransaction(prisma, async (tx) => completeExistingTeamRegistration({
       db: tx,
       eventName,
@@ -447,7 +373,7 @@ export async function scannerCompleteTeamRegistration(eventName: string, teamNam
       leaderUserId,
     }));
 
-    if (!result.success) return { success: false, error: result.error, reason: result.reason, details: result.details };
+    if (!result.success) throw new Error(result.error || "Unable to complete team registration");
 
     revalidatePath("/admin/event-registrations");
     revalidatePath("/admin/events");
@@ -456,11 +382,7 @@ export async function scannerCompleteTeamRegistration(eventName: string, teamNam
     revalidatePath("/workshops");
 
     return result;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[scannerCompleteTeamRegistration]", msg);
-    return { success: false, error: `Unable to complete team registration: ${msg}` };
-  }
+  })
 }
 
 function selectedStationId(eventName: string) {
@@ -474,7 +396,7 @@ async function logScannerBulkAudit(input: {
 }) {
   const session = await getSession();
   const actorId = typeof session?.userId === "string" ? session.userId : "unknown";
-
+  
   let actorEmail: string | null = null;
   if (actorId !== "unknown") {
     const actor = await prisma.user.findUnique({
@@ -502,7 +424,7 @@ export async function getScannerBulkTeamFlowStatus() {
 
 export async function getScannerStepStatus(token: string) {
   const scanned = await scanParticipantQR(token);
-  if (!scanned.success || !scanned.data) {
+  if (!scanned.success) {
     return {
       success: false,
       error: scanned.error || "Unable to resolve participant.",

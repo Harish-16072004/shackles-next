@@ -244,59 +244,66 @@ export async function createTeam(input: {
     return { success: false, reason: "CAPACITY_FULL", error: "Event is full." };
   }
 
-  // Unique team name check
-  const existingTeam = await input.db.team.findUnique({
-    where: { eventId_nameNormalized: { eventId: event.id, nameNormalized: normalizedTeam } },
-  });
-  if (existingTeam) {
-    return { success: false, reason: "TEAM_NAME_TAKEN", error: "A team with this name already exists for this event." };
-  }
+  const performTeamCreation = async (tx: Prisma.TransactionClient) => {
+    // Unique team name check inside transaction
+    const existingTeam = await tx.team.findUnique({
+      where: { eventId_nameNormalized: { eventId: event.id, nameNormalized: normalizedTeam } },
+    });
+    if (existingTeam) {
+      throw new Error("A team with this name already exists for this event.");
+    }
 
-  const currentTeams = await input.db.team.count({ where: { eventId: event.id } });
-  if (isMaxTeamsExceeded(event.maxTeams, currentTeams, 1)) {
-    return { success: false, reason: "TEAM_SLOTS_FULL", error: "Team slots are full for this event." };
-  }
+    const currentTeams = await tx.team.count({ where: { eventId: event.id } });
+    if (isMaxTeamsExceeded(event.maxTeams, currentTeams, 1)) {
+      throw new Error("Team slots are full for this event.");
+    }
 
-  const teamCode = await generateUniqueTeamCode(input.db, event.id);
-  const joinCode = await generateUniqueJoinCode(input.db);
+    const teamCode = await generateUniqueTeamCode(tx, event.id);
+    const joinCode = await generateUniqueJoinCode(tx);
 
-  const team = await input.db.team.create({
-    data: {
-      eventId: event.id,
-      name: input.teamName.trim(),
-      nameNormalized: normalizedTeam,
-      teamCode,
-      joinCode,
-      joinCodeExpiresAt: input.joinCodeExpiresAt ?? null,
-      memberCount: 1,
-      status: TeamStatus.OPEN,
-      leaderUserId: leader.id,
-      leaderContactPhoneSnapshot: leader.phone,
-      leaderContactEmailSnapshot: leader.email,
-    },
-  });
+    const team = await tx.team.create({
+      data: {
+        eventId: event.id,
+        name: input.teamName.trim(),
+        nameNormalized: normalizedTeam,
+        teamCode,
+        joinCode,
+        joinCodeExpiresAt: input.joinCodeExpiresAt ?? null,
+        memberCount: 1,
+        status: TeamStatus.OPEN,
+        leaderUserId: leader.id,
+        leaderContactPhoneSnapshot: leader.phone,
+        leaderContactEmailSnapshot: leader.email,
+      },
+    });
 
-  await input.db.eventRegistration.create({
-    data: {
-      userId: leader.id,
-      eventId: event.id,
-      teamId: team.id,
-      teamName: team.name,
-      teamSize: 1,
-      memberRole: TeamMemberRole.LEADER,
-      attended: false,
-      source: RegistrationSource.ONLINE,
-      syncStatus: RegistrationSyncStatus.APPLIED,
-      year: activeYear,
-    },
-  });
+    await tx.eventRegistration.create({
+      data: {
+        userId: leader.id,
+        eventId: event.id,
+        teamId: team.id,
+        teamName: team.name,
+        teamSize: 1,
+        memberRole: TeamMemberRole.LEADER,
+        attended: false,
+        source: RegistrationSource.ONLINE,
+        syncStatus: RegistrationSyncStatus.APPLIED,
+        year: activeYear,
+      },
+    });
 
-  return {
-    success: true,
-    message: `Team ${team.name} created. Share the join code with your teammates.`,
-    teamCode,
-    joinCode,
+    return { 
+      success: true as const, 
+      message: `Team ${team.name} created successfully.`,
+      teamId: team.id, 
+      joinCode: team.joinCode || undefined
+    };
   };
+
+  if ('$transaction' in input.db) {
+    return await (input.db as any).$transaction(performTeamCreation);
+  }
+  return await performTeamCreation(input.db as Prisma.TransactionClient);
 }
 
 // ---------------------------------------------------------------------------
@@ -355,7 +362,7 @@ export async function joinTeamByCode(input: {
     return { success: false, reason: "EVENT_NOT_AVAILABLE", error: "This event is no longer accepting registrations." };
   }
 
-  if (team.status !== TeamStatus.OPEN && team.status !== TeamStatus.DRAFT) {
+  if (team.status !== TeamStatus.OPEN) {
     return { success: false, reason: "TEAM_LOCKED", error: "This team is no longer accepting new members." };
   }
 
@@ -394,7 +401,7 @@ export async function joinTeamByCode(input: {
   });
   if (existing) {
     return {
-      success: true,
+      success: true as const,
       message: "You are already registered for this event.",
       teamName: team.name,
       eventName: event.name,
@@ -426,59 +433,65 @@ export async function joinTeamByCode(input: {
     throw err;
   }
 
-  // Register
-  await input.db.eventRegistration.create({
-    data: {
-      userId: user.id,
-      eventId: event.id,
-      teamId: team.id,
-      teamName: team.name,
-      teamSize: 1,
-      memberRole: TeamMemberRole.MEMBER,
-      attended: false,
-      source: RegistrationSource.ONLINE,
-      syncStatus: RegistrationSyncStatus.APPLIED,
-      year: activeYear,
-    },
-  });
-
-  // Atomic increment with capacity guard — prevents concurrent over-join
-  const shouldLock = team.memberCount + 1 === teamMaxSize;
-  const updated = await input.db.team.updateMany({
-    where: {
-      id: team.id,
-      memberCount: { lt: teamMaxSize }, // only increment if still within capacity
-    },
-    data: { 
-      memberCount: { increment: 1 },
-      ...(shouldLock ? { 
-        status: TeamStatus.LOCKED,
-        lockedAt: new Date(),
-        joinCode: null,
-        joinCodeExpiresAt: null
-      } : {})
-    },
-  });
-
-  if (updated.count === 0) {
-    // Another concurrent joiner just filled the last slot — rollback by deleting
-    // the registration we just created. This is a rare edge case.
-    await input.db.eventRegistration.deleteMany({
-      where: { userId: input.userId, eventId: event.id },
+  const performJoin = async (tx: Prisma.TransactionClient) => {
+    // 9. Re-check capacity inside transaction
+    const freshTeam = await tx.team.findUnique({
+      where: { id: team.id },
+      select: { memberCount: true, status: true },
     });
-    return {
-      success: false,
-      reason: "TEAM_SIZE_EXCEEDED",
-      error: `Team is now full. Please try again.`,
-    };
-  }
 
-  return {
-    success: true,
-    message: `Successfully joined team ${team.name} for ${event.name}.`,
-    teamName: team.name,
-    eventName: event.name,
+    if (!freshTeam || freshTeam.status !== TeamStatus.OPEN) {
+      throw new Error("Team is no longer accepting new members.");
+    }
+
+    if (freshTeam.memberCount + 1 > teamMaxSize) {
+      throw new Error(`Team is already full (${teamMaxSize}).`);
+    }
+
+    // 10. Register
+    await tx.eventRegistration.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        teamId: team.id,
+        teamName: team.name,
+        teamSize: 1,
+        memberRole: TeamMemberRole.MEMBER,
+        attended: false,
+        source: RegistrationSource.ONLINE,
+        syncStatus: RegistrationSyncStatus.APPLIED,
+        year: activeYear,
+      },
+    });
+
+    // 11. Atomic increment with capacity guard
+    const shouldLock = freshTeam.memberCount + 1 === teamMaxSize;
+    await tx.team.update({
+      where: { id: team.id },
+      data: { 
+        memberCount: { increment: 1 },
+        ...(shouldLock ? { 
+          status: TeamStatus.LOCKED,
+          lockedAt: new Date(),
+          joinCode: null,
+          joinCodeExpiresAt: null
+        } : {})
+      },
+    });
+
+    return {
+      success: true as const,
+      message: `Successfully joined team ${team.name} for ${event.name}.`,
+      teamName: team.name,
+      eventName: event.name,
+    };
   };
+
+  const client = input.db as any;
+  if ('$transaction' in client) {
+    return await client.$transaction(performJoin);
+  }
+  return await performJoin(input.db as Prisma.TransactionClient);
 }
 
 // ---------------------------------------------------------------------------
@@ -545,7 +558,7 @@ export async function lockTeam(input: {
     }
   }
 
-  if (team.status === TeamStatus.LOCKED || team.status === TeamStatus.COMPLETED) {
+  if (team.status === TeamStatus.LOCKED) {
     return { success: false, reason: "TEAM_LOCKED", error: "Team is already locked." };
   }
   if (team.status === TeamStatus.CANCELLED) {
@@ -579,7 +592,7 @@ export async function lockTeam(input: {
 
   // Optimistic lock: only update if still OPEN/DRAFT (race-condition guard)
   const res = await input.db.team.updateMany({
-    where: { id: team.id, status: { in: [TeamStatus.OPEN, TeamStatus.DRAFT] } },
+    where: { id: team.id, status: TeamStatus.OPEN },
     data: {
       status: TeamStatus.LOCKED,
       memberCount,
@@ -602,7 +615,7 @@ export async function lockTeam(input: {
   }));
 
   return {
-    success: true,
+    success: true as const,
     message: `Team ${team.name} is now locked with ${memberCount} members.`,
     teamName: team.name,
     eventName: team.event.name,
@@ -686,7 +699,7 @@ export async function addMemberToTeamEvent(input: {
   const existing = await input.db.eventRegistration.findUnique({
     where: { userId_eventId: { userId: input.userId, eventId: event.id } },
   });
-  if (existing) return { success: true, message: "Participant already in this event." };
+  if (existing) return { success: true as const, message: "Participant already in this event." };
 
   const participantCount = await getEventParticipantCount({ db: input.db, eventId: event.id });
   if (isMaxParticipantsExceeded(event.maxParticipants, participantCount, 1)) {
@@ -697,75 +710,81 @@ export async function addMemberToTeamEvent(input: {
     where: { eventId_nameNormalized: { eventId: event.id, nameNormalized: normalizedTeam } },
   });
 
-  if (!team) {
-    const currentTeams = await input.db.team.count({ where: { eventId: event.id } });
-    if (isMaxTeamsExceeded(event.maxTeams, currentTeams, 1)) {
-      return { success: false, reason: "TEAM_SLOTS_FULL", error: "Team slots are full." };
+  const performOnSpotRegister = async (tx: Prisma.TransactionClient) => {
+    let activeTeam = team;
+
+    if (!activeTeam) {
+      const currentTeams = await tx.team.count({ where: { eventId: event.id } });
+      if (isMaxTeamsExceeded(event.maxTeams, currentTeams, 1)) {
+        throw new Error("Team slots are full.");
+      }
+
+      activeTeam = await tx.team.create({
+        data: {
+          eventId: event.id,
+          name: input.teamName.trim(),
+          nameNormalized: normalizedTeam,
+          teamCode: await generateUniqueTeamCode(tx, event.id),
+          memberCount: 0,
+          status: TeamStatus.OPEN,
+          leaderUserId: user.id,
+          leaderContactPhoneSnapshot: user.phone,
+          leaderContactEmailSnapshot: user.email,
+        },
+      });
     }
 
-    team = await input.db.team.create({
+    if (!activeTeam) throw new Error("Failed to resolve team.");
+
+    if (activeTeam.status !== TeamStatus.OPEN) {
+      throw new Error("Team is already locked.");
+    }
+
+    const maxTeamSize = event.teamMaxSize ?? 4;
+    if (activeTeam.memberCount + 1 > maxTeamSize) {
+      throw new Error(`Team can have at most ${maxTeamSize} members.`);
+    }
+
+    await tx.eventRegistration.create({
       data: {
+        userId: user.id,
         eventId: event.id,
-        name: input.teamName.trim(),
-        nameNormalized: normalizedTeam,
-        teamCode: await generateUniqueTeamCode(input.db, event.id),
-        memberCount: 0,
-        // On-spot coordinator flow: use OPEN so the same status semantics apply
-        status: TeamStatus.OPEN,
-        leaderUserId: user.id,
-        leaderContactPhoneSnapshot: user.phone,
-        leaderContactEmailSnapshot: user.email,
+        teamId: activeTeam.id,
+        teamName: activeTeam.name,
+        teamSize: 1,
+        memberRole: activeTeam.leaderUserId === user.id ? TeamMemberRole.LEADER : TeamMemberRole.MEMBER,
+        attended: true,
+        attendedAt: new Date(),
+        source: RegistrationSource.ON_SPOT,
+        syncStatus: RegistrationSyncStatus.APPLIED,
+        stationId: input.stationId,
+        year: activeYear,
+        ...(input.clientOperationId ? { clientOperationId: input.clientOperationId } : {}),
+        ...(input.syncedAt ? { syncedAt: input.syncedAt } : {}),
       },
     });
+
+    const shouldAutoLock = activeTeam.memberCount + 1 === maxTeamSize;
+    await tx.team.update({
+      where: { id: activeTeam.id },
+      data: { 
+        memberCount: { increment: 1 },
+        ...(shouldAutoLock ? { 
+          status: TeamStatus.LOCKED,
+          lockedAt: new Date(),
+          joinCode: null,
+          joinCodeExpiresAt: null
+        } : {})
+      },
+    });
+
+    return { success: true as const, message: `Added to team ${activeTeam.name} and marked present.` };
+  };
+
+  if ('$transaction' in input.db) {
+    return await (input.db as any).$transaction(performOnSpotRegister);
   }
-
-  if (team.status !== TeamStatus.OPEN && team.status !== TeamStatus.DRAFT) {
-    return { success: false, reason: "TEAM_LOCKED", error: "Team is already locked." };
-  }
-
-  const maxTeamSize = event.teamMaxSize ?? 4;
-  if (team.memberCount + 1 > maxTeamSize) {
-    return {
-      success: false,
-      reason: "TEAM_SIZE_EXCEEDED",
-      error: `Team can have at most ${maxTeamSize} members.`,
-    };
-  }
-
-  await input.db.eventRegistration.create({
-    data: {
-      userId: user.id,
-      eventId: event.id,
-      teamId: team.id,
-      teamName: team.name,
-      teamSize: 1,
-      memberRole: team.leaderUserId === user.id ? TeamMemberRole.LEADER : TeamMemberRole.MEMBER,
-      attended: true,
-      attendedAt: new Date(),
-      source: RegistrationSource.ON_SPOT,
-      syncStatus: RegistrationSyncStatus.APPLIED,
-      stationId: input.stationId,
-      year: activeYear,
-      ...(input.clientOperationId ? { clientOperationId: input.clientOperationId } : {}),
-      ...(input.syncedAt ? { syncedAt: input.syncedAt } : {}),
-    },
-  });
-
-  const shouldAutoLock = team.memberCount + 1 === maxTeamSize;
-  await input.db.team.update({
-    where: { id: team.id },
-    data: { 
-      memberCount: { increment: 1 },
-      ...(shouldAutoLock ? { 
-        status: TeamStatus.LOCKED,
-        lockedAt: new Date(),
-        joinCode: null,
-        joinCodeExpiresAt: null
-      } : {})
-    },
-  });
-
-  return { success: true, message: `Added to team ${team.name} and marked present.` };
+  return await performOnSpotRegister(input.db as Prisma.TransactionClient);
 }
 
 // ---------------------------------------------------------------------------
@@ -993,7 +1012,7 @@ export async function bulkRegisterTeamByShacklesIds(input: {
     });
   }
 
-  if (team.status !== TeamStatus.OPEN && team.status !== TeamStatus.DRAFT) {
+  if (team.status !== TeamStatus.OPEN) {
     return { success: false, reason: "TEAM_LOCKED", error: "Team is already locked." };
   }
 
@@ -1059,7 +1078,7 @@ export async function bulkRegisterTeamByShacklesIds(input: {
 
   if (mustLock) {
     const res = await input.db.team.updateMany({
-      where: { id: team.id, status: { in: [TeamStatus.OPEN, TeamStatus.DRAFT] } },
+      where: { id: team.id, status: TeamStatus.OPEN },
       data: teamData,
     });
     if (res.count === 0) {
@@ -1071,13 +1090,13 @@ export async function bulkRegisterTeamByShacklesIds(input: {
 
   if (!mustLock) {
     return {
-      success: true,
+      success: true as const,
       message: `Team ${team.name} updated with ${finalMemberCount} members.`,
     };
   }
 
   return {
-    success: true,
+    success: true as const,
     message: `Team ${team.name} registered and locked with ${finalMemberCount} members.`,
   };
 }
@@ -1124,7 +1143,7 @@ export async function completeExistingTeamRegistration(input: {
   });
 
   if (!team) return { success: false, reason: "TEAM_NOT_FOUND", error: "Team not found." };
-  if (team.status !== TeamStatus.OPEN && team.status !== TeamStatus.DRAFT) {
+  if (team.status !== TeamStatus.OPEN) {
     return { success: false, reason: "TEAM_LOCKED", error: "Team is already completed and locked." };
   }
 

@@ -25,32 +25,23 @@ export default async function CoordinatorDashboard() {
   // Get some stats for the dashboard
   const totalEventsAssigned = assignedEvents.length
 
-  const totalParticipants = await Promise.all(
-    assignedEvents.map(async (event) => {
-      const count = await prisma.eventRegistration.count({
-        where: { eventId: event.id },
-      })
-      return count
+  // Optimized stats fetching: Use groupBy to avoid N+1 queries
+  const eventIds = assignedEvents.map(e => e.id)
+  
+  const [participantStats, teamStats] = await Promise.all([
+    prisma.eventRegistration.groupBy({
+      by: ['attended'],
+      where: { eventId: { in: eventIds } },
+      _count: true
+    }),
+    prisma.team.count({
+      where: { eventId: { in: eventIds } }
     })
-  ).then(counts => counts.reduce((a, b) => a + b, 0))
+  ])
 
-  const totalAttended = await Promise.all(
-    assignedEvents.map(async (event) => {
-      const count = await prisma.eventRegistration.count({
-        where: { eventId: event.id, attended: true },
-      })
-      return count
-    })
-  ).then(counts => counts.reduce((a, b) => a + b, 0))
-
-  const totalTeams = await Promise.all(
-    assignedEvents.map(async (event) => {
-      const count = await prisma.team.count({
-        where: { eventId: event.id },
-      })
-      return count
-    })
-  ).then(counts => counts.reduce((a, b) => a + b, 0))
+  const totalParticipants = participantStats.reduce((sum, s) => sum + s._count, 0)
+  const totalAttended = participantStats.find(s => s.attended)?._count || 0
+  const totalTeams = teamStats
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">

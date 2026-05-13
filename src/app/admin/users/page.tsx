@@ -85,7 +85,28 @@ export default async function UserManagementPage({ searchParams }: { searchParam
   const [users, totalFiltered, totalRegistered, verifiedPayments, pendingPayments, rejectedPayments, generalOnly, workshopOnly, combo, kitsIssued] = await Promise.all([
     prisma.user.findMany({
       where,
-      include: { payment: true },
+      select: {
+        id: true,
+        shacklesId: true,
+        firstName: true,
+        lastName: true,
+        department: true,
+        yearOfStudy: true,
+        email: true,
+        phone: true,
+        collegeName: true,
+        registrationType: true,
+        kitStatus: true,
+        createdAt: true,
+        payment: {
+          select: {
+            status: true,
+            amount: true,
+            proofPath: true,
+            proofUrl: true,
+          },
+        },
+      },
       orderBy,
       skip: (currentPage - 1) * PAGE_SIZE,
       take: PAGE_SIZE,

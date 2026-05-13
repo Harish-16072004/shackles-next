@@ -38,19 +38,37 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
   const events = await prisma.event.findMany({
     where: allowedEventIds ? { id: { in: allowedEventIds } } : undefined,
     orderBy: { name: "asc" },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      date: true,
+      endDate: true,
+      participationMode: true,
       registrations: {
-        include: {
-          user: true,
+        select: {
+          id: true,
+          userId: true,
+          eventId: true,
+          teamName: true,
+          attended: true,
+          attendedAt: true,
+          teamId: true,
+          teamSize: true,
+          memberRole: true,
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+              collegeName: true,
+            },
+          },
           team: {
-            include: {
-              leader: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                },
-              },
+            select: {
+              id: true,
+              name: true,
+              leaderUserId: true,
             },
           },
         },
@@ -238,7 +256,7 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {filtered.map((evt) => (
-              <EventRegistrationCard key={evt.id} event={evt} />
+              <EventRegistrationCard key={evt.id} event={evt as any} />
             ))}
           </div>
         )}

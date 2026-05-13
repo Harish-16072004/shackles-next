@@ -1,8 +1,8 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { requireMarkingCriteriaAccess, requireMarkSubmissionAccess, checkCanManageMarkingCriteria, checkCanSubmitMarks } from '@/lib/session'
-import { Permission } from '@prisma/client'
+import { executeSafeAction } from '@/lib/safe-action'
+import { Permission, Role } from '@prisma/client'
 import { z } from 'zod'
 
 // Validation schemas
@@ -61,15 +61,9 @@ const SubmitMarksSchema = z.object({
 export async function createMarkingCriteria(
   input: z.infer<typeof CreateMarkingCriteriaSchema>
 ) {
-  try {
+  return executeSafeAction({ roles: [Role.ADMIN], permission: Permission.MANAGE_SCORES }, async (session) => {
     // Validate input
     const validated = CreateMarkingCriteriaSchema.parse(input)
-
-    // Check authorization
-    const authCheck = await checkCanManageMarkingCriteria(validated.eventId)
-    if (!authCheck.allowed) {
-      return { success: false, error: authCheck.error || 'Unauthorized' }
-    }
 
     // Check if criteria already exists for this event
     const existing = await prisma.markingCriteria.findUnique({
@@ -78,13 +72,13 @@ export async function createMarkingCriteria(
     })
 
     if (existing) {
-      return { success: false, error: 'Marking criteria already exists for this event' }
+      throw new Error('Marking criteria already exists for this event')
     }
 
     // Verify all components have valid weight percentages that sum appropriately
     const totalWeight = validated.components.reduce((sum, c) => sum + c.weightPercentage, 0)
     if (totalWeight !== 100) {
-      return { success: false, error: `Component weights must sum to 100% (currently ${totalWeight}%)` }
+      throw new Error(`Component weights must sum to 100% (currently ${totalWeight}%)`)
     }
 
     // Create criteria with components in transaction
@@ -109,21 +103,17 @@ export async function createMarkingCriteria(
     })
 
     return {
-      success: true,
       criteriaId: criteria.id,
       message: `Created marking criteria with ${criteria.components.length} components`,
     }
-  } catch (error) {
-    console.error('createMarkingCriteria error:', error)
-    return { success: false, error: 'Failed to create marking criteria' }
-  }
+  })
 }
 
 /**
  * Get marking criteria and components for an event
  */
 export async function getMarkingCriteria(eventId: string) {
-  try {
+  return executeSafeAction({ permission: Permission.MANAGE_SCORES }, async (session) => {
     const criteria = await prisma.markingCriteria.findUnique({
       where: { eventId },
       include: {
@@ -134,32 +124,26 @@ export async function getMarkingCriteria(eventId: string) {
     })
 
     if (!criteria) {
-      return { success: false, error: 'No marking criteria found for this event' }
+      throw new Error('No marking criteria found for this event')
     }
 
     return {
-      success: true,
-      criteria: {
-        id: criteria.id,
-        name: criteria.name,
-        description: criteria.description,
-        maxMarks: criteria.maxMarks,
-        numberOfJudges: criteria.numberOfJudges,
-        components: criteria.components.map(c => ({
-          id: c.id,
-          name: c.name,
-          description: c.description,
-          weightPercentage: c.weightPercentage,
-          maxMarksForComponent: c.maxMarksForComponent,
-          order: c.order,
-        })),
-        createdAt: criteria.createdAt,
-      },
+      id: criteria.id,
+      name: criteria.name,
+      description: criteria.description,
+      maxMarks: criteria.maxMarks,
+      numberOfJudges: criteria.numberOfJudges,
+      components: criteria.components.map(c => ({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        weightPercentage: c.weightPercentage,
+        maxMarksForComponent: c.maxMarksForComponent,
+        order: c.order,
+      })),
+      createdAt: criteria.createdAt,
     }
-  } catch (error) {
-    console.error('getMarkingCriteria error:', error)
-    return { success: false, error: 'Failed to fetch marking criteria' }
-  }
+  })
 }
 
 /**
@@ -169,14 +153,8 @@ export async function getMarkingCriteria(eventId: string) {
 export async function updateMarkingCriteria(
   input: z.infer<typeof UpdateMarkingCriteriaSchema>
 ) {
-  try {
+  return executeSafeAction({ roles: [Role.ADMIN], permission: Permission.MANAGE_SCORES }, async (session) => {
     const validated = UpdateMarkingCriteriaSchema.parse(input)
-
-    // Check authorization
-    const authCheck = await checkCanManageMarkingCriteria(validated.eventId)
-    if (!authCheck.allowed) {
-      return { success: false, error: authCheck.error || 'Unauthorized' }
-    }
 
     // Update criteria
     const criteria = await prisma.markingCriteria.update({
@@ -194,11 +172,8 @@ export async function updateMarkingCriteria(
       },
     })
 
-    return { success: true, criteriaId: criteria.id, message: 'Criteria updated successfully' }
-  } catch (error) {
-    console.error('updateMarkingCriteria error:', error)
-    return { success: false, error: 'Failed to update marking criteria' }
-  }
+    return { criteriaId: criteria.id, message: 'Criteria updated successfully' }
+  })
 }
 
 /**
@@ -206,23 +181,14 @@ export async function updateMarkingCriteria(
  * SuperAdmin only
  */
 export async function deleteMarkingCriteria(eventId: string) {
-  try {
-    // Check authorization
-    const authCheck = await checkCanManageMarkingCriteria(eventId)
-    if (!authCheck.allowed) {
-      return { success: false, error: authCheck.error || 'Unauthorized' }
-    }
-
+  return executeSafeAction({ roles: [Role.ADMIN], permission: Permission.MANAGE_SCORES }, async (session) => {
     // Delete criteria (cascades to components, team marks, component marks, judge markings)
     await prisma.markingCriteria.delete({
       where: { eventId },
     })
 
-    return { success: true, message: 'Marking criteria deleted successfully' }
-  } catch (error) {
-    console.error('deleteMarkingCriteria error:', error)
-    return { success: false, error: 'Failed to delete marking criteria' }
-  }
+    return { message: 'Marking criteria deleted successfully' }
+  })
 }
 
 /**
@@ -230,14 +196,8 @@ export async function deleteMarkingCriteria(eventId: string) {
  * SuperAdmin only
  */
 export async function addComponent(input: z.infer<typeof AddComponentSchema>) {
-  try {
+  return executeSafeAction({ roles: [Role.ADMIN], permission: Permission.MANAGE_SCORES }, async (session) => {
     const validated = AddComponentSchema.parse(input)
-
-    // Check authorization
-    const authCheck = await checkCanManageMarkingCriteria(validated.eventId)
-    if (!authCheck.allowed) {
-      return { success: false, error: authCheck.error || 'Unauthorized' }
-    }
 
     // Get current criteria to check weights
     const criteria = await prisma.markingCriteria.findUnique({
@@ -246,7 +206,7 @@ export async function addComponent(input: z.infer<typeof AddComponentSchema>) {
     })
 
     if (!criteria) {
-      return { success: false, error: 'Marking criteria not found' }
+      throw new Error('Marking criteria not found')
     }
 
     // Check if order already exists
@@ -259,7 +219,7 @@ export async function addComponent(input: z.infer<typeof AddComponentSchema>) {
     })
 
     if (existingOrder) {
-      return { success: false, error: `Component order ${validated.order} already exists` }
+      throw new Error(`Component order ${validated.order} already exists`)
     }
 
     // Create component
@@ -275,14 +235,10 @@ export async function addComponent(input: z.infer<typeof AddComponentSchema>) {
     })
 
     return {
-      success: true,
       componentId: component.id,
       message: 'Component added successfully',
     }
-  } catch (error) {
-    console.error('addComponent error:', error)
-    return { success: false, error: 'Failed to add component' }
-  }
+  })
 }
 
 /**
@@ -290,14 +246,8 @@ export async function addComponent(input: z.infer<typeof AddComponentSchema>) {
  * SuperAdmin only
  */
 export async function deleteComponent(input: z.infer<typeof DeleteComponentSchema>) {
-  try {
+  return executeSafeAction({ roles: [Role.ADMIN], permission: Permission.MANAGE_SCORES }, async (session) => {
     const validated = DeleteComponentSchema.parse(input)
-
-    // Check authorization
-    const authCheck = await checkCanManageMarkingCriteria(validated.eventId)
-    if (!authCheck.allowed) {
-      return { success: false, error: authCheck.error || 'Unauthorized' }
-    }
 
     // Verify component belongs to event's criteria
     const component = await prisma.criteriaComponent.findFirst({
@@ -309,7 +259,7 @@ export async function deleteComponent(input: z.infer<typeof DeleteComponentSchem
     })
 
     if (!component) {
-      return { success: false, error: 'Component not found for this event' }
+      throw new Error('Component not found for this event')
     }
 
     // Delete component (cascades to judge markings for this component)
@@ -317,11 +267,8 @@ export async function deleteComponent(input: z.infer<typeof DeleteComponentSchem
       where: { id: validated.componentId },
     })
 
-    return { success: true, message: 'Component deleted successfully' }
-  } catch (error) {
-    console.error('deleteComponent error:', error)
-    return { success: false, error: 'Failed to delete component' }
-  }
+    return { message: 'Component deleted successfully' }
+  })
 }
 
 /**
@@ -329,7 +276,7 @@ export async function deleteComponent(input: z.infer<typeof DeleteComponentSchem
  * SuperAdmin only - judge identities hidden
  */
 export async function getLeaderboard(eventId: string) {
-  try {
+  return executeSafeAction({ roles: [Role.ADMIN, Role.COORDINATOR], permission: Permission.MANAGE_SCORES }, async (session) => {
     const criteria = await prisma.markingCriteria.findUnique({
       where: { eventId },
       include: {
@@ -354,17 +301,10 @@ export async function getLeaderboard(eventId: string) {
     })
 
     if (!criteria) {
-      return { success: false, error: 'No marking criteria found' }
-    }
-
-    // Check authorization - SuperAdmin only for leaderboard
-    const session = await requireMarkingCriteriaAccess(eventId)
-    if (!session) {
-      return { success: false, error: 'Unauthorized' }
+      throw new Error('No marking criteria found')
     }
 
     return {
-      success: true,
       leaderboard: {
         eventId,
         maxMarks: criteria.maxMarks,
@@ -383,8 +323,5 @@ export async function getLeaderboard(eventId: string) {
         })),
       },
     }
-  } catch (error) {
-    console.error('getLeaderboard error:', error)
-    return { success: false, error: 'Failed to fetch leaderboard' }
-  }
+  })
 }

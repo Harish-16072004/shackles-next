@@ -12,7 +12,8 @@ import path from "path";
 import { allocateShacklesId } from "@/server/services/shackles-id.service";
 import { runSerializableTransaction } from "@/server/services/transaction.service";
 import { encodeQrPayload } from "@/server/services/qr.service";
-import { requireAdmin } from "@/lib/session";
+import { executeSafeAction } from "@/lib/safe-action";
+import { Role } from "@prisma/client";
 
 type QrUploadResult = {
   qrImageUrl: string | null;
@@ -94,11 +95,7 @@ async function uploadQrImage(qrValue: string, shacklesId: string, registrationTy
 }
 
 export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJECT') {
-  try {
-    // C2: Auth guard — only admins can verify payments
-    await requireAdmin();
-
-
+  return executeSafeAction({ roles: [Role.ADMIN] }, async (session) => {
     if (action === 'REJECT') {
       await prisma.payment.update({
         where: { userId },
@@ -122,7 +119,7 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
           },
         },
       });
-      if (!user) return { success: false, error: "User not found" };
+      if (!user) throw new Error("User not found");
 
       const isOnSpotParticipant =
         user.payment?.captureSource === 'ON_SPOT' || Boolean(user.onSpotProfile);
@@ -224,9 +221,5 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
     revalidatePath('/admin/adminDashboard');
     revalidatePath('/userDashboard');
     return { success: true };
-
-  } catch (error) {
-    console.error("Admin Action Failed:", error);
-    return { success: false, error: "Failed to update status" };
-  }
+  })
 }

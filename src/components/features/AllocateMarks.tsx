@@ -3,14 +3,52 @@
 import { useState, useEffect } from 'react'
 import { fetchEventMarkingData, saveTeamMarksAllocation } from '@/server/actions/marking-allocation'
 
+interface MarkingComponent {
+  id: string;
+  name: string;
+  maxMarksForComponent: number;
+}
+
+interface MarkingCriteria {
+  id: string;
+  numberOfJudges: number;
+  components: MarkingComponent[];
+}
+
+interface Team {
+  id: string;
+  name: string;
+  memberCount: number;
+}
+
+interface Judge {
+  id: string;
+  email: string;
+}
+
+interface ExistingMark {
+  teamId: string;
+  componentId: string;
+  judgeId: string;
+  marksAwarded: number;
+}
+
+interface MarkingData {
+  event: { id: string; name: string };
+  criteria: MarkingCriteria | null;
+  teams: Team[];
+  judges: Judge[];
+  existingMarks: ExistingMark[];
+}
+
 export default function AllocateMarks({ eventId }: { eventId: string }) {
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<MarkingData | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
 
   // marksState[teamId][componentId][judgeIndex] = number
   const [marksState, setMarksState] = useState<Record<string, Record<string, Record<number, number>>>>({})
-  const [saving, setSaving] = useState(false)
+  const [saving, setSaving] = useState<string | null>(null)
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -20,19 +58,21 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
   async function loadData() {
     setLoading(true)
     const res = await fetchEventMarkingData(eventId)
-    if (res.success) {
-      setData(res)
+    if (res.success && res.data) {
+      const markingData = res.data;
+      setData(markingData)
       // Pre-fill state
-      const initialMarks: any = {}
-      if (res.criteria && res.judges && res.existingMarks) {
-        res.teams.forEach((team: any) => {
+      const initialMarks: Record<string, Record<string, Record<number, number>>> = {}
+      if (markingData.criteria && markingData.judges && markingData.existingMarks) {
+        const criteria = markingData.criteria;
+        markingData.teams.forEach((team) => {
           initialMarks[team.id] = {}
-          res.criteria.components.forEach((comp: any) => {
+          criteria.components.forEach((comp) => {
             initialMarks[team.id][comp.id] = {}
-            for (let i = 0; i < res.criteria.numberOfJudges; i++) {
-              const judgeId = res.judges[i]?.id
-              const existing = res.existingMarks.find(
-                (m: any) => m.teamId === team.id && m.componentId === comp.id && m.judgeId === judgeId
+            for (let i = 0; i < criteria.numberOfJudges; i++) {
+              const judgeId = markingData.judges[i]?.id
+              const existing = markingData.existingMarks.find(
+                (m) => m.teamId === team.id && m.componentId === comp.id && m.judgeId === judgeId
               )
               initialMarks[team.id][comp.id][i] = existing ? Number(existing.marksAwarded) : 0
             }
@@ -83,7 +123,7 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
     })
 
     if (res.success) {
-      setMessage(`Marks for ${data.teams.find((t: any) => t.id === teamId)?.name} saved successfully.`)
+      setMessage(`Marks for ${data.teams.find((t) => t.id === teamId)?.name} saved successfully.`)
     } else {
       setMessage(res.error || 'Error saving marks.')
     }
@@ -100,7 +140,7 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
   if (!data || !data.criteria) return (
     <div className="bg-white rounded-3xl shadow-xl p-10 text-center border border-slate-100 max-w-2xl mx-auto">
       <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-        <svg size={32} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+        <svg width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
       </div>
       <h3 className="text-xl font-black text-slate-900 mb-2">Configuration Missing</h3>
       <p className="text-slate-500 leading-relaxed mb-8">
@@ -130,7 +170,7 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
             <p className="text-sm font-black text-slate-900">{criteria.numberOfJudges} Official Judges</p>
           </div>
           <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 border border-slate-100">
-            <svg size={24} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+            <svg width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="text-slate-400"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
           </div>
         </div>
       </div>
@@ -138,7 +178,7 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
       {message && (
         <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="w-8 h-8 bg-emerald-500 text-white rounded-full flex items-center justify-center shrink-0">
-            <svg size={16} fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
+            <svg width={16} height={16} fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
           </div>
           <p className="font-bold text-sm">{message}</p>
         </div>
@@ -147,7 +187,7 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
       {teams.length === 0 ? (
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-16 text-center">
           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300">
-            <svg size={40} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <svg width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </div>
           <h3 className="text-xl font-bold text-slate-900 mb-2">No Teams Attended</h3>
           <p className="text-slate-500 max-w-sm mx-auto">
@@ -160,7 +200,7 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] sticky left-0 bg-white z-10 border-r border-slate-50 shadow-[4px_0_10px_rgba(0,0,0,0.02)]">Team Details</th>
-                {criteria.components.map((comp: any) => (
+                {criteria.components.map((comp) => (
                   <th key={comp.id} className="p-6 text-center border-r border-slate-50 last:border-0" style={{ minWidth: `${Math.max(120, criteria.numberOfJudges * 70)}px` }}>
                     <p className="text-[10px] font-black text-violet-600 uppercase tracking-widest mb-1">{comp.name}</p>
                     <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">Max: {comp.maxMarksForComponent}</p>
@@ -170,13 +210,13 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {teams.map((team: any) => (
+              {teams.map((team) => (
                 <tr key={team.id} className="group hover:bg-slate-50/50 transition-colors">
                   <td className="p-6 sticky left-0 bg-white z-10 group-hover:bg-slate-50/50 transition-colors border-r border-slate-50 shadow-[4px_0_10px_rgba(0,0,0,0.02)]">
                     <p className="font-black text-slate-900 text-lg tracking-tight mb-0.5">{team.name}</p>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{team.memberCount} Members</p>
                   </td>
-                  {criteria.components.map((comp: any) => (
+                  {criteria.components.map((comp) => (
                     <td key={comp.id} className="p-4 border-r border-slate-50 last:border-0">
                       <div className="flex items-center justify-center gap-2">
                         {Array.from({ length: criteria.numberOfJudges }).map((_, i) => (
@@ -219,7 +259,7 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
       {/* Instructional Footer */}
       <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
         <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-slate-400 shrink-0">
-          <svg size={20} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <svg width={40} height={40} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         </div>
         <p className="text-slate-500 text-xs font-medium leading-relaxed">
           The table only shows teams that have officially marked their attendance. All marks are automatically averaged across judges. Click <span className="font-bold text-slate-900">Save</span> after entering marks for each team.

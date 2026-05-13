@@ -1,7 +1,8 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/session'
+import { executeSafeAction } from '@/lib/safe-action'
+import { Permission, Role } from '@prisma/client'
 import { z } from 'zod'
 
 const SaveMarksSchema = z.object({
@@ -15,15 +16,14 @@ const SaveMarksSchema = z.object({
 })
 
 export async function saveTeamMarksAllocation(input: z.infer<typeof SaveMarksSchema>) {
-  try {
-    const session = await requireSession()
+  return executeSafeAction({ permission: Permission.MANAGE_SCORES }, async (session) => {
     const { eventId, teamId, marks } = SaveMarksSchema.parse(input)
 
     const criteria = await prisma.markingCriteria.findUnique({
       where: { eventId },
       include: { components: true }
     })
-    if (!criteria) return { success: false, error: 'Criteria missing' }
+    if (!criteria) throw new Error('Marking criteria missing for this event')
 
     const judgeIds: string[] = []
     for (let i = 0; i < criteria.numberOfJudges; i++) {
@@ -68,14 +68,12 @@ export async function saveTeamMarksAllocation(input: z.infer<typeof SaveMarksSch
         await tx.teamMark.update({ where: { id: teamMark.id }, data: { totalMarks, isSubmitted: true } })
     })
 
-    return { success: true, message: 'Marks allocated successfully' }
-  } catch (error) {
-    return { success: false, error: 'Failed to allocate marks' }
-  }
+    return { message: 'Marks allocated successfully' }
+  })
 }
 
 export async function fetchEventMarkingData(eventId: string) {
-    await requireSession()
+    return executeSafeAction({ permission: Permission.MANAGE_SCORES }, async (session) => {
     const event = await prisma.event.findUnique({
         where: { id: eventId },
         select: { id: true, name: true, participationMode: true }
@@ -128,5 +126,6 @@ export async function fetchEventMarkingData(eventId: string) {
         }))
     }
 
-    return { success: true, event, criteria: criteriaPlain, teams, judges, existingMarks }
+    return { event, criteria: criteriaPlain, teams, judges, existingMarks }
+    })
 }

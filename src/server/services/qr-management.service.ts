@@ -167,84 +167,128 @@ async function processStructuredScan(
 
   const userName = `${user.firstName} ${user.lastName}`;
 
-  if (payload.operationType === "ATTENDANCE" && payload.eventId) {
-    const eventRegistration = await db.eventRegistration.findUnique({
-      where: {
-        userId_eventId: {
-          userId: user.id,
-          eventId: payload.eventId,
+  if (payload.operationType === "ATTENDANCE") {
+    if (payload.eventId) {
+      const eventRegistration = await db.eventRegistration.findUnique({
+        where: {
+          userId_eventId: {
+            userId: user.id,
+            eventId: payload.eventId,
+          },
         },
-      },
-      select: {
-        id: true,
-        attended: true,
-        teamId: true,
-        team: { select: { status: true } },
-      },
-    });
+        select: {
+          id: true,
+          attended: true,
+          teamId: true,
+          team: { select: { status: true } },
+          event: { select: { name: true } },
+        },
+      });
 
-    if (!eventRegistration) {
-      return {
-        success: false,
-        userId: user.id,
-        shacklesId: user.shacklesId || undefined,
-        userName,
-        error: "Not registered for this event.",
+      if (!eventRegistration) {
+        return {
+          success: false,
+          userId: user.id,
+          shacklesId: user.shacklesId || undefined,
+          userName,
+          error: "NOT REGISTERED FOR THE REQUESTED EVENT.",
+        };
+      }
+
+      // Enforce team-lock before marking attendance
+      if (
+        eventRegistration.teamId &&
+        eventRegistration.team?.status !== "LOCKED"
+      ) {
+        return {
+          success: false,
+          userId: user.id,
+          shacklesId: user.shacklesId || undefined,
+          userName,
+          error: "TEAM REGISTRATION MUST BE LOCKED BEFORE MARKING ATTENDANCE.",
+        };
+      }
+
+      if (eventRegistration.attended) {
+        await logScanOperation(db, payload, user.id);
+        return {
+          success: true,
+          userId: user.id,
+          shacklesId: user.shacklesId || undefined,
+          userName,
+          message: `${userName.toUpperCase()} ALREADY CHECKED IN FOR ${eventRegistration.event.name.toUpperCase()}.`,
+        };
+      }
+
+      // ATOMIC TRANSACTION: Mark attendance + Log operation
+      const performAttendanceUpdate = async (tx: Prisma.TransactionClient) => {
+        await tx.eventRegistration.update({
+          where: { id: eventRegistration.id },
+          data: {
+            attended: true,
+            attendedAt: new Date(),
+            stationId: payload.stationId,
+          },
+        });
+
+        await logScanOperation(tx, payload, user.id);
+
+        return {
+          success: true,
+          userId: user.id,
+          shacklesId: user.shacklesId || undefined,
+          userName,
+          message: `ATTENDANCE MARKED FOR ${eventRegistration.event.name.toUpperCase()}.`,
+        };
       };
-    }
 
-    // Enforce team-lock before marking attendance
-    if (
-      eventRegistration.teamId &&
-      eventRegistration.team?.status !== "LOCKED"
-    ) {
-      return {
-        success: false,
-        userId: user.id,
-        shacklesId: user.shacklesId || undefined,
-        userName,
-        error: "Team registration must be locked before attendance can be marked.",
-      };
-    }
-
-    if (eventRegistration.attended) {
+      if ('$transaction' in db) {
+        return await (db as any).$transaction(performAttendanceUpdate);
+      }
+      return await performAttendanceUpdate(db as Prisma.TransactionClient);
+    } else {
+      // General symposium attendance (no eventId)
       await logScanOperation(db, payload, user.id);
       return {
         success: true,
         userId: user.id,
         shacklesId: user.shacklesId || undefined,
         userName,
-        message: `${userName} has already been checked in.`,
+        message: `SYMPOSIUM ENTRY RECORDED FOR ${userName.toUpperCase()}.`,
       };
     }
-
-    await db.eventRegistration.update({
-      where: { id: eventRegistration.id },
-      data: {
-        attended: true,
-        attendedAt: new Date(),
-        stationId: payload.stationId,
-      },
-    });
   } else if (payload.operationType === "KIT") {
-    await db.user.update({
-      where: { id: user.id },
-      data: {
-        kitStatus: "ISSUED",
-        kitIssuedAt: new Date(),
-        kitIssuedBy: payload.stationId,
-      },
-    });
+    // ATOMIC TRANSACTION: Update kit status + Log operation
+    const performKitIssue = async (tx: Prisma.TransactionClient) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          kitStatus: "ISSUED",
+          kitIssuedAt: new Date(),
+          kitIssuedBy: payload.stationId,
+        },
+      });
+
+      await logScanOperation(tx, payload, user.id);
+
+      return {
+        success: true,
+        userId: user.id,
+        shacklesId: user.shacklesId || undefined,
+        userName,
+        message: `KIT ISSUED TO ${userName.toUpperCase()}.`,
+      };
+    };
+
+    if ('$transaction' in db) {
+      return await (db as any).$transaction(performKitIssue);
+    }
+    return await performKitIssue(db as Prisma.TransactionClient);
   }
 
-  await logScanOperation(db, payload, user.id);
-
   return {
-    success: true,
-    userId: user.id,
-    shacklesId: user.shacklesId || undefined,
-    userName,
-    message: `${payload.operationType === "KIT" ? "Kit issued" : "Attendance marked"} for ${userName}.`,
+    success: false,
+    error: "INVALID OPERATION TYPE.",
   };
 }
 

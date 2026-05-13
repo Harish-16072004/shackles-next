@@ -3,9 +3,10 @@
 import { z } from 'zod'
 import { hash } from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
-import { requireAdmin } from '@/lib/session'
 import { Role, StaffRole } from '@prisma/client'
 import { logAdminAudit } from '@/lib/admin-audit'
+import { executeSafeAction } from '@/lib/safe-action'
+import { Permission } from '@prisma/client'
 
 // ===== Validation Schemas =====
 
@@ -34,20 +35,11 @@ const RemoveStaffFromEventSchema = z.object({
 // ===== Staff Creation =====
 
 export async function createStaffUser(input: z.infer<typeof CreateStaffUserSchema>) {
-  try {
-    // Verify admin
-    const session = await requireAdmin()
-
+  return executeSafeAction({ roles: [Role.ADMIN] }, async (session) => {
     // Validate input
-    const result = CreateStaffUserSchema.safeParse(input)
-    if (!result.success) {
-      return {
-        success: false,
-        error: result.error.flatten().fieldErrors,
-      }
-    }
+    const validated = CreateStaffUserSchema.parse(input)
 
-    const { email, password, firstName, lastName, phone, role } = result.data
+    const { email, password, firstName, lastName, phone, role } = validated
 
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
@@ -56,10 +48,7 @@ export async function createStaffUser(input: z.infer<typeof CreateStaffUserSchem
     })
 
     if (existingUser) {
-      return {
-        success: false,
-        error: { email: ['Email already in use'] },
-      }
+      throw new Error('Email already in use')
     }
 
     // Hash password
@@ -98,38 +87,20 @@ export async function createStaffUser(input: z.infer<typeof CreateStaffUserSchem
     })
 
     return {
-      success: true,
-      data: staffUser,
+      staff: staffUser,
       message: `${role} account created successfully`,
     }
-  } catch (error) {
-    console.error('[createStaffUser] Error:', error)
-    return {
-      success: false,
-      error: {
-        general: ['Failed to create staff user'],
-      },
-    }
-  }
+  })
 }
 
 // ===== Event Assignment =====
 
 export async function assignStaffToEvent(input: z.infer<typeof AssignStaffToEventSchema>) {
-  try {
-    // Verify admin
-    const session = await requireAdmin()
-
+  return executeSafeAction({ roles: [Role.ADMIN] }, async (session) => {
     // Validate input
-    const result = AssignStaffToEventSchema.safeParse(input)
-    if (!result.success) {
-      return {
-        success: false,
-        error: 'Invalid input',
-      }
-    }
+    const validated = AssignStaffToEventSchema.parse(input)
 
-    const { userId, eventId, staffRole: providedRole } = result.data
+    const { userId, eventId, staffRole: providedRole } = validated
 
     // Verify user exists and is staff
     const user = await prisma.user.findUnique({
@@ -138,11 +109,11 @@ export async function assignStaffToEvent(input: z.infer<typeof AssignStaffToEven
     })
 
     if (!user) {
-      return { success: false, error: 'User not found' }
+      throw new Error('User not found')
     }
 
     if (user.role !== 'COORDINATOR' && user.role !== 'VOLUNTEER') {
-      return { success: false, error: 'User is not a staff member' }
+      throw new Error('User is not a staff member')
     }
 
     // Use user's primary role if not explicitly provided (derived from database)
@@ -155,7 +126,7 @@ export async function assignStaffToEvent(input: z.infer<typeof AssignStaffToEven
     })
 
     if (!event) {
-      return { success: false, error: 'Event not found' }
+      throw new Error('Event not found')
     }
 
     // Check if already assigned
@@ -167,7 +138,7 @@ export async function assignStaffToEvent(input: z.infer<typeof AssignStaffToEven
     })
 
     if (existing) {
-      return { success: false, error: 'Staff already assigned to this event' }
+      throw new Error('Staff already assigned to this event')
     }
 
     // Create assignment
@@ -192,36 +163,23 @@ export async function assignStaffToEvent(input: z.infer<typeof AssignStaffToEven
     })
 
     return {
-      success: true,
-      data: {
+      assignment: {
         ...assignment,
         eventName: event.name,
       },
       message: `${user.email} assigned to ${event.name} as ${staffRole}`,
     }
-  } catch (error) {
-    console.error('[assignStaffToEvent] Error:', error)
-    return {
-      success: false,
-      error: 'Failed to assign staff to event',
-    }
-  }
+  })
 }
 
 // ===== Remove Assignment =====
 
 export async function removeStaffFromEvent(input: z.infer<typeof RemoveStaffFromEventSchema>) {
-  try {
-    // Verify admin
-    const session = await requireAdmin()
-
+  return executeSafeAction({ roles: [Role.ADMIN] }, async (session) => {
     // Validate input
-    const result = RemoveStaffFromEventSchema.safeParse(input)
-    if (!result.success) {
-      return { success: false, error: 'Invalid input' }
-    }
+    const validated = RemoveStaffFromEventSchema.parse(input)
 
-    const { userId, eventId } = result.data
+    const { userId, eventId } = validated
 
     // Verify assignment exists
     const assignment = await prisma.eventStaffAssignment.findFirst({
@@ -233,7 +191,7 @@ export async function removeStaffFromEvent(input: z.infer<typeof RemoveStaffFrom
     })
 
     if (!assignment) {
-      return { success: false, error: 'Assignment not found' }
+      throw new Error('Assignment not found')
     }
 
     // Delete assignment
@@ -250,24 +208,15 @@ export async function removeStaffFromEvent(input: z.infer<typeof RemoveStaffFrom
     })
 
     return {
-      success: true,
       message: `${assignment.user.email} removed from ${assignment.event.name}`,
     }
-  } catch (error) {
-    console.error('[removeStaffFromEvent] Error:', error)
-    return {
-      success: false,
-      error: 'Failed to remove staff from event',
-    }
-  }
+  })
 }
 
 // ===== List Functions =====
 
 export async function listStaffUsers() {
-  try {
-    await requireAdmin()
-
+  return executeSafeAction({ roles: [Role.ADMIN] }, async (session) => {
     const staff = await prisma.user.findMany({
       where: {
         role: { in: ['COORDINATOR', 'VOLUNTEER'] },
@@ -288,17 +237,12 @@ export async function listStaffUsers() {
       orderBy: { createdAt: 'desc' },
     })
 
-    return { success: true, data: staff }
-  } catch (error) {
-    console.error('[listStaffUsers] Error:', error)
-    return { success: false, error: 'Failed to list staff users' }
-  }
+    return { staff }
+  })
 }
 
 export async function listAvailableEvents() {
-  try {
-    await requireAdmin()
-
+  return executeSafeAction({ roles: [Role.ADMIN] }, async (session) => {
     const events = await prisma.event.findMany({
       where: {
         isActive: true,
@@ -313,9 +257,6 @@ export async function listAvailableEvents() {
       orderBy: { date: 'asc' },
     })
 
-    return { success: true, data: events }
-  } catch (error) {
-    console.error('[listAvailableEvents] Error:', error)
-    return { success: false, error: 'Failed to list events' }
-  }
+    return { events }
+  })
 }

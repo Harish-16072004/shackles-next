@@ -45,67 +45,47 @@ export const authConfig: NextAuthConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const pathname = nextUrl.pathname;
+      const userRole = auth?.user?.role as string | undefined;
 
-      // --- Public API routes that don't require auth ---
-      if (
-        pathname === "/api/health" ||
-        pathname.startsWith("/api/auth")
-      ) {
+      // --- 1. Public API routes ---
+      if (pathname === "/api/health" || pathname.startsWith("/api/auth")) {
         return true;
       }
 
-      // API admin routes
-      if (pathname.startsWith("/api/admin")) {
+      // --- 2. Administrative Paths (API & UI) ---
+      const isAdminRoute = pathname.startsWith("/admin");
+      const isAdminApi = pathname.startsWith("/api/admin");
+
+      if (isAdminRoute || isAdminApi) {
         if (!isLoggedIn) return false;
 
-        // Coordinators and Volunteers need access to specific admin APIs
-        if (
-          pathname.startsWith("/api/admin/marking") || 
-          pathname.startsWith("/api/admin/scanner") ||
-          pathname.startsWith("/api/admin/event-registrations")
-        ) {
-          return (
-            auth.user?.role === "ADMIN" ||
-            auth.user?.role === "COORDINATOR" ||
-            auth.user?.role === "VOLUNTEER"
-          );
+        // Higher-level roles (ADMIN, COORDINATOR, VOLUNTEER)
+        const isStaff = userRole === "ADMIN" || userRole === "COORDINATOR" || userRole === "VOLUNTEER";
+        if (!isStaff) return false;
+
+        // Specific sub-paths for restricted staff access
+        const isRestrictedStaffPath = 
+          pathname.includes("/marking") || 
+          pathname.includes("/scanner") || 
+          pathname.includes("/event-registrations");
+
+        if (isRestrictedStaffPath) {
+          // Both Volunteers and Coordinators can access these specific modules
+          return true;
         }
 
-        return auth.user?.role === "ADMIN";
+        // Only SuperAdmins can access everything else in /admin or /api/admin
+        return userRole === "ADMIN";
       }
 
-      // Other API routes require authentication
+      // --- 3. Protected User Routes ---
+      const isUserRoute = pathname.startsWith("/userDashboard") || pathname.startsWith("/(protected)");
+      if (isUserRoute) {
+        return isLoggedIn;
+      }
+
+      // --- 4. Other API routes ---
       if (pathname.startsWith("/api/")) {
-        return isLoggedIn;
-      }
-
-      // Admin page routes require ADMIN role
-      if (pathname.startsWith("/admin")) {
-        if (!isLoggedIn) return false;
-
-        // Coordinators and Volunteers need access to specific admin routes like marking, scanner, or event registrations
-        if (
-          pathname.startsWith("/admin/marking") || 
-          pathname.startsWith("/admin/scanner") ||
-          pathname.startsWith("/admin/event-registrations")
-        ) {
-          return (
-            auth.user?.role === "ADMIN" ||
-            auth.user?.role === "COORDINATOR" ||
-            auth.user?.role === "VOLUNTEER"
-          );
-        }
-
-        return auth.user?.role === "ADMIN";
-      }
-
-      // User dashboard requires authentication
-      if (pathname.startsWith("/userDashboard")) {
-        return isLoggedIn;
-      }
-
-      // Protected routes require any authenticated session
-      if (pathname.startsWith("/(protected)")) {
         return isLoggedIn;
       }
 

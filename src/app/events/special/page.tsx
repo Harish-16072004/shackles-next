@@ -17,6 +17,7 @@ export default async function SpecialEventsPage({
       isActive: true,
       isTemplate: false,
       isArchived: false,
+      name: { not: "KIT DISTRIBUTION" },
     },
     orderBy: [{ date: "asc" }, { name: "asc" }],
     select: {

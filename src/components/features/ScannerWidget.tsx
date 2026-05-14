@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Scanner } from "@yudiel/react-qr-scanner";
+import { processQRScanAction } from "@/server/actions/event-logistics";
 
 type FeedbackState = {
   type: "success" | "warning" | "error" | "idle" | "processing";
@@ -35,20 +36,14 @@ export default function ScannerWidget({ eventId, stationId = "WEB_SCANNER" }: { 
     setFeedback({ type: "processing", message: "DECRYPTING PAYLOAD..." });
 
     try {
-      const res = await fetch("/api/scanner/qr-scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          qrData: decodedText,
-          stationId,
-          eventId,
-          operationType: operationTypeRef.current,
-        }),
+      const data = await processQRScanAction({
+        qrData: decodedText,
+        stationId: stationId || "WEB_SCANNER",
+        eventId,
+        operationType: operationTypeRef.current,
       });
 
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
+      if (!data.success) {
         setFeedback({ type: "error", message: data.error || "SCAN ERROR" });
       } else if (data.message && data.message.toLowerCase().includes("already")) {
         setFeedback({ type: "warning", message: data.message.toUpperCase() });
@@ -58,6 +53,7 @@ export default function ScannerWidget({ eventId, stationId = "WEB_SCANNER" }: { 
     } catch (err) {
       setFeedback({ type: "error", message: "NETWORK ERROR" });
     }
+
 
     setTimeout(() => {
       setFeedback({ type: "idle", message: "AWAITING INPUT..." });

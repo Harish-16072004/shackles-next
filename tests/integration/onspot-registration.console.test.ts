@@ -1,4 +1,5 @@
-import { PaymentStatus, PrismaClient, Role } from "@prisma/client";
+import { PaymentStatus, Role } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/cache", () => ({
@@ -12,13 +13,11 @@ vi.mock("@/lib/session", () => ({
 import { getSession } from "@/lib/session";
 import {
   approveOnSpotPayment,
-  createOnSpotParticipant,
   getOnSpotParticipants,
   getOnSpotSummary,
   rejectOnSpotPayment,
 } from "../../src/server/actions/onspot-registration";
-
-const prisma = new PrismaClient();
+import { registerOnSpotParticipant as createOnSpotParticipant } from "../../src/server/actions/onspot-user-registration";
 
 function runTag() {
   return `onspot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -58,6 +57,7 @@ describe("integration: on-spot registration console", () => {
           department: "Ops",
           yearOfStudy: "NA",
           role: Role.ADMIN,
+          gender: "MALE",
         },
       });
 
@@ -73,6 +73,7 @@ describe("integration: on-spot registration console", () => {
         collegeLoc: "Karaikudi",
         department: "Mechanical",
         yearOfStudy: "IV",
+        gender: "MALE",
         registrationType: "GENERAL",
         amount: 300,
         paymentChannel: "CASH",
@@ -90,26 +91,27 @@ describe("integration: on-spot registration console", () => {
 
       const listResult = await getOnSpotParticipants({ search: tag, status: "ALL", paymentChannel: "ALL" });
       expect(listResult.success).toBe(true);
-      expect(listResult.data.length).toBeGreaterThanOrEqual(1);
+      if (!listResult.success) throw new Error("List failed");
+      expect(listResult.data.data.length).toBeGreaterThanOrEqual(1);
 
-      const createdRow = listResult.data.find((row) => row.email === userEmail);
+      const createdRow = listResult.data.data.find((row: any) => row.email === userEmail);
       expect(createdRow).toBeTruthy();
-      expect((createdRow?.payment as { captureSource?: string } | null)?.captureSource).toBe("ON_SPOT");
+      expect((createdRow?.payment as any)?.captureSource).toBe("ON_SPOT");
       expect(createdRow?.payment?.status).toBe(PaymentStatus.PENDING);
-      expect((createdRow as { onSpotProfile?: { stationId?: string | null } } | undefined)?.onSpotProfile?.stationId).toBe("A1");
+      expect((createdRow as any)?.onSpotProfile?.stationId).toBe("A1");
 
       const summaryResult = await getOnSpotSummary();
       expect(summaryResult.success).toBe(true);
+      if (!summaryResult.success) throw new Error("Summary failed");
       expect(summaryResult.data.total).toBeGreaterThanOrEqual(1);
       expect(summaryResult.data.cash).toBeGreaterThanOrEqual(1);
     } finally {
       if (createdUserId) {
-        await prisma.$executeRawUnsafe('DELETE FROM "OnSpotProfile" WHERE "userId" = $1', createdUserId);
-        await prisma.payment.deleteMany({ where: { userId: createdUserId } });
-        await prisma.user.deleteMany({ where: { id: createdUserId } });
+        try { await prisma.$executeRawUnsafe('DELETE FROM "OnSpotProfile" WHERE "userId" = $1', createdUserId); } catch (e) {}
+        try { await prisma.payment.deleteMany({ where: { userId: createdUserId } }); } catch (e) {}
+        try { await prisma.user.deleteMany({ where: { id: createdUserId } }); } catch (e) {}
       }
-
-      await prisma.user.deleteMany({ where: { email: adminEmail } });
+      try { await prisma.user.deleteMany({ where: { email: adminEmail } }); } catch (e) {}
     }
   }, 30000);
 
@@ -137,6 +139,7 @@ describe("integration: on-spot registration console", () => {
           department: "Ops",
           yearOfStudy: "NA",
           role: Role.ADMIN,
+          gender: "MALE",
         },
       });
 
@@ -152,6 +155,7 @@ describe("integration: on-spot registration console", () => {
         collegeLoc: "Karaikudi",
         department: "Civil",
         yearOfStudy: "III",
+        gender: "MALE",
         registrationType: "GENERAL",
         amount: 300,
         paymentChannel: "CASH",
@@ -173,15 +177,14 @@ describe("integration: on-spot registration console", () => {
       const payment = await prisma.payment.findUnique({ where: { userId: createdUserId as string } });
       expect(payment?.status).toBe(PaymentStatus.REJECTED);
       expect(payment?.rejectionReason).toBe("invalid cash slip");
-      expect((payment as { captureSource?: string } | null)?.captureSource).toBe("ON_SPOT");
+      expect((payment as any)?.captureSource).toBe("ON_SPOT");
     } finally {
       if (createdUserId) {
-        await prisma.$executeRawUnsafe('DELETE FROM "OnSpotProfile" WHERE "userId" = $1', createdUserId);
-        await prisma.payment.deleteMany({ where: { userId: createdUserId } });
-        await prisma.user.deleteMany({ where: { id: createdUserId } });
+        try { await prisma.$executeRawUnsafe('DELETE FROM "OnSpotProfile" WHERE "userId" = $1', createdUserId); } catch (e) {}
+        try { await prisma.payment.deleteMany({ where: { userId: createdUserId } }); } catch (e) {}
+        try { await prisma.user.deleteMany({ where: { id: createdUserId } }); } catch (e) {}
       }
-
-      await prisma.user.deleteMany({ where: { email: adminEmail } });
+      try { await prisma.user.deleteMany({ where: { email: adminEmail } }); } catch (e) {}
     }
   }, 30000);
 
@@ -209,6 +212,7 @@ describe("integration: on-spot registration console", () => {
           department: "Ops",
           yearOfStudy: "NA",
           role: Role.ADMIN,
+          gender: "MALE",
         },
       });
 
@@ -224,6 +228,7 @@ describe("integration: on-spot registration console", () => {
         collegeLoc: "Karaikudi",
         department: "Civil",
         yearOfStudy: "III",
+        gender: "MALE",
         registrationType: "GENERAL",
         amount: 300,
         paymentChannel: "CASH",
@@ -250,18 +255,17 @@ describe("integration: on-spot registration console", () => {
 
       expect(approvedUser?.role).toBe(Role.PARTICIPANT);
       expect(approvedUser?.payment?.status).toBe(PaymentStatus.VERIFIED);
-      expect((approvedUser?.payment as { captureSource?: string } | null)?.captureSource).toBe("ON_SPOT");
-      expect((approvedUser?.payment as { verificationDeviceId?: string | null } | null)?.verificationDeviceId).toBe("TAB-VERIFY-01");
-      expect((approvedUser?.payment as { verificationNote?: string | null } | null)?.verificationNote).toBe("cash verified at desk");
+      expect((approvedUser?.payment as any)?.captureSource).toBe("ON_SPOT");
+      expect((approvedUser?.payment as any)?.verificationDeviceId).toBe("TAB-VERIFY-01");
+      expect((approvedUser?.payment as any)?.verificationNote).toBe("cash verified at desk");
       expect(approvedUser?.shacklesId).toBeTruthy();
     } finally {
       if (createdUserId) {
-        await prisma.$executeRawUnsafe('DELETE FROM "OnSpotProfile" WHERE "userId" = $1', createdUserId);
-        await prisma.payment.deleteMany({ where: { userId: createdUserId } });
-        await prisma.user.deleteMany({ where: { id: createdUserId } });
+        try { await prisma.$executeRawUnsafe('DELETE FROM "OnSpotProfile" WHERE "userId" = $1', createdUserId); } catch (e) {}
+        try { await prisma.payment.deleteMany({ where: { userId: createdUserId } }); } catch (e) {}
+        try { await prisma.user.deleteMany({ where: { id: createdUserId } }); } catch (e) {}
       }
-
-      await prisma.user.deleteMany({ where: { email: adminEmail } });
+      try { await prisma.user.deleteMany({ where: { email: adminEmail } }); } catch (e) {}
     }
   }, 30000);
 });

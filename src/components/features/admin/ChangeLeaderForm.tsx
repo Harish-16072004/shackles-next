@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, useTransition } from 'react';
 import { Crown } from 'lucide-react';
+import { changeTeamLeader } from '@/server/actions/event-logistics';
 
 type Member = {
     userId: string;
@@ -25,19 +26,27 @@ export function ChangeLeaderForm({
 }: ChangeLeaderFormProps) {
     const [open, setOpen] = useState(false);
     const [selectedUserId, setSelectedUserId] = useState('');
+    const [isPending, startTransition] = useTransition();
 
     const eligibleMembers = members.filter((m) => m.userId !== currentLeaderUserId);
 
-    const onSubmit = (e: FormEvent<HTMLFormElement>) => {
-        if (!selectedUserId) {
-            e.preventDefault();
-            return;
-        }
+    const handleSubmit = () => {
+        if (!selectedUserId) return;
+
         const chosen = members.find((m) => m.userId === selectedUserId);
         const ok = window.confirm(
             `Promote "${chosen?.fullName}" as leader of team "${teamName}"?\nThe current leader will be demoted to member.`
         );
-        if (!ok) e.preventDefault();
+        if (!ok) return;
+
+        startTransition(async () => {
+            const result = await changeTeamLeader({ teamId, newLeaderUserId: selectedUserId, eventId });
+            if (result.success) {
+                window.location.reload();
+            } else {
+                alert(result.error || 'Failed to change leader');
+            }
+        });
     };
 
     if (!open) {
@@ -54,15 +63,7 @@ export function ChangeLeaderForm({
     }
 
     return (
-        <form
-            action="/api/admin/event-registrations/change-leader"
-            method="post"
-            onSubmit={onSubmit}
-            className="flex items-center gap-2 flex-wrap"
-        >
-            <input type="hidden" name="teamId" value={teamId} />
-            <input type="hidden" name="eventId" value={eventId} />
-
+        <div className="flex items-center gap-2 flex-wrap">
             <select
                 name="newLeaderUserId"
                 value={selectedUserId}
@@ -77,11 +78,12 @@ export function ChangeLeaderForm({
             </select>
 
             <button
-                type="submit"
-                disabled={!selectedUserId}
+                type="button"
+                onClick={handleSubmit}
+                disabled={!selectedUserId || isPending}
                 className="rounded-sm border border-amber-400 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-                Confirm
+                {isPending ? 'Saving...' : 'Confirm'}
             </button>
             <button
                 type="button"
@@ -90,6 +92,6 @@ export function ChangeLeaderForm({
             >
                 Cancel
             </button>
-        </form>
+        </div>
     );
 }

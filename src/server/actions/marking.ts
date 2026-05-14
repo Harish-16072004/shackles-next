@@ -325,3 +325,351 @@ export async function getLeaderboard(eventId: string) {
     }
   })
 }
+
+// ---------------------------------------------------------------------------
+// Fetch criteria for coordinator/judge view (migrated from api/marking/criteria GET)
+// ---------------------------------------------------------------------------
+
+export async function fetchCriteriaForCoordinator(eventId: string) {
+  if (!eventId) return { success: false, error: 'eventId required' }
+
+  try {
+    const criteria = await prisma.markingCriteria.findUnique({
+      where: { eventId },
+      include: {
+        components: {
+          orderBy: { order: 'asc' },
+        },
+      },
+    })
+
+    if (!criteria) {
+      return { success: false, error: 'Marking criteria not found' }
+    }
+
+    return {
+      success: true,
+      criteria: {
+        id: criteria.id,
+        name: criteria.name,
+        description: criteria.description,
+        maxMarks: criteria.maxMarks,
+        numberOfJudges: criteria.numberOfJudges,
+        components: criteria.components,
+        createdAt: criteria.createdAt,
+        updatedAt: criteria.updatedAt,
+      },
+    }
+  } catch (error) {
+    console.error('fetchCriteriaForCoordinator error:', error)
+    return { success: false, error: 'Failed to fetch criteria' }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Submit marks (migrated from api/marking/submit-marks)
+// ---------------------------------------------------------------------------
+
+const SubmitJudgeMarksSchema = z.object({
+  eventId: z.string().cuid(),
+  teamMarks: z.array(z.object({
+    teamId: z.string().cuid(),
+    judgeId: z.string().cuid().optional(),
+    componentMarks: z.array(z.object({
+      componentId: z.string().cuid(),
+      marks: z.number().min(0),
+    })).min(1),
+  })).min(1),
+})
+
+export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSchema>) {
+  let validated: z.infer<typeof SubmitJudgeMarksSchema>
+  try {
+    validated = SubmitJudgeMarksSchema.parse(input)
+  } catch (e) {
+    return { success: false, error: 'Invalid request body' }
+  }
+
+  const { eventId, teamMarks } = validated
+
+  try {
+    const criteria = await prisma.markingCriteria.findUnique({
+      where: { eventId },
+      include: { components: true },
+    })
+
+    if (!criteria) {
+      return { success: false, error: 'Marking criteria not found for this event' }
+    }
+
+    // Validate components exist and marks within bounds
+    for (const tm of teamMarks) {
+      for (const cm of tm.componentMarks) {
+        const component = criteria.components.find(c => c.id === cm.componentId)
+        if (!component) {
+          return { success: false, error: `Component ${cm.componentId} not found` }
+        }
+        if (cm.marks > component.maxMarksForComponent) {
+          return { success: false, error: `Marks for component ${component.name} exceed max (${component.maxMarksForComponent})` }
+        }
+      }
+    }
+
+    const results: Array<{
+      teamId: string;
+      teamName?: string;
+      success: boolean;
+      error?: string;
+      totalMarks?: number;
+      componentMarksCount?: number;
+    }> = []
+
+    await prisma.$transaction(async (tx) => {
+      for (const tm of teamMarks) {
+        try {
+          const team = await tx.team.findFirst({
+            where: { id: tm.teamId, eventId },
+            select: { id: true, name: true },
+          })
+
+          if (!team) {
+            results.push({ teamId: tm.teamId, success: false, error: 'Team not found for this event' })
+            continue
+          }
+
+          let teamMark = await tx.teamMark.findFirst({
+            where: { teamId: tm.teamId, markingCriteriaId: criteria.id },
+          })
+
+          if (!teamMark) {
+            teamMark = await tx.teamMark.create({
+              data: { teamId: tm.teamId, markingCriteriaId: criteria.id, isSubmitted: false },
+            })
+          }
+
+          if (tm.judgeId) {
+            for (const cm of tm.componentMarks) {
+              const existing = await tx.judgeMarking.findFirst({
+                where: {
+                  teamId: tm.teamId,
+                  markingCriteriaId: criteria.id,
+                  componentId: cm.componentId,
+                  judgeId: tm.judgeId,
+                },
+                select: { id: true },
+              })
+              if (!existing) {
+                await tx.judgeMarking.create({
+                  data: {
+                    teamId: tm.teamId,
+                    markingCriteriaId: criteria.id,
+                    componentId: cm.componentId,
+                    judgeId: tm.judgeId,
+                    marksAwarded: cm.marks,
+                  },
+                })
+              }
+            }
+          }
+
+          let totalMarks = 0
+          const componentUpdates = []
+
+          for (const component of criteria.components) {
+            const marksForComponent = tm.componentMarks.find(m => m.componentId === component.id)
+            if (!marksForComponent) continue
+
+            const weighted = (marksForComponent.marks / component.maxMarksForComponent) * component.weightPercentage
+            totalMarks += weighted
+
+            let finalAverage = marksForComponent.marks
+            if (tm.judgeId) {
+              const allJudgeMarks = await tx.judgeMarking.findMany({
+                where: { teamId: tm.teamId, markingCriteriaId: criteria.id, componentId: component.id },
+              })
+              finalAverage = allJudgeMarks.reduce((s, j) => s + Number(j.marksAwarded), 0) / allJudgeMarks.length
+            }
+
+            const componentMark = await tx.componentMark.findFirst({
+              where: { teamMarkId: teamMark.id, componentId: component.id },
+            })
+
+            if (componentMark) {
+              await tx.componentMark.update({
+                where: { id: componentMark.id },
+                data: {
+                  averageMarks: finalAverage,
+                  judgeCount: tm.judgeId ? componentMark.judgeCount + 1 : 1,
+                },
+              })
+            } else {
+              await tx.componentMark.create({
+                data: {
+                  teamMarkId: teamMark.id,
+                  componentId: component.id,
+                  averageMarks: finalAverage,
+                  judgeCount: 1,
+                },
+              })
+            }
+
+            componentUpdates.push({ componentId: component.id, marks: marksForComponent.marks })
+          }
+
+          await tx.teamMark.update({
+            where: { id: teamMark.id },
+            data: { totalMarks, isSubmitted: true, submittedAt: new Date() },
+          })
+
+          results.push({
+            teamId: tm.teamId,
+            teamName: team.name,
+            success: true,
+            totalMarks,
+            componentMarksCount: componentUpdates.length,
+          })
+        } catch (error) {
+          console.error(`Error submitting marks for team ${tm.teamId}:`, error)
+          results.push({ teamId: tm.teamId, success: false, error: 'Failed to submit marks' })
+        }
+      }
+    })
+
+    const succeeded = results.filter(r => r.success).length
+    const failed = results.length - succeeded
+
+    return {
+      success: true,
+      message: `Submitted marks for ${succeeded}/${results.length} teams`,
+      results,
+      summary: { succeeded, failed, total: results.length },
+    }
+  } catch (error) {
+    console.error('submitJudgeMarks error:', error)
+    return { success: false, error: 'Failed to submit marks' }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Get team marks (migrated from api/marking/team-marks GET)
+// ---------------------------------------------------------------------------
+
+export async function getTeamMarks(input: { eventId: string; teamId: string }) {
+  const { eventId, teamId } = input
+  if (!eventId || !teamId) return { success: false, error: 'eventId and teamId required' }
+
+  try {
+    const team = await prisma.team.findFirst({
+      where: { id: teamId, eventId },
+      select: { id: true, name: true },
+    })
+
+    if (!team) return { success: false, error: 'Team not found for this event' }
+
+    const teamMark = await prisma.teamMark.findFirst({
+      where: { teamId, criteria: { eventId } },
+      include: {
+        componentMarks: {
+          include: {
+            component: {
+              select: { id: true, name: true, maxMarksForComponent: true },
+            },
+          },
+        },
+        criteria: {
+          select: { id: true, name: true, maxMarks: true, numberOfJudges: true },
+        },
+      },
+    })
+
+    if (!teamMark) {
+      return { success: true, marks: null, message: 'No marks submitted for this team yet' }
+    }
+
+    return {
+      success: true,
+      marks: {
+        teamId,
+        teamName: team.name,
+        totalMarks: Number(teamMark.totalMarks),
+        isSubmitted: teamMark.isSubmitted,
+        submittedAt: teamMark.submittedAt,
+        criteria: teamMark.criteria,
+        componentMarks: teamMark.componentMarks.map(cm => ({
+          componentId: cm.componentId,
+          componentName: cm.component.name,
+          averageMarks: Number(cm.averageMarks),
+          maxMarks: cm.component.maxMarksForComponent,
+          judgeCount: cm.judgeCount,
+        })),
+      },
+    }
+  } catch (error) {
+    console.error('getTeamMarks error:', error)
+    return { success: false, error: 'Failed to fetch team marks' }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Get leaderboard data for public-facing views (migrated from api/marking/leaderboard GET)
+// ---------------------------------------------------------------------------
+
+export async function getLeaderboardData(eventId: string) {
+  if (!eventId) return { success: false, error: 'eventId required' }
+
+  try {
+    const criteria = await prisma.markingCriteria.findUnique({
+      where: { eventId },
+      include: {
+        components: {
+          orderBy: { order: 'asc' },
+          select: { id: true, name: true, order: true, weightPercentage: true, maxMarksForComponent: true },
+        },
+        teamMarks: {
+          where: { isSubmitted: true },
+          include: {
+            team: { select: { id: true, name: true, memberCount: true } },
+            componentMarks: {
+              include: { component: { select: { id: true, name: true } } },
+            },
+          },
+          orderBy: [{ totalMarks: 'desc' }, { createdAt: 'desc' }],
+        },
+      },
+    })
+
+    if (!criteria) return { success: false, error: 'No marking criteria found for this event' }
+
+    const leaderboard = criteria.teamMarks.map((tm, index) => ({
+      rank: index + 1,
+      teamId: tm.team.id,
+      teamName: tm.team.name,
+      memberCount: tm.team.memberCount,
+      totalMarks: Number(tm.totalMarks),
+      submittedAt: tm.submittedAt,
+      componentMarks: tm.componentMarks.map(cm => ({
+        componentId: cm.component.id,
+        componentName: cm.component.name,
+        averageMarks: Number(cm.averageMarks),
+        judgeCount: cm.judgeCount,
+      })),
+    }))
+
+    return {
+      success: true,
+      leaderboard: {
+        eventId,
+        criteriaName: criteria.name,
+        maxMarks: criteria.maxMarks,
+        numberOfJudges: criteria.numberOfJudges,
+        components: criteria.components,
+        teams: leaderboard,
+        totalTeamsSubmitted: leaderboard.length,
+      },
+    }
+  } catch (error) {
+    console.error('getLeaderboardData error:', error)
+    return { success: false, error: 'Failed to fetch leaderboard' }
+  }
+}
+

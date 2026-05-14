@@ -21,11 +21,7 @@ function safeRevalidatePath(path: string) {
   }
 }
 
-function normalizeIndianPhone(value: string) {
-  const trimmed = value.replace(/[\s-]/g, '');
-  const match = trimmed.match(/^(?:\+91|91)?([6-9]\d{9})$/);
-  return match ? match[1] : null;
-}
+import { indianPhoneSchema } from '@/lib/validation/phone';
 
 function getClientIpFromHeaders(store: Headers) {
   const forwarded = store.get('x-forwarded-for') || '';
@@ -65,13 +61,7 @@ const PublicOnSpotSchema = z.object({
   firstName: z.string().trim().min(2),
   lastName: z.string().trim().min(1),
   email: z.string().trim().email(),
-  phone: z
-    .string()
-    .trim()
-    .transform((value) => normalizeIndianPhone(value))
-    .refine((value): value is string => Boolean(value), {
-      message: 'Invalid Indian mobile number',
-    }),
+  phone: indianPhoneSchema,
   password: z.string().min(8),
   collegeName: z.string().trim().min(2),
   collegeLoc: z.string().trim().min(2),

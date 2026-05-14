@@ -9,6 +9,7 @@ import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
 import { logAdminAudit } from "@/lib/admin-audit";
 import { getActiveYear } from "@/lib/edition";
 import { archiveEventById, restoreEventById } from "@/server/services/event-archive.service";
+import { normalizeIndianPhone } from "@/lib/validation/phone";
 
 const EVENT_TYPE_OPTIONS = [
   { value: "TECHNICAL", label: "Technical" },
@@ -68,20 +69,17 @@ function parseCoordinators(formData: FormData) {
     phone: (formData.get(`coordinatorPhone${index}`) as string | null)?.trim() || "",
   }));
 
-  const first = entries[0];
-  if (!first.name || !first.phone) {
-    return null;
-  }
-
-  for (const entry of entries.slice(1)) {
-    const hasName = Boolean(entry.name);
-    const hasPhone = Boolean(entry.phone);
-    if (hasName !== hasPhone) {
-      return null;
+  for (const entry of entries) {
+    if (entry.name || entry.phone) {
+      if (!entry.name || !entry.phone) return null;
+      const normalized = normalizeIndianPhone(entry.phone);
+      if (!normalized) return null;
+      entry.phone = normalized;
     }
   }
 
   const normalized = entries.filter((entry) => entry.name && entry.phone);
+  if (normalized.length === 0) return null;
 
   return {
     coordinatorName: normalized.map((entry) => entry.name).join(" | "),

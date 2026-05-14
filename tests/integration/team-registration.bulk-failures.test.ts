@@ -1,11 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { bulkRegisterTeamByShacklesIds } from "../../src/server/services/team-registration.service";
+import { getActiveYear } from "../../src/lib/edition";
 
 const prisma = new PrismaClient();
 
 function runTag() {
-  return `bulk-fail-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return `BF-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
 }
 
 async function ensureDatabaseAvailable() {
@@ -45,6 +46,8 @@ async function createUser(input: {
       transactionId: `bulk-fail-pay-${input.suffix}-${input.tag}`,
       proofUrl: `bulk-fail-proof-${input.suffix}-${input.tag}`,
       status: input.paymentStatus ?? "VERIFIED",
+      year: getActiveYear(),
+      packageType: "COMBO",
     },
   });
 
@@ -97,7 +100,7 @@ describe("integration: team bulk registration failure semantics", () => {
       const result = await bulkRegisterTeamByShacklesIds({
         db: prisma,
         eventName,
-        teamName: `BULK LEADER TEAM ${tag}`,
+        teamName: `TEAM${Math.floor(Math.random() * 100000)}`,
         shacklesIds: [userA.shacklesId as string, userB.shacklesId as string],
         leaderShacklesId: "NOT_IN_LIST",
         stationId: "bulk-fail",
@@ -139,7 +142,7 @@ describe("integration: team bulk registration failure semantics", () => {
       const result = await bulkRegisterTeamByShacklesIds({
         db: prisma,
         eventName,
-        teamName: `BULK UNPAID TEAM ${tag}`,
+        teamName: `TEAM${Math.floor(Math.random() * 100000)}`,
         shacklesIds: [paid.shacklesId as string, unpaid.shacklesId as string],
         leaderShacklesId: paid.shacklesId as string,
         stationId: "bulk-fail",
@@ -160,7 +163,7 @@ describe("integration: team bulk registration failure semantics", () => {
     } finally {
       await prisma.eventRegistration.deleteMany({ where: { stationId: "bulk-fail" } });
       await prisma.team.deleteMany({ where: { name: { startsWith: "BULK UNPAID TEAM " } } });
-      await prisma.event.deleteMany({ where: { name: { startsWith: "BULK-UNPAID-" } } });
+      await prisma.team.deleteMany({ where: { name: { startsWith: "TEAM" } } });
       await prisma.payment.deleteMany({ where: { transactionId: { contains: tag } } });
       await prisma.user.deleteMany({ where: { email: { contains: tag } } });
     }
@@ -195,7 +198,7 @@ describe("integration: team bulk registration failure semantics", () => {
       const result = await bulkRegisterTeamByShacklesIds({
         db: prisma,
         eventName,
-        teamName: `BULK ALREADY TEAM ${tag}`,
+        teamName: `TEAM${Math.floor(Math.random() * 100000)}`,
         shacklesIds: [already.shacklesId as string, fresh.shacklesId as string],
         leaderShacklesId: fresh.shacklesId as string,
         stationId: "bulk-fail",
@@ -211,7 +214,7 @@ describe("integration: team bulk registration failure semantics", () => {
     } finally {
       await prisma.eventRegistration.deleteMany({ where: { event: { name: { startsWith: "BULK-ALREADY-" } } } });
       await prisma.team.deleteMany({ where: { name: { startsWith: "BULK ALREADY TEAM " } } });
-      await prisma.event.deleteMany({ where: { name: { startsWith: "BULK-ALREADY-" } } });
+      await prisma.team.deleteMany({ where: { name: { startsWith: "TEAM" } } });
       await prisma.payment.deleteMany({ where: { transactionId: { contains: tag } } });
       await prisma.user.deleteMany({ where: { email: { contains: tag } } });
     }
@@ -238,7 +241,7 @@ describe("integration: team bulk registration failure semantics", () => {
       const result = await bulkRegisterTeamByShacklesIds({
         db: prisma,
         eventName,
-        teamName: `BULK MAX TEAM ${tag}`,
+        teamName: `TEAM${Math.floor(Math.random() * 100000)}`,
         shacklesIds: [u1.shacklesId as string, u2.shacklesId as string, u3.shacklesId as string],
         leaderShacklesId: u1.shacklesId as string,
         stationId: "bulk-fail",
@@ -254,7 +257,7 @@ describe("integration: team bulk registration failure semantics", () => {
     } finally {
       await prisma.eventRegistration.deleteMany({ where: { stationId: "bulk-fail" } });
       await prisma.team.deleteMany({ where: { name: { startsWith: "BULK MAX TEAM " } } });
-      await prisma.event.deleteMany({ where: { name: { startsWith: "BULK-MAX-" } } });
+      await prisma.team.deleteMany({ where: { name: { startsWith: "TEAM" } } });
       await prisma.payment.deleteMany({ where: { transactionId: { contains: tag } } });
       await prisma.user.deleteMany({ where: { email: { contains: tag } } });
     }
@@ -288,7 +291,7 @@ describe("integration: team bulk registration failure semantics", () => {
       const result = await bulkRegisterTeamByShacklesIds({
         db: prisma,
         eventName,
-        teamName: `BULK CAP TEAM ${tag}`,
+        teamName: `TEAM${Math.floor(Math.random() * 100000)}`,
         shacklesIds: [newcomer.shacklesId as string],
         leaderShacklesId: newcomer.shacklesId as string,
         stationId: "bulk-fail",
@@ -304,7 +307,7 @@ describe("integration: team bulk registration failure semantics", () => {
     } finally {
       await prisma.eventRegistration.deleteMany({ where: { event: { name: { startsWith: "BULK-CAP-" } } } });
       await prisma.team.deleteMany({ where: { name: { startsWith: "BULK CAP TEAM " } } });
-      await prisma.event.deleteMany({ where: { name: { startsWith: "BULK-CAP-" } } });
+      await prisma.team.deleteMany({ where: { name: { startsWith: "TEAM" } } });
       await prisma.payment.deleteMany({ where: { transactionId: { contains: tag } } });
       await prisma.user.deleteMany({ where: { email: { contains: tag } } });
     }

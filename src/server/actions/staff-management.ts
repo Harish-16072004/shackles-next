@@ -8,6 +8,8 @@ import { logAdminAudit } from '@/lib/admin-audit'
 import { executeSafeAction } from '@/lib/safe-action'
 import { Permission } from '@prisma/client'
 
+import { indianPhoneSchema } from '@/lib/validation/phone'
+
 // ===== Validation Schemas =====
 
 const CreateStaffUserSchema = z.object({
@@ -15,7 +17,7 @@ const CreateStaffUserSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
   firstName: z.string().min(1, 'First name required'),
   lastName: z.string().min(1, 'Last name required'),
-  phone: z.string().min(10, 'Valid phone number required'),
+  phone: indianPhoneSchema,
   role: z.enum(['COORDINATOR', 'VOLUNTEER'], {
     message: 'Role must be COORDINATOR or VOLUNTEER',
   }),

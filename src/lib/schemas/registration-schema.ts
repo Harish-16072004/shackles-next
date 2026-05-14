@@ -1,13 +1,13 @@
 import { z } from 'zod';
+import { indianPhoneSchema } from '../validation/phone';
 
-const indianMobileRegex = /^[6-9]\d{9}$/;
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const registrationStep1Schema = z.object({
   firstName: z.string().min(1, 'First name is required').max(50, 'First name is too long'),
   lastName: z.string().min(1, 'Last name is required').max(50, 'Last name is too long'),
   email: z.string().min(1, 'Email is required').regex(emailRegex, 'Enter a valid email address'),
-  phone: z.string().min(1, 'Mobile number is required').regex(indianMobileRegex, 'Enter a valid 10-digit mobile number starting with 6-9'),
+  phone: indianPhoneSchema,
   collegeName: z.string().min(1, 'College name is required'),
   collegeLoc: z.string().min(1, 'College location is required'),
   department: z.string().min(1, 'Department is required'),

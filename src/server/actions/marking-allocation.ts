@@ -33,7 +33,7 @@ export async function saveTeamMarksAllocation(input: z.infer<typeof SaveMarksSch
             judge = await prisma.user.create({
                 data: {
                     email: dummyEmail, firstName: `Judge ${i+1}`, lastName: `(Event)`,
-                    password: 'N/A', phone: '0000000000', collegeName: 'N/A',
+                    password: 'N/A', phone: '9999999999', collegeName: 'N/A',
                     collegeLoc: 'N/A', department: 'N/A', yearOfStudy: 'N/A', role: 'VOLUNTEER'
                 }
             })

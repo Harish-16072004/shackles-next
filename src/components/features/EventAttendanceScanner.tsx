@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Scanner } from '@yudiel/react-qr-scanner'
 import { AlertCircle, CheckCircle2, QrCode, Users, Plus, ShieldCheck, X } from 'lucide-react'
+import { processQRScanAction, checkRegistrationStatus, scannerRegisterForEvent, scannerCreateTeam } from '@/server/actions/event-logistics'
 
 interface ParticipantInfo {
   name: string
@@ -75,10 +76,7 @@ export default function EventAttendanceScanner({
       const shacklesId = decoded.sid
 
       setLoading(true)
-      const response = await fetch(
-        `/api/scanner/check-registration?shacklesId=${shacklesId}&eventId=${eventId}`
-      )
-      const data = await response.json()
+      const data = await checkRegistrationStatus({ shacklesId, eventId })
 
       if (!data.success) {
         setMessage({ type: 'error', text: data.error || 'REGISTRATION CHECK FAILED' })
@@ -87,9 +85,9 @@ export default function EventAttendanceScanner({
         return
       }
 
-      setParticipant(data.participant)
-      setEvent(data.event)
-      setRegistered(data.registered)
+      setParticipant(data.participant || null)
+      setEvent(data.event || null)
+      setRegistered(data.registered ?? null)
       setQrData(result[0].rawValue)
       setScannedToday((prev) => prev + 1)
       setMessage(null)
@@ -107,18 +105,12 @@ export default function EventAttendanceScanner({
 
     setLoading(true)
     try {
-      const response = await fetch('/api/scanner/qr-scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          qrData,
-          eventId,
-          operationType: 'ATTENDANCE',
-          stationId: 'event-scanner',
-        }),
+      const data = await processQRScanAction({
+        qrData: qrData!,
+        eventId,
+        operationType: 'ATTENDANCE',
+        stationId: 'event-scanner',
       })
-
-      const data = await response.json()
 
       if (!data.success) {
         setMessage({ type: 'error', text: data.error || 'MARKING FAILED' })
@@ -151,16 +143,10 @@ export default function EventAttendanceScanner({
 
     setLoading(true)
     try {
-      const response = await fetch('/api/scanner/register-for-event', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shacklesId: participant.shacklesId,
-          eventId,
-        }),
+      const data = await scannerRegisterForEvent({
+        shacklesId: participant.shacklesId,
+        eventId,
       })
-
-      const data = await response.json()
 
       if (!data.success) {
         setMessage({ type: 'error', text: data.error || 'REGISTRATION FAILED' })
@@ -194,19 +180,13 @@ export default function EventAttendanceScanner({
 
     setLoading(true)
     try {
-      const response = await fetch('/api/scanner/create-team', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scannedShacklesId: participant.shacklesId,
-          memberShacklesIds: memberIds,
-          eventId,
-          teamName: teamName.trim(),
-          lockStatus,
-        }),
+      const data = await scannerCreateTeam({
+        scannedShacklesId: participant.shacklesId,
+        memberShacklesIds: memberIds,
+        eventId,
+        teamName: teamName.trim(),
+        lockStatus,
       })
-
-      const data = await response.json()
 
       if (!data.success) {
         setMessage({ type: 'error', text: data.error || 'TEAM CREATION FAILED' })

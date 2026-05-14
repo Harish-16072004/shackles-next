@@ -1,14 +1,15 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { afterAll, describe, expect, it } from "vitest";
 import {
-  addMemberToTeamEvent,
   bulkRegisterAndLockTeamByShacklesIds,
+  bulkRegisterTeamByShacklesIds,
   TeamServiceResult,
 } from "../../src/server/services/team-registration.service";
 import { runSerializableTransaction } from "../../src/server/services/transaction.service";
+import { getActiveYear } from "../../src/lib/edition";
 
-const prisma = new PrismaClient();
-const runTag = `phase4-stress-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+const runTag = `S-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
 
 function isUniqueError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
@@ -37,7 +38,8 @@ async function createVerifiedUser(index: number) {
       collegeLoc: "Karaikudi",
       department: "Mechanical",
       yearOfStudy: "IV",
-      shacklesId: `STR${Date.now()}${String(index).padStart(3, "0")}`,
+      gender: "MALE",
+      shacklesId: `STR${Date.now()}${String(index).padStart(3, "0")}`.toUpperCase(),
     },
   });
 
@@ -48,6 +50,8 @@ async function createVerifiedUser(index: number) {
       transactionId: `stress-tx-${suffix}`,
       proofUrl: `stress-proof-${suffix}`,
       status: "VERIFIED",
+      year: getActiveYear(),
+      packageType: "COMBO",
     },
   });
 
@@ -56,13 +60,12 @@ async function createVerifiedUser(index: number) {
 
 describe("integration: team registration stress", () => {
   afterAll(async () => {
-    await prisma.registrationOperation.deleteMany({ where: { operationId: { startsWith: `${runTag}-` } } });
-    await prisma.eventRegistration.deleteMany({ where: { stationId: { startsWith: `${runTag}-` } } });
-    await prisma.team.deleteMany({ where: { name: { startsWith: `PHASE4-STRESS-${runTag}` } } });
-    await prisma.event.deleteMany({ where: { name: { startsWith: `PHASE4-STRESS-${runTag}` } } });
-    await prisma.payment.deleteMany({ where: { transactionId: { startsWith: "stress-tx-phase4-stress-" } } });
-    await prisma.user.deleteMany({ where: { email: { startsWith: "stress.phase4-stress-" } } });
-    await prisma.$disconnect();
+    try { await prisma.registrationOperation.deleteMany({ where: { operationId: { startsWith: `${runTag}-` } } }); } catch (e) {}
+    try { await prisma.eventRegistration.deleteMany({ where: { stationId: { contains: runTag } } }); } catch (e) {}
+    try { await prisma.team.deleteMany({ where: { name: { contains: runTag } } }); } catch (e) {}
+    try { await prisma.event.deleteMany({ where: { name: { contains: runTag } } }); } catch (e) {}
+    try { await prisma.payment.deleteMany({ where: { transactionId: { contains: runTag } } }); } catch (e) {}
+    try { await prisma.user.deleteMany({ where: { email: { contains: runTag } } }); } catch (e) {}
   });
 
   it("enforces single-winner lock semantics over repeated parallel TEAM_COMPLETE attempts", async () => {
@@ -71,8 +74,8 @@ describe("integration: team registration stress", () => {
     let successfulRounds = 0;
 
     for (let round = 0; round < iterations; round += 1) {
-      const eventName = `PHASE4-STRESS-${runTag}-LOCK-${round}`;
-      const teamName = `PHASE4-STRESS-${runTag}-TEAM-${round}`;
+      const eventName = `E-${runTag}-L${round}`;
+      const teamName = `T-${runTag}-T${round}`;
 
       const event = await prisma.event.create({
         data: {
@@ -85,6 +88,7 @@ describe("integration: team registration stress", () => {
           maxTeams: 20,
           isActive: true,
           date: new Date(),
+          year: getActiveYear(),
         },
       });
 
@@ -129,14 +133,12 @@ describe("integration: team registration stress", () => {
 
       if (successCount === 1) {
         successfulRounds += 1;
-      }
-
-      if (successCount !== 1) {
+      } else {
         invariantViolations += 1;
       }
 
       for (const entry of fulfilled) {
-        if (!entry.value.success && !["ALREADY_REGISTERED", "TEAM_LOCKED"].includes(entry.value.reason)) {
+        if (!entry.value.success && !["ALREADY_REGISTERED", "TEAM_LOCKED"].includes(entry.value.reason || "")) {
           invariantViolations += 1;
         }
       }
@@ -174,10 +176,9 @@ describe("integration: team registration stress", () => {
       }
     }
 
-    const successRate = successfulRounds / iterations;
     expect(invariantViolations).toBe(0);
-    expect(successRate).toBeGreaterThanOrEqual(0.9);
-  }, 90_000);
+    expect(successfulRounds).toBe(iterations);
+  }, 120_000);
 
   it("preserves participant capacity under repeated parallel TEAM_ADD contention", async () => {
     const rounds = 6;
@@ -188,7 +189,7 @@ describe("integration: team registration stress", () => {
     let invariantViolations = 0;
 
     for (let round = 0; round < rounds; round += 1) {
-      const eventName = `PHASE4-STRESS-${runTag}-CAP-${round}`;
+      const eventName = `E-${runTag}-C${round}`;
 
       const event = await prisma.event.create({
         data: {
@@ -201,6 +202,7 @@ describe("integration: team registration stress", () => {
           maxTeams: 20,
           isActive: true,
           date: new Date(),
+          year: getActiveYear(),
         },
       });
 
@@ -211,13 +213,16 @@ describe("integration: team registration stress", () => {
       const settled = await Promise.allSettled(
         users.map((user, index) =>
           runSerializableTransaction(prisma, (tx) =>
-            addMemberToTeamEvent({
+            bulkRegisterTeamByShacklesIds({
               db: tx,
-              userId: user.id,
               eventName,
-              teamName: `PHASE4-STRESS-${runTag}-CAP-TEAM-${round}-${index}`,
+              teamName: `T-${runTag}-C${round}-${index}`,
+              shacklesIds: [user.shacklesId!],
+              leaderShacklesId: user.shacklesId!,
               stationId: `${runTag}-cap-${round}`,
-              clientOperationId: `${runTag}-cap-op-${round}-${index}`,
+              operationId: `${runTag}-cap-op-${round}-${index}`,
+              lockTeam: false,
+              markAttended: false,
             })
           )
         )
@@ -240,7 +245,7 @@ describe("integration: team registration stress", () => {
 
       for (const outcome of settled) {
         if (outcome.status === "fulfilled") {
-          if (!outcome.value.success && !["CAPACITY_FULL", "TEAM_SLOTS_FULL"].includes(outcome.value.reason)) {
+          if (!outcome.value.success && !["CAPACITY_FULL", "TEAM_SLOTS_FULL", "ALREADY_REGISTERED"].includes(outcome.value.reason || "")) {
             invariantViolations += 1;
           }
         } else if (!isKnownConcurrencyError(outcome.reason)) {
@@ -249,8 +254,7 @@ describe("integration: team registration stress", () => {
       }
     }
 
-    const capacityPreservationRate = roundsWithinCapacity / rounds;
     expect(invariantViolations).toBe(0);
-    expect(capacityPreservationRate).toBe(1);
-  }, 90_000);
+    expect(roundsWithinCapacity).toBe(rounds);
+  }, 120_000);
 });

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { fetchCriteriaForCoordinator, submitJudgeMarks } from '@/server/actions/marking'
 
 interface MarkingComponent {
   id: string
@@ -48,22 +49,21 @@ export function CoordinatorMarking({ eventId, teams }: CoordinatorMarkingProps) 
     // Fetch marking criteria
     const fetchCriteria = async () => {
       try {
-        const response = await fetch(`/api/marking/criteria?eventId=${eventId}`)
-        const data = await response.json()
+        const response = await fetchCriteriaForCoordinator(eventId)
 
-        if (!response.ok) {
-          setError(data.error || 'Failed to fetch criteria')
+        if (!response.success || !response.criteria) {
+          setError(response.error || 'Failed to fetch criteria')
           setLoading(false)
           return
         }
 
-        setCriteria(data.criteria)
+        setCriteria(response.criteria)
 
         // Initialize marks object
         const initialMarks: Record<string, Record<string, number>> = {}
         teams.forEach(team => {
           initialMarks[team.id] = {}
-          data.criteria.components.forEach((comp: MarkingComponent) => {
+          response.criteria.components.forEach((comp: MarkingComponent) => {
             initialMarks[team.id][comp.id] = 0
           })
         })
@@ -113,23 +113,17 @@ export function CoordinatorMarking({ eventId, teams }: CoordinatorMarkingProps) 
         })),
       }))
 
-      const response = await fetch('/api/marking/submit-marks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventId,
-          teamMarks,
-        }),
+      const response = await submitJudgeMarks({
+        eventId,
+        teamMarks,
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Failed to submit marks')
+      if (!response.success) {
+        setError(response.error || 'Failed to submit marks')
         return
       }
 
-      setSuccess(data.message)
+      setSuccess(response.message || 'Marks submitted')
     } catch (err) {
       setError('Network error')
       console.error(err)

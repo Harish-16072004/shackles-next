@@ -6,11 +6,13 @@ import { redirect } from "next/navigation";
 import { hash } from "bcryptjs";
 
 
+import { indianPhoneSchema } from "@/lib/validation/phone";
+
 // 1. Define the Validation Schema (The Rules)
 const RegisterSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
-  phone: z.string().min(10, "Phone number must be valid"),
+  phone: indianPhoneSchema,
   college: z.string().min(2, "College name is required"),
 });
 

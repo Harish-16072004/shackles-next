@@ -1,8 +1,7 @@
 'use client';
 
-import type { FormEvent } from "react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { deleteTeam, deleteTeamMember } from "@/server/actions/event-logistics";
 
 type TeamDeleteFormProps = {
   teamId: string;
@@ -18,87 +17,61 @@ type MemberDeleteFormProps = {
 };
 
 export function TeamDeleteForm({ teamId, teamName, eventId }: TeamDeleteFormProps) {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     const ok = window.confirm(`Delete team "${teamName}" and all its members from this event?`);
     if (!ok) return;
 
-    setLoading(true);
-    const formData = new FormData();
-    formData.append("teamId", teamId || "");
-    formData.append("eventId", eventId || "");
-
-    try {
-      const res = await fetch("/api/admin/event-registrations/delete-team", {
-        method: "POST",
-        body: formData,
-      });
-      if (res.ok || res.redirected) {
+    startTransition(async () => {
+      const result = await deleteTeam({ teamId, eventId });
+      if (result.success) {
         window.location.reload();
       } else {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || "Failed to delete team");
+        alert(result.error || "Failed to delete team");
       }
-    } catch (e) {
-      alert("An error occurred");
-    }
-    setLoading(false);
+    });
   };
 
   return (
     <button
       type="button"
       onClick={handleDelete}
-      disabled={loading}
+      disabled={isPending}
       style={{ pointerEvents: 'auto' }}
       className="relative z-10 rounded-sm border border-red-300 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50 cursor-pointer"
     >
-      {loading ? "Deleting..." : "Delete Team"}
+      {isPending ? "Deleting..." : "Delete Team"}
     </button>
   );
 }
 
 export function MemberDeleteForm({ registrationId, fullName, hasTeam, eventId }: MemberDeleteFormProps) {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     const ok = window.confirm(`Delete ${fullName} from this event registration?`);
     if (!ok) return;
 
-    setLoading(true);
-    const formData = new FormData();
-    formData.append("registrationId", registrationId || "");
-    formData.append("eventId", eventId || "");
-
-    try {
-      const res = await fetch("/api/admin/event-registrations/delete-member", {
-        method: "POST",
-        body: formData,
-      });
-      if (res.ok || res.redirected) {
+    startTransition(async () => {
+      const result = await deleteTeamMember({ registrationId, eventId });
+      if (result.success) {
         window.location.reload();
       } else {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || "Failed to delete member");
+        alert(result.error || "Failed to delete member");
       }
-    } catch (e) {
-      alert("An error occurred");
-    }
-    setLoading(false);
+    });
   };
 
   return (
     <button
       type="button"
       onClick={handleDelete}
-      disabled={loading}
+      disabled={isPending}
       style={{ pointerEvents: 'auto' }}
       className="relative z-10 rounded-sm border border-red-300 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50 cursor-pointer"
     >
-      {loading ? "Deleting..." : (hasTeam ? "Delete Member" : "Delete Participant")}
+      {isPending ? "Deleting..." : (hasTeam ? "Delete Member" : "Delete Participant")}
     </button>
   );
 }

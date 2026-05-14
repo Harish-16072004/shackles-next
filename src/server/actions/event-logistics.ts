@@ -5,18 +5,22 @@ import { prisma } from "@/lib/prisma";
 import { getActiveYear } from "@/lib/edition";
 import { isScannerBulkTeamFlowEnabled } from "@/lib/env";
 import { logAdminAudit } from "@/lib/admin-audit";
-import { getSession } from "@/lib/session";
+import { getSession, checkCanManageRegistrations, checkEventStaff } from "@/lib/session";
+import { createRateLimiter } from "@/lib/rate-limit";
 import {
   addMemberToTeamEvent,
   bulkRegisterTeamByShacklesIds,
   completeExistingTeamRegistration,
   normalizeShacklesId,
+  normalizeTeamName,
+  generateUniqueTeamCode,
   parseUniqueShacklesIds,
 } from "@/server/services/team-registration.service";
 import { runSerializableTransaction } from "@/server/services/transaction.service";
 import { decodeQrPayload } from "@/server/services/qr.service";
+import { processQRScan } from "@/server/services/qr-management.service";
 import { executeSafeAction } from "@/lib/safe-action";
-import { Permission, Role } from "@prisma/client";
+import { Permission, Role, TeamMemberRole } from "@prisma/client";
 
 // --- 1. SCAN LOGIC (For Volunteers) ---
 // Input: Scanned QR Token string
@@ -306,7 +310,7 @@ export async function getScannerJoinableTeams(input: {
     const teams = await prisma.team.findMany({
       where: {
         eventId: event.id,
-        status: 'DRAFT',
+        status: 'OPEN',
         ...(normalizedQuery
           ? {
               OR: [
@@ -707,3 +711,504 @@ export async function registerCurrentUserForEvent(eventName: string) {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Admin: Change Team Leader (migrated from api/admin/event-registrations/change-leader)
+// ---------------------------------------------------------------------------
+
+const changeLeaderRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 30,
+  keyPrefix: "action:admin:change-leader",
+});
+
+export async function changeTeamLeader(input: {
+  teamId: string;
+  newLeaderUserId: string;
+  eventId: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const { teamId, newLeaderUserId, eventId } = input;
+
+  if (!teamId || !newLeaderUserId || !eventId) {
+    return { success: false, error: "Missing required fields." };
+  }
+
+  const { allowed, session } = await checkCanManageRegistrations(eventId);
+  if (!allowed || !session) {
+    return { success: false, error: "Unauthorized." };
+  }
+
+  const rl = await changeLeaderRateLimiter.limit(`admin:change-leader:${session.userId}`);
+  if (!rl.success) {
+    return { success: false, error: "Too many attempts. Please try again later." };
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { id: true, leaderUserId: true, members: { select: { userId: true } } },
+  });
+
+  if (!team) return { success: false, error: "Team not found." };
+
+  const isMember = team.members.some((m) => m.userId === newLeaderUserId);
+  if (!isMember) return { success: false, error: "Selected user is not a member of this team." };
+
+  if (team.leaderUserId === newLeaderUserId) {
+    return { success: false, error: "This user is already the team leader." };
+  }
+
+  await prisma.$transaction([
+    prisma.eventRegistration.updateMany({
+      where: { teamId, userId: team.leaderUserId ?? "" },
+      data: { memberRole: "MEMBER" },
+    }),
+    prisma.eventRegistration.updateMany({
+      where: { teamId, userId: newLeaderUserId },
+      data: { memberRole: "LEADER" },
+    }),
+    prisma.team.update({
+      where: { id: teamId },
+      data: { leaderUserId: newLeaderUserId },
+    }),
+  ]);
+
+  revalidatePath("/admin/event-registrations");
+  revalidatePath(`/admin/event-registrations/${eventId}`);
+
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Admin: Delete Team Member (migrated from api/admin/event-registrations/delete-member)
+// ---------------------------------------------------------------------------
+
+const deleteMemberRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 10,
+  keyPrefix: "action:admin:delete-member",
+});
+
+export async function deleteTeamMember(input: {
+  registrationId: string;
+  eventId: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const { registrationId, eventId } = input;
+
+  if (!eventId) return { success: false, error: "Event ID is required." };
+  if (!registrationId) return { success: false, error: "Registration ID is required." };
+
+  const { allowed, session } = await checkCanManageRegistrations(eventId);
+  if (!allowed || !session) {
+    return { success: false, error: "Unauthorized." };
+  }
+
+  const rl = await deleteMemberRateLimiter.limit(`admin:delete-member:${session.userId}`);
+  if (!rl.success) {
+    return { success: false, error: "Too many attempts. Please try again later." };
+  }
+
+  const registration = await prisma.eventRegistration.findUnique({
+    where: { id: registrationId },
+    select: { id: true, teamId: true, userId: true, memberRole: true },
+  });
+
+  if (!registration) return { success: false, error: "Registration not found." };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.eventRegistration.delete({ where: { id: registration.id } });
+
+    if (!registration.teamId) return;
+
+    const remaining = await tx.eventRegistration.findMany({
+      where: { teamId: registration.teamId },
+      orderBy: { userId: "asc" },
+      select: { userId: true, memberRole: true },
+    });
+
+    if (remaining.length === 0) {
+      await tx.team.delete({ where: { id: registration.teamId } });
+      return;
+    }
+
+    const nextLeader =
+      remaining.find((item) => item.memberRole === TeamMemberRole.LEADER)?.userId || remaining[0].userId;
+
+    await tx.eventRegistration.updateMany({
+      where: { teamId: registration.teamId },
+      data: { memberRole: TeamMemberRole.MEMBER },
+    });
+
+    await tx.eventRegistration.updateMany({
+      where: { teamId: registration.teamId, userId: nextLeader },
+      data: { memberRole: TeamMemberRole.LEADER },
+    });
+
+    const leaderUser = await tx.user.findUnique({
+      where: { id: nextLeader },
+      select: { id: true, phone: true, email: true },
+    });
+
+    await tx.team.update({
+      where: { id: registration.teamId },
+      data: {
+        memberCount: remaining.length,
+        leaderUserId: leaderUser?.id || null,
+        leaderContactPhoneSnapshot: leaderUser?.phone || null,
+        leaderContactEmailSnapshot: leaderUser?.email || null,
+      },
+    });
+  });
+
+  revalidatePath("/admin/event-registrations", "layout");
+  revalidatePath("/admin/events");
+  revalidatePath("/admin/adminDashboard");
+  revalidatePath("/userDashboard");
+  revalidatePath("/events");
+  revalidatePath("/workshops");
+
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Admin: Delete Entire Team (migrated from api/admin/event-registrations/delete-team)
+// ---------------------------------------------------------------------------
+
+const deleteTeamRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 10,
+  keyPrefix: "action:admin:delete-team",
+});
+
+export async function deleteTeam(input: {
+  teamId: string;
+  eventId: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const { teamId, eventId } = input;
+
+  if (!eventId) return { success: false, error: "Event ID is required." };
+  if (!teamId) return { success: false, error: "Team ID is required." };
+
+  const { allowed, session } = await checkCanManageRegistrations(eventId);
+  if (!allowed || !session) {
+    return { success: false, error: "Unauthorized." };
+  }
+
+  const rl = await deleteTeamRateLimiter.limit(`admin:delete-team:${session.userId}`);
+  if (!rl.success) {
+    return { success: false, error: "Too many attempts. Please try again later." };
+  }
+
+  const existingTeam = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } });
+  if (!existingTeam) return { success: false, error: "Team not found." };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.eventRegistration.deleteMany({ where: { teamId } });
+    await tx.team.delete({ where: { id: teamId } });
+  });
+
+  revalidatePath("/admin/event-registrations", "layout");
+  revalidatePath("/admin/events");
+  revalidatePath("/admin/adminDashboard");
+  revalidatePath("/userDashboard");
+  revalidatePath("/events");
+  revalidatePath("/workshops");
+
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Scanner: Process QR Scan (migrated from api/scanner/qr-scan)
+// ---------------------------------------------------------------------------
+
+export async function processQRScanAction(input: {
+  qrData: string;
+  stationId: string;
+  eventId?: string;
+  operationType: string;
+}): Promise<{ success: boolean; error?: string; [key: string]: any }> {
+  const { qrData, stationId, eventId, operationType } = input;
+
+  if (!qrData || !stationId || !operationType) {
+    return { success: false, error: "Missing required fields" };
+  }
+
+  const requiredPermission: Permission = operationType === 'KIT' ? Permission.KIT_ISSUANCE : Permission.SCAN_ATTENDANCE;
+
+  if (eventId) {
+    const { allowed, error } = await checkEventStaff(eventId, requiredPermission);
+    if (!allowed) {
+      return { success: false, error: error || "Forbidden" };
+    }
+  }
+
+  try {
+    const result = await processQRScan(prisma, {
+      qrData,
+      stationId,
+      eventId,
+      operationType,
+      timestamp: new Date(),
+    });
+    return result;
+  } catch (error) {
+    console.error("QR Scan Error:", error);
+    return { success: false, error: "Internal Server Error" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scanner: Check Registration Status (migrated from api/scanner/check-registration)
+// ---------------------------------------------------------------------------
+
+export async function checkRegistrationStatus(input: {
+  shacklesId: string;
+  eventId: string;
+}): Promise<{
+  success: boolean;
+  error?: string;
+  registered?: boolean;
+  participant?: { name: string; shacklesId: string | null };
+  event?: { id: string; name: string; type: string; participationMode: string; minTeamSize: number | null; maxTeamSize: number | null };
+}> {
+  const { shacklesId, eventId } = input;
+
+  if (!shacklesId || !eventId) {
+    return { success: false, error: "Missing shacklesId or eventId" };
+  }
+
+  const { allowed, error } = await checkEventStaff(eventId, Permission.SCAN_ATTENDANCE);
+  if (!allowed) {
+    return { success: false, error: error || "Forbidden" };
+  }
+
+  try {
+    const normalizedId = normalizeShacklesId(shacklesId);
+    const user = await prisma.user.findUnique({
+      where: { shacklesId: normalizedId },
+      select: { id: true, firstName: true, lastName: true, shacklesId: true },
+    });
+
+    if (!user) return { success: false, error: "Participant not found" };
+
+    const registration = await prisma.eventRegistration.findFirst({
+      where: { userId: user.id, eventId },
+      select: { id: true },
+    });
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, name: true, type: true, participationMode: true, teamMinSize: true, teamMaxSize: true },
+    });
+
+    if (!event) return { success: false, error: "Event not found" };
+
+    return {
+      success: true,
+      registered: !!registration,
+      participant: { name: `${user.firstName} ${user.lastName}`.trim(), shacklesId: user.shacklesId },
+      event: {
+        id: event.id,
+        name: event.name,
+        type: event.type,
+        participationMode: event.participationMode,
+        minTeamSize: event.teamMinSize,
+        maxTeamSize: event.teamMaxSize,
+      },
+    };
+  } catch (error) {
+    console.error("Check Registration Error:", error);
+    return { success: false, error: "Internal Server Error" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scanner: Register for Event (migrated from api/scanner/register-for-event)
+// ---------------------------------------------------------------------------
+
+export async function scannerRegisterForEvent(input: {
+  shacklesId: string;
+  eventId: string;
+}): Promise<{ success: boolean; error?: string; registrationId?: string; message?: string }> {
+  const { shacklesId, eventId } = input;
+
+  if (!shacklesId || !eventId) {
+    return { success: false, error: "Missing shacklesId or eventId" };
+  }
+
+  const { allowed, error } = await checkEventStaff(eventId, Permission.SCAN_ATTENDANCE);
+  if (!allowed) {
+    return { success: false, error: error || "Forbidden" };
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { shacklesId },
+      select: { id: true },
+    });
+
+    if (!user) return { success: false, error: "Participant not found" };
+
+    const existingRegistration = await prisma.eventRegistration.findFirst({
+      where: { userId: user.id, eventId },
+      select: { id: true },
+    });
+
+    if (existingRegistration) {
+      return { success: false, error: "Participant already registered for this event" };
+    }
+
+    const activeYear = getActiveYear();
+    const registration = await prisma.eventRegistration.create({
+      data: { userId: user.id, eventId, year: activeYear, attended: false },
+      select: { id: true },
+    });
+
+    return { success: true, registrationId: registration.id, message: "Participant registered for event. Scan again to mark attendance." };
+  } catch (error) {
+    console.error("Register for Event Error:", error);
+    return { success: false, error: "Internal Server Error" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scanner: Create Team (migrated from api/scanner/create-team)
+// ---------------------------------------------------------------------------
+
+export async function scannerCreateTeam(input: {
+  scannedShacklesId: string;
+  memberShacklesIds: string[];
+  eventId: string;
+  teamName: string;
+  lockStatus?: string;
+}): Promise<{ success: boolean; error?: string; teamId?: string; totalMembers?: number; message?: string }> {
+  const { scannedShacklesId, memberShacklesIds, eventId, teamName, lockStatus } = input;
+
+  if (!scannedShacklesId || !memberShacklesIds || !eventId || !teamName) {
+    return { success: false, error: "Missing required fields" };
+  }
+
+  if (!Array.isArray(memberShacklesIds)) {
+    return { success: false, error: "memberShacklesIds must be an array" };
+  }
+
+  const { allowed, error } = await checkEventStaff(eventId, Permission.SCAN_ATTENDANCE);
+  if (!allowed) {
+    return { success: false, error: error || "Forbidden" };
+  }
+
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { type: true, teamMinSize: true, teamMaxSize: true },
+    });
+
+    if (!event) return { success: false, error: "Event not found" };
+
+    const normalizedCaptainId = normalizeShacklesId(scannedShacklesId);
+    const captain = await prisma.user.findUnique({
+      where: { shacklesId: normalizedCaptainId },
+      select: { id: true, email: true, phone: true },
+    });
+
+    if (!captain) return { success: false, error: "Captain (scanned user) not found" };
+
+    const normalizedMemberIds = memberShacklesIds.map(id => normalizeShacklesId(id));
+    const members = await prisma.user.findMany({
+      where: { shacklesId: { in: normalizedMemberIds } },
+      select: { id: true, shacklesId: true },
+    });
+
+    if (members.length !== normalizedMemberIds.length) {
+      const foundIds = new Set(members.map((m) => m.shacklesId));
+      const missingIds = normalizedMemberIds.filter((id) => !foundIds.has(id));
+      return { success: false, error: `Members not found: ${missingIds.join(", ")}` };
+    }
+
+    const totalSize = 1 + normalizedMemberIds.length;
+    if (event.teamMinSize && totalSize < event.teamMinSize) {
+      return { success: false, error: `Team size ${totalSize} is below minimum ${event.teamMinSize}` };
+    }
+    if (event.teamMaxSize && totalSize > event.teamMaxSize) {
+      return { success: false, error: `Team size ${totalSize} exceeds maximum ${event.teamMaxSize}` };
+    }
+
+    const memberIds = members.map((m) => m.id);
+    if (memberIds.includes(captain.id)) {
+      return { success: false, error: "Captain cannot be in team members list" };
+    }
+    if (new Set(memberIds).size !== memberIds.length) {
+      return { success: false, error: "Duplicate members in team" };
+    }
+
+    const activeYear = getActiveYear();
+
+    const existingRegs = await prisma.eventRegistration.findMany({
+      where: { eventId, userId: { in: [captain.id, ...memberIds] } },
+      select: { userId: true, teamId: true },
+    });
+
+    for (const reg of existingRegs) {
+      if (reg.teamId) {
+        return { success: false, error: "One or more team members already in a team for this event" };
+      }
+    }
+
+    const normalizedName = normalizeTeamName(teamName);
+    const teamCode = await generateUniqueTeamCode(prisma, eventId);
+
+    const existingTeamName = await prisma.team.findUnique({
+      where: { eventId_nameNormalized: { eventId, nameNormalized: normalizedName } },
+    });
+
+    if (existingTeamName) {
+      return { success: false, error: "A team with this name already exists" };
+    }
+
+    const session = await getSession();
+    const isLocked = lockStatus === "LOCKED";
+    const isFull = totalSize === event.teamMaxSize;
+    const finalStatus = (isLocked || isFull) ? "LOCKED" : "OPEN";
+
+    const team = await prisma.team.create({
+      data: {
+        eventId,
+        name: teamName,
+        nameNormalized: normalizedName,
+        teamCode,
+        status: finalStatus,
+        leaderUserId: captain.id,
+        leaderContactEmailSnapshot: captain.email,
+        leaderContactPhoneSnapshot: captain.phone,
+        memberCount: totalSize,
+        lockedAt: (isLocked || isFull) ? new Date() : null,
+        lockedBy: (isLocked || isFull) ? String(session?.userId || "") : null,
+      },
+    });
+
+    const allTeamUserIds = [captain.id, ...memberIds];
+    await prisma.eventRegistration.createMany({
+      data: allTeamUserIds.map((userId) => ({
+        userId,
+        eventId,
+        teamId: team.id,
+        year: activeYear,
+        attended: false,
+        memberRole: userId === captain.id ? "LEADER" : "MEMBER",
+        teamName: teamName,
+        teamSize: totalSize,
+        source: "ONLINE" as const,
+        syncStatus: "APPLIED" as const,
+      })),
+    });
+
+    return {
+      success: true,
+      teamId: team.id,
+      totalMembers: totalSize,
+      message: isLocked ? "Team created and locked successfully." : `Draft team "${teamName}" saved successfully.`,
+    };
+  } catch (error) {
+    console.error("Create Team Error:", error);
+    return { success: false, error: "Internal Server Error" };
+  }
+}

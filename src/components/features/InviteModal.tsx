@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X, Send, Users } from 'lucide-react';
+import { sendTeamInvite } from '@/server/actions/event-registration';
 
 interface InviteModalProps {
   eventId: string;
@@ -53,20 +54,14 @@ export function InviteModal({
     setFeedback(null);
 
     try {
-      const res = await fetch('/api/team/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId, teamCode, emails: validEmails }),
-      });
+      const res = await sendTeamInvite({ eventId, teamCode, emails: validEmails });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setFeedback({ type: 'error', text: data.error ?? 'Failed to send invites.' });
+      if (!res.success) {
+        setFeedback({ type: 'error', text: res.error ?? 'Failed to send invites.' });
         return;
       }
 
-      setFeedback({ type: 'success', text: data.message ?? 'Invites sent!' });
+      setFeedback({ type: 'success', text: res.message ?? 'Invites sent!' });
       setTimeout(() => {
         onSuccess();
         onClose();

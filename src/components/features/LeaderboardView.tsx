@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { getLeaderboardData } from '@/server/actions/marking'
 
 interface ComponentMark {
   componentId: string
@@ -53,16 +54,15 @@ export function LeaderboardView({ eventId, onRefresh }: LeaderboardViewProps) {
     try {
       setError('')
       setLoading(true)
-      const response = await fetch(`/api/marking/leaderboard?eventId=${eventId}`)
-      const data = await response.json()
+      const response = await getLeaderboardData(eventId)
 
-      if (!response.ok) {
-        setError(data.error || 'Failed to fetch leaderboard')
+      if (!response.success || !response.leaderboard) {
+        setError(response.error || 'Failed to fetch leaderboard')
         setLoading(false)
         return
       }
 
-      setLeaderboard(data.leaderboard)
+      setLeaderboard(response.leaderboard)
     } catch (err) {
       setError('Network error')
       console.error(err)

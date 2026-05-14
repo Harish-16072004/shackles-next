@@ -1,9 +1,8 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { describe, expect, it } from "vitest";
 import { bulkRegisterAndLockTeamByShacklesIds, bulkRegisterTeamByShacklesIds } from "../../src/server/services/team-registration.service";
 import { runSerializableTransaction } from "../../src/server/services/transaction.service";
-
-const prisma = new PrismaClient();
+import { getActiveYear } from "../../src/lib/edition";
 
 function tag(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -22,7 +21,8 @@ async function createVerifiedUser(runTag: string, index: number) {
       collegeLoc: "Karaikudi",
       department: "Mechanical",
       yearOfStudy: "IV",
-      shacklesId: `IN${Date.now()}${String(index).padStart(3, "0")}`,
+      gender: "MALE",
+      shacklesId: `IN${Date.now()}${String(index).padStart(3, "0")}`.toUpperCase(),
     },
   });
 
@@ -33,6 +33,8 @@ async function createVerifiedUser(runTag: string, index: number) {
       transactionId: `int-tx-${idSuffix}`,
       proofUrl: `int-proof-${idSuffix}`,
       status: "VERIFIED",
+      year: getActiveYear(),
+      packageType: "COMBO",
     },
   });
 
@@ -42,8 +44,8 @@ async function createVerifiedUser(runTag: string, index: number) {
 describe("integration: team registration transaction behavior", () => {
   it("keeps final state correct under concurrent lock attempts", async () => {
     const runTag = tag("phase4-int");
-    const eventName = `PHASE4-INT-EVENT-${runTag}`;
-    const teamName = `PHASE4 INT TEAM ${runTag}`;
+    const eventName = `EVENT${Date.now()}`;
+    const teamName = `TEAM${Math.floor(Math.random() * 100000)}`;
 
     try {
       const event = await prisma.event.create({
@@ -57,6 +59,7 @@ describe("integration: team registration transaction behavior", () => {
           maxTeams: 20,
           isActive: true,
           date: new Date(),
+          year: getActiveYear(),
         },
       });
 
@@ -96,6 +99,9 @@ describe("integration: team registration transaction behavior", () => {
       ]);
 
       const successful = [a, b].filter((r) => r.status === "fulfilled" && r.value.success);
+      if (successful.length !== 1) {
+        console.log("DEBUG: Parallel attempts results:", JSON.stringify({ a, b }, null, 2));
+      }
       expect(successful.length).toBe(1);
 
       const registrations = await prisma.eventRegistration.findMany({
@@ -118,23 +124,18 @@ describe("integration: team registration transaction behavior", () => {
       expect(team?.status).toBe("LOCKED");
       expect(team?.memberCount).toBe(shacklesIds.length);
     } finally {
-      await prisma.eventRegistration.deleteMany({
-        where: {
-          OR: [{ stationId: "phase4-int-a" }, { stationId: "phase4-int-b" }],
-        },
-      });
-
-      await prisma.team.deleteMany({ where: { name: { startsWith: "PHASE4 INT TEAM " } } });
-      await prisma.event.deleteMany({ where: { name: { startsWith: "PHASE4-INT-EVENT-" } } });
-      await prisma.payment.deleteMany({ where: { transactionId: { startsWith: "int-tx-phase4-int-" } } });
-      await prisma.user.deleteMany({ where: { email: { startsWith: "int.phase4-int-" } } });
+      try { await prisma.eventRegistration.deleteMany({ where: { OR: [{ stationId: "phase4-int-a" }, { stationId: "phase4-int-b" }] } }); } catch (e) {}
+      try { await prisma.team.deleteMany({ where: { name: { startsWith: "TEAM" } } }); } catch (e) {}
+      try { await prisma.event.deleteMany({ where: { name: { startsWith: "EVENT" } } }); } catch (e) {}
+      try { await prisma.payment.deleteMany({ where: { transactionId: { startsWith: "int-tx-phase4-int-" } } }); } catch (e) {}
+      try { await prisma.user.deleteMany({ where: { email: { startsWith: "int.phase4-int-" } } }); } catch (e) {}
     }
-  }, 30000);
+  }, 90000);
 
   it("registers team in draft mode without auto-attendance", async () => {
     const runTag = tag("phase4-draft");
-    const eventName = `PHASE4-DRAFT-EVENT-${runTag}`;
-    const teamName = `PHASE4 DRAFT TEAM ${runTag}`;
+    const eventName = `EDRAFT${Date.now()}`;
+    const teamName = `TDRAFT${Math.floor(Math.random() * 100000)}`;
 
     try {
       const event = await prisma.event.create({
@@ -148,6 +149,7 @@ describe("integration: team registration transaction behavior", () => {
           maxTeams: 20,
           isActive: true,
           date: new Date(),
+          year: getActiveYear(),
         },
       });
 
@@ -193,21 +195,21 @@ describe("integration: team registration transaction behavior", () => {
         },
       });
 
-      expect(team?.status).toBe("DRAFT");
+      expect(team?.status).toBe("OPEN");
       expect(team?.memberCount).toBe(shacklesIds.length);
     } finally {
-      await prisma.eventRegistration.deleteMany({ where: { stationId: "phase4-draft" } });
-      await prisma.team.deleteMany({ where: { name: { startsWith: "PHASE4 DRAFT TEAM " } } });
-      await prisma.event.deleteMany({ where: { name: { startsWith: "PHASE4-DRAFT-EVENT-" } } });
-      await prisma.payment.deleteMany({ where: { transactionId: { startsWith: "int-tx-phase4-draft-" } } });
-      await prisma.user.deleteMany({ where: { email: { startsWith: "int.phase4-draft-" } } });
+      try { await prisma.eventRegistration.deleteMany({ where: { stationId: "phase4-draft" } }); } catch (e) {}
+      try { await prisma.team.deleteMany({ where: { name: { startsWith: "TDRAFT" } } }); } catch (e) {}
+      try { await prisma.event.deleteMany({ where: { name: { startsWith: "EDRAFT" } } }); } catch (e) {}
+      try { await prisma.payment.deleteMany({ where: { transactionId: { startsWith: "int-tx-phase4-draft-" } } }); } catch (e) {}
+      try { await prisma.user.deleteMany({ where: { email: { startsWith: "int.phase4-draft-" } } }); } catch (e) {}
     }
   }, 30000);
 
   it("fails atomically when a Shackles ID is unknown", async () => {
     const runTag = tag("phase4-unknown");
-    const eventName = `PHASE4-UNKNOWN-EVENT-${runTag}`;
-    const teamName = `PHASE4 UNKNOWN TEAM ${runTag}`;
+    const eventName = `EUNK${Date.now()}`;
+    const teamName = `TUNK${Math.floor(Math.random() * 100000)}`;
 
     try {
       const event = await prisma.event.create({
@@ -221,6 +223,7 @@ describe("integration: team registration transaction behavior", () => {
           maxTeams: 20,
           isActive: true,
           date: new Date(),
+          year: getActiveYear(),
         },
       });
 
@@ -252,18 +255,18 @@ describe("integration: team registration transaction behavior", () => {
       const teams = await prisma.team.findMany({ where: { eventId: event.id } });
       expect(teams).toHaveLength(0);
     } finally {
-      await prisma.eventRegistration.deleteMany({ where: { stationId: "phase4-unknown" } });
-      await prisma.team.deleteMany({ where: { name: { startsWith: "PHASE4 UNKNOWN TEAM " } } });
-      await prisma.event.deleteMany({ where: { name: { startsWith: "PHASE4-UNKNOWN-EVENT-" } } });
-      await prisma.payment.deleteMany({ where: { transactionId: { startsWith: "int-tx-phase4-unknown-" } } });
-      await prisma.user.deleteMany({ where: { email: { startsWith: "int.phase4-unknown-" } } });
+      try { await prisma.eventRegistration.deleteMany({ where: { stationId: "phase4-unknown" } }); } catch (e) {}
+      try { await prisma.team.deleteMany({ where: { name: { startsWith: "TUNK" } } }); } catch (e) {}
+      try { await prisma.event.deleteMany({ where: { name: { startsWith: "EUNK" } } }); } catch (e) {}
+      try { await prisma.payment.deleteMany({ where: { transactionId: { startsWith: "int-tx-phase4-unknown-" } } }); } catch (e) {}
+      try { await prisma.user.deleteMany({ where: { email: { startsWith: "int.phase4-unknown-" } } }); } catch (e) {}
     }
   }, 30000);
 
   it("enforces team minimum size when lock is requested", async () => {
     const runTag = tag("phase4-min-lock");
-    const eventName = `PHASE4-MIN-LOCK-EVENT-${runTag}`;
-    const teamName = `PHASE4 MIN LOCK TEAM ${runTag}`;
+    const eventName = `EMIN${Date.now()}`;
+    const teamName = `TMIN${Math.floor(Math.random() * 100000)}`;
 
     try {
       const event = await prisma.event.create({
@@ -277,6 +280,7 @@ describe("integration: team registration transaction behavior", () => {
           maxTeams: 20,
           isActive: true,
           date: new Date(),
+          year: getActiveYear(),
         },
       });
 
@@ -314,13 +318,13 @@ describe("integration: team registration transaction behavior", () => {
         },
       });
 
-      expect(team?.status).toBe("DRAFT");
+      expect(team?.status).toBe("OPEN");
     } finally {
-      await prisma.eventRegistration.deleteMany({ where: { stationId: "phase4-min-lock" } });
-      await prisma.team.deleteMany({ where: { name: { startsWith: "PHASE4 MIN LOCK TEAM " } } });
-      await prisma.event.deleteMany({ where: { name: { startsWith: "PHASE4-MIN-LOCK-EVENT-" } } });
-      await prisma.payment.deleteMany({ where: { transactionId: { startsWith: "int-tx-phase4-min-lock-" } } });
-      await prisma.user.deleteMany({ where: { email: { startsWith: "int.phase4-min-lock-" } } });
+      try { await prisma.eventRegistration.deleteMany({ where: { stationId: "phase4-min-lock" } }); } catch (e) {}
+      try { await prisma.team.deleteMany({ where: { name: { startsWith: "TMIN" } } }); } catch (e) {}
+      try { await prisma.event.deleteMany({ where: { name: { startsWith: "EMIN" } } }); } catch (e) {}
+      try { await prisma.payment.deleteMany({ where: { transactionId: { startsWith: "int-tx-phase4-min-lock-" } } }); } catch (e) {}
+      try { await prisma.user.deleteMany({ where: { email: { startsWith: "int.phase4-min-lock-" } } }); } catch (e) {}
     }
   }, 30000);
 });

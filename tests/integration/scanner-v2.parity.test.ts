@@ -1,4 +1,5 @@
-import { PrismaClient, TeamStatus } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { TeamStatus } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -6,7 +7,11 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({
-  getSession: vi.fn(async () => null),
+  getSession: vi.fn(async () => ({
+    userId: "admin-id",
+    role: "ADMIN",
+    email: "admin@example.com"
+  })),
 }));
 
 import {
@@ -21,10 +26,8 @@ import {
   validateTeamRegistration,
 } from "../../src/server/actions/event-logistics";
 
-const prisma = new PrismaClient();
-
 function runTag(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
 }
 
 async function ensureDatabaseAvailable() {
@@ -40,6 +43,7 @@ async function createVerifiedUser(input: {
   tag: string;
   suffix: string;
   shacklesId: string;
+  year: number;
   qrToken?: string;
 }) {
   const user = await prisma.user.create({
@@ -54,6 +58,7 @@ async function createVerifiedUser(input: {
       department: "Mechanical",
       yearOfStudy: "IV",
       shacklesId: input.shacklesId,
+      gender: "MALE",
       ...(input.qrToken ? { qrToken: input.qrToken } : {}),
     },
   });
@@ -65,6 +70,8 @@ async function createVerifiedUser(input: {
       transactionId: `scanner-pay-${input.suffix}-${input.tag}`,
       proofUrl: `scanner-proof-${input.suffix}-${input.tag}`,
       status: "VERIFIED",
+      year: input.year,
+      packageType: "COMBO",
     },
   });
 
@@ -91,7 +98,8 @@ describe("integration: scanner-v2 parity coverage", () => {
       const participant = await createVerifiedUser({
         tag,
         suffix: "core",
-        shacklesId: `SH${String(activeYear).slice(-2)}G901`,
+        shacklesId: `SH${String(activeYear).slice(-2)}G901${tag.slice(-2)}`.toUpperCase(),
+        year: activeYear,
         qrToken,
       });
 
@@ -131,8 +139,8 @@ describe("integration: scanner-v2 parity coverage", () => {
       });
 
       const scanResult = await scanParticipantQR(qrToken);
-      expect(scanResult.success).toBe(true);
-      expect(scanResult.data?.id).toBe(participant.id);
+      if (!scanResult.success) throw new Error("Scan failed: " + (scanResult.error || "unknown"));
+      expect(scanResult.data.id).toBe(participant.id);
 
       const kitResult = await updateKitStatus(participant.id);
       expect(kitResult.success).toBe(true);
@@ -167,18 +175,10 @@ describe("integration: scanner-v2 parity coverage", () => {
       });
       expect(quickReg?.attended).toBe(true);
     } finally {
-      await prisma.eventRegistration.deleteMany({
-        where: {
-          event: {
-            name: {
-              in: [attendanceEventName, quickEventName],
-            },
-          },
-        },
-      });
-      await prisma.event.deleteMany({ where: { name: { in: [attendanceEventName, quickEventName] } } });
-      await prisma.payment.deleteMany({ where: { transactionId: { contains: tag } } });
-      await prisma.user.deleteMany({ where: { email: { contains: tag } } });
+      try { await prisma.eventRegistration.deleteMany({ where: { event: { name: { in: [attendanceEventName, quickEventName] } } } }); } catch (e) {}
+      try { await prisma.event.deleteMany({ where: { name: { in: [attendanceEventName, quickEventName] } } }); } catch (e) {}
+      try { await prisma.payment.deleteMany({ where: { transactionId: { contains: tag } } }); } catch (e) {}
+      try { await prisma.user.deleteMany({ where: { email: { contains: tag } } }); } catch (e) {}
       if (previousActiveYear) {
         process.env.ACTIVE_YEAR = previousActiveYear;
       } else {
@@ -199,7 +199,7 @@ describe("integration: scanner-v2 parity coverage", () => {
     process.env.ACTIVE_YEAR = String(activeYear);
 
     const eventName = `SCANNER-TEAM-${tag}`;
-    const teamName = `SCANNER TEAM ${tag}`;
+    const teamName = `T-SCAN-${tag}`;
 
     try {
       const event = await prisma.event.create({
@@ -222,12 +222,14 @@ describe("integration: scanner-v2 parity coverage", () => {
       const leader = await createVerifiedUser({
         tag,
         suffix: "leader",
-        shacklesId: `SH${String(activeYear).slice(-2)}G011`,
+        shacklesId: `SH${String(activeYear).slice(-2)}G011${tag.slice(-2)}`.toUpperCase(),
+        year: activeYear,
       });
       const member = await createVerifiedUser({
         tag,
         suffix: "member",
-        shacklesId: `SH${String(activeYear).slice(-2)}G012`,
+        shacklesId: `SH${String(activeYear).slice(-2)}G012${tag.slice(-2)}`.toUpperCase(),
+        year: activeYear,
       });
 
       const firstAdd = await scannerRegisterTeamMember(leader.id, eventName, teamName);
@@ -255,12 +257,12 @@ describe("integration: scanner-v2 parity coverage", () => {
       expect(team?.status).toBe(TeamStatus.LOCKED);
       expect(team?.memberCount).toBe(2);
     } finally {
-      await prisma.eventRegistration.deleteMany({ where: { stationId: { startsWith: "SCANNER:" } } });
-      await prisma.eventRegistration.deleteMany({ where: { event: { name: { startsWith: "SCANNER-TEAM-" } } } });
-      await prisma.team.deleteMany({ where: { name: { startsWith: "SCANNER TEAM " } } });
-      await prisma.event.deleteMany({ where: { name: { startsWith: "SCANNER-TEAM-" } } });
-      await prisma.payment.deleteMany({ where: { transactionId: { contains: tag } } });
-      await prisma.user.deleteMany({ where: { email: { contains: tag } } });
+      try { await prisma.eventRegistration.deleteMany({ where: { stationId: { startsWith: "SCANNER:" } } }); } catch (e) {}
+      try { await prisma.eventRegistration.deleteMany({ where: { event: { name: { startsWith: "SCANNER-TEAM-" } } } }); } catch (e) {}
+      try { await prisma.team.deleteMany({ where: { name: { startsWith: "T-SCAN-" } } }); } catch (e) {}
+      try { await prisma.event.deleteMany({ where: { name: { startsWith: "SCANNER-TEAM-" } } }); } catch (e) {}
+      try { await prisma.payment.deleteMany({ where: { transactionId: { contains: tag } } }); } catch (e) {}
+      try { await prisma.user.deleteMany({ where: { email: { contains: tag } } }); } catch (e) {}
       if (previousActiveYear) {
         process.env.ACTIVE_YEAR = previousActiveYear;
       } else {
@@ -283,7 +285,7 @@ describe("integration: scanner-v2 parity coverage", () => {
     process.env.ENABLE_SCANNER_BULK_TEAM_FLOW = "true";
 
     const eventName = `SCANNER-BULK-${tag}`;
-    const teamName = `SCANNER BULK ${tag}`;
+    const teamName = `T-BULK-${tag}`;
 
     try {
       const event = await prisma.event.create({
@@ -306,12 +308,14 @@ describe("integration: scanner-v2 parity coverage", () => {
       const userA = await createVerifiedUser({
         tag,
         suffix: "a",
-        shacklesId: `SH${String(activeYear).slice(-2)}G021`,
+        shacklesId: `SH${String(activeYear).slice(-2)}G021${tag.slice(-2)}`.toUpperCase(),
+        year: activeYear,
       });
       const userB = await createVerifiedUser({
         tag,
         suffix: "b",
-        shacklesId: `SH${String(activeYear).slice(-2)}G022`,
+        shacklesId: `SH${String(activeYear).slice(-2)}G022${tag.slice(-2)}`.toUpperCase(),
+        year: activeYear,
       });
 
       const validation = await validateTeamRegistration({
@@ -339,11 +343,11 @@ describe("integration: scanner-v2 parity coverage", () => {
         leaderShacklesId: userA.shacklesId as string,
         lockTeam: false,
       });
-      expect(bulkDraft.success).toBe(true);
+      if (!bulkDraft.success) throw new Error("Bulk draft failed: " + JSON.stringify(bulkDraft));
 
       const joinable = await getScannerJoinableTeams({
         eventName,
-        query: "SCANNER BULK",
+        query: "SCANNER-BULK",
       });
       expect(joinable.some((team) => team.name === teamName)).toBe(true);
 
@@ -364,12 +368,12 @@ describe("integration: scanner-v2 parity coverage", () => {
       });
       expect(team?.status).toBe(TeamStatus.LOCKED);
     } finally {
-      await prisma.eventRegistration.deleteMany({ where: { stationId: { startsWith: "SCANNER:" } } });
-      await prisma.eventRegistration.deleteMany({ where: { event: { name: { startsWith: "SCANNER-BULK-" } } } });
-      await prisma.team.deleteMany({ where: { name: { startsWith: "SCANNER BULK " } } });
-      await prisma.event.deleteMany({ where: { name: { startsWith: "SCANNER-BULK-" } } });
-      await prisma.payment.deleteMany({ where: { transactionId: { contains: tag } } });
-      await prisma.user.deleteMany({ where: { email: { contains: tag } } });
+      try { await prisma.eventRegistration.deleteMany({ where: { stationId: { startsWith: "SCANNER:" } } }); } catch (e) {}
+      try { await prisma.eventRegistration.deleteMany({ where: { event: { name: { startsWith: "SCANNER-BULK-" } } } }); } catch (e) {}
+      try { await prisma.team.deleteMany({ where: { name: { startsWith: "T-BULK-" } } }); } catch (e) {}
+      try { await prisma.event.deleteMany({ where: { name: { startsWith: "SCANNER-BULK-" } } }); } catch (e) {}
+      try { await prisma.payment.deleteMany({ where: { transactionId: { contains: tag } } }); } catch (e) {}
+      try { await prisma.user.deleteMany({ where: { email: { contains: tag } } }); } catch (e) {}
       if (previousActiveYear) {
         process.env.ACTIVE_YEAR = previousActiveYear;
       } else {

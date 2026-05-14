@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { createMarkingCriteria } from '@/server/actions/marking'
 
 interface ScoringSetupProps {
   eventId: string
@@ -83,24 +84,18 @@ export function ScoringSetup({ eventId, eventName, onSaved }: ScoringSetupProps)
     setLoading(true)
 
     try {
-      const response = await fetch('/api/marking/criteria', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventId,
-          ...criteria,
-          components: components.map(({ uid, ...rest }) => rest),
-        }),
+      const response = await createMarkingCriteria({
+        eventId,
+        ...criteria,
+        components: components.map(({ uid, ...rest }) => rest),
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Failed to create criteria')
+      if (!response.success) {
+        setError(response.error || 'Failed to create criteria')
         return
       }
 
-      setSuccess(data.message)
+      setSuccess(response.message || 'Criteria created')
       onSaved?.()
     } catch (err) {
       setError('Network error')

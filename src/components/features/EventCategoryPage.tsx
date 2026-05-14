@@ -5,6 +5,12 @@ import { useSearchParams } from 'next/navigation';
 import { Calendar, Users, User, X, ExternalLink, ChevronRight, ChevronLeft, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { InviteModal } from '@/components/features/InviteModal';
+import {
+  registerForIndividualEvent,
+  createTeamViaForm,
+  joinTeamViaCode,
+  getMyRegistrations
+} from '@/server/actions/event-registration';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -163,16 +169,15 @@ export default function EventCategoryPage({
 
   const fetchMyRegistrations = useCallback(async () => {
     try {
-      const res = await fetch('/api/events/my-registrations');
-      if (!res.ok) return;
-      const data = await res.json();
+      const res = await getMyRegistrations();
+      if (!res.success) return;
 
       const map: Record<string, MyTeamEntry> = {};
-      (data.teams ?? []).forEach((t: MyTeamEntry) => {
+      (res.teams ?? []).forEach((t: MyTeamEntry) => {
         map[t.eventId] = t;
       });
       setMyTeamsByEventId(map);
-      setIndividualEventIds(data.individualEventIds ?? []);
+      setIndividualEventIds(res.individualEventIds ?? []);
     } catch {
       // silently ignore — user may not be logged in
     }
@@ -221,23 +226,18 @@ export default function EventCategoryPage({
         setRegistering(true);
         setFeedback(null);
         try {
-          const res = await fetch('/api/events/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              eventName: teamEvent.name,
-              teamCode: teamCodeFromUrl,
-              inviteToken: inviteTokenFromUrl,
-              action: 'jointeam',
-            }),
+          const res = await joinTeamViaCode({
+            eventName: teamEvent.name,
+            teamCode: teamCodeFromUrl,
+            inviteToken: inviteTokenFromUrl,
           });
-          const data = await res.json();
-          if (!res.ok) {
+
+          if (!res.success) {
             setFeedbackType('error');
-            setFeedback(data.error ?? 'Failed to join team via invite.');
+            setFeedback(res.error ?? 'Failed to join team via invite.');
           } else {
             setFeedbackType('success');
-            setFeedback(data.message ?? 'Joined team successfully!');
+            setFeedback(res.message ?? 'Joined team successfully!');
             await fetchMyRegistrations();
           }
         } catch {
@@ -265,19 +265,14 @@ export default function EventCategoryPage({
     setRegistering(true);
     setFeedback(null);
     try {
-      const res = await fetch('/api/events/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventName: selectedEvent?.name }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
+      const res = await registerForIndividualEvent({ eventName: selectedEvent?.name ?? '' });
+      if (!res.success) {
         setFeedbackType('error');
-        setFeedback(data.error ?? 'Registration failed.');
+        setFeedback(res.error ?? 'Registration failed.');
         return;
       }
       setFeedbackType('success');
-      setFeedback('Registered successfully!');
+      setFeedback(res.message || 'Registered successfully!');
       await fetchMyRegistrations();
     } catch {
       setFeedbackType('error');
@@ -298,20 +293,19 @@ export default function EventCategoryPage({
     setRegistering(true);
     setFeedback(null);
     try {
-      const res = await fetch('/api/events/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventName: selectedEvent.name, teamName: teamName.trim(), action: 'createteam' }),
+      const res = await createTeamViaForm({
+        eventName: selectedEvent.name,
+        teamName: teamName.trim(),
       });
-      const data = await res.json();
-      if (!res.ok) {
+
+      if (!res.success) {
         setFeedbackType('error');
-        setFeedback(data.error ?? 'Failed to create team.');
+        setFeedback(res.error ?? 'Failed to create team.');
         return;
       }
-      setLatestTeamCode(data.teamCode ?? null);
+      setLatestTeamCode(res.teamCode ?? null);
       setFeedbackType('success');
-      setFeedback('Team created! Share the code below with teammates.');
+      setFeedback(res.message || 'Team created! Share the code below with teammates.');
       await fetchMyRegistrations();
     } catch {
       setFeedbackType('error');
@@ -332,19 +326,19 @@ export default function EventCategoryPage({
     setRegistering(true);
     setFeedback(null);
     try {
-      const res = await fetch('/api/events/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId: selectedEvent.id, eventName: selectedEvent.name, joinCode: code, teamCode: code, inviteToken: inviteToken || undefined, action: 'jointeam' }),
+      const res = await joinTeamViaCode({
+        eventName: selectedEvent.name,
+        teamCode: code,
+        inviteToken: inviteToken || undefined,
       });
-      const data = await res.json();
-      if (!res.ok) {
+
+      if (!res.success) {
         setFeedbackType('error');
-        setFeedback(data.error ?? 'Failed to join team.');
+        setFeedback(res.error ?? 'Failed to join team.');
         return;
       }
       setFeedbackType('success');
-      setFeedback('Joined team successfully!');
+      setFeedback(res.message || 'Joined team successfully!');
       setJoinCode('');
       setInviteToken('');
       await fetchMyRegistrations();

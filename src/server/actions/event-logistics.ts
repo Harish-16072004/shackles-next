@@ -932,7 +932,7 @@ export async function processQRScanAction(input: {
     return { success: false, error: "Missing required fields" };
   }
 
-  const requiredPermission: Permission = operationType === 'KIT' ? Permission.KIT_ISSUANCE : Permission.SCAN_ATTENDANCE;
+  const requiredPermission: Permission = operationType === 'KIT' ? Permission.SCAN_KIT : Permission.SCAN_ATTENDANCE;
 
   if (eventId) {
     const { allowed, error } = await checkEventStaff(eventId, requiredPermission);
@@ -946,7 +946,7 @@ export async function processQRScanAction(input: {
       qrData,
       stationId,
       eventId,
-      operationType,
+      operationType: operationType as "ATTENDANCE" | "KIT" | "OTHER",
       timestamp: new Date(),
     });
     return result;
@@ -1009,7 +1009,7 @@ export async function checkRegistrationStatus(input: {
       event: {
         id: event.id,
         name: event.name,
-        type: event.type,
+        type: event.type || "OTHER",
         participationMode: event.participationMode,
         minTeamSize: event.teamMinSize,
         maxTeamSize: event.teamMaxSize,

@@ -49,7 +49,9 @@ interface MyTeamEntry {
 
 interface EventCategoryPageProps {
   category: string;
+  title?: string;
   subtitle?: string;
+  accent?: string;
   events?: Event[];
   inviteToken?: string;
   teamCode?: string;
@@ -368,7 +370,6 @@ export default function EventCategoryPage({
           Back to Events
         </Link>
         <h1 className="text-3xl font-bold tracking-tight text-gray-900">{category}</h1>
-        {subtitle && <p className="mt-1.5 text-sm text-gray-500">{subtitle}</p>}
       </div>
 
       {/* Event Grid */}
@@ -422,6 +423,13 @@ export default function EventCategoryPage({
                   {team && (event.teamMinSize || event.teamMaxSize) && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-600">
                       {event.teamMinSize ?? 2}–{event.teamMaxSize ?? 4} members
+                    </span>
+                  )}
+
+                  {/* Trainer (for Workshops) */}
+                  {event.trainerName && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 border border-amber-100">
+                      Trainer: {event.trainerName}
                     </span>
                   )}
                 </div>
@@ -589,12 +597,12 @@ export default function EventCategoryPage({
                               onKeyDown={e => e.key === 'Enter' && handleCreateTeam()}
                               placeholder="Team name (Technical or Legit ONLY, 3-40 chars)"
                               disabled={registering}
-                              className="w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-500 outline-none transition focus:border-gray-400 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-200 disabled:opacity-50"
                             />
                             <button
                               onClick={handleCreateTeam}
                               disabled={registering || !teamName.trim()}
-                              className="shrink-0 rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="shrink-0 rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Create
                             </button>

@@ -3,6 +3,7 @@
 import { loginUser } from "@/server/actions/login";
 import { useEffect, useState, useActionState } from "react";
 import { REGISTRATION_TARGET_TIME } from "@/components/features/CountdownOptimized";
+import { Eye, EyeOff } from "lucide-react";
 
 const initialState = {
   error: "",
@@ -11,6 +12,7 @@ const initialState = {
 export default function LoginPage() {
   const [state, formAction] = useActionState(loginUser, initialState);
   const [isExpired, setIsExpired] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     setIsExpired(Date.now() >= REGISTRATION_TARGET_TIME);
@@ -32,7 +34,17 @@ export default function LoginPage() {
 
           <div>
             <label className="block text-sm font-medium mb-1">Password</label>
-            <input name="password" type="password" required className="input-field" placeholder="••••••••" />
+            <div className="relative">
+              <input name="password" type={showPassword ? "text" : "password"} required className="input-field pr-10" placeholder="••••••••" />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           {state?.error && (

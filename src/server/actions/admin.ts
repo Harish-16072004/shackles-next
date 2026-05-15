@@ -12,8 +12,9 @@ import path from "path";
 import { allocateShacklesId } from "@/server/services/shackles-id.service";
 import { runSerializableTransaction } from "@/server/services/transaction.service";
 import { encodeQrPayload } from "@/server/services/qr.service";
-import { executeSafeAction } from "@/lib/safe-action";
 import { Role } from "@prisma/client";
+import { executeSafeAction } from "@/lib/safe-action";
+import { enqueueQRGeneration } from "./jobs";
 
 type QrUploadResult = {
   qrImageUrl: string | null;
@@ -177,29 +178,18 @@ export async function verifyUserPayment(userId: string, action: 'APPROVE' | 'REJ
 
           if (qrUploadContext) {
             try {
-              const qrValue = encodeQrPayload({
-                v: 1,
-                type: 'USER',
-                uid: qrUploadContext.qrToken,
-                sid: qrUploadContext.shacklesId,
-                y: activeYear,
+              // Offload heavy QR generation and upload to BullMQ worker
+              await enqueueQRGeneration({
+                userId: qrUploadContext.userId,
+                shacklesId: qrUploadContext.shacklesId,
+                qrToken: qrUploadContext.qrToken,
+                registrationType: qrUploadContext.registrationType,
+                year: activeYear,
               });
-
-              const qrUpload = await uploadQrImage(
-                qrValue,
-                qrUploadContext.shacklesId,
-                qrUploadContext.registrationType
-              );
-
-              await prisma.user.update({
-                where: { id: userId },
-                data: {
-                  qrImageUrl: qrUpload.qrImageUrl,
-                  qrPath: qrUpload.qrPath,
-                },
-              });
-            } catch (uploadError) {
-              console.error('QR upload failed after verification. Continuing with token-only QR access.', uploadError);
+            } catch (queueError) {
+              console.error('Failed to enqueue QR generation job:', queueError);
+              // Fallback: If queue fails, we still have the token in DB, 
+              // but the image will be missing until manually retried.
             }
           }
         } catch (error) {

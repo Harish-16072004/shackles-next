@@ -16,11 +16,13 @@ function formatDate(date?: Date | null) {
   }).format(date);
 }
 
-export default async function AdminMessagesPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+export default async function AdminMessagesPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await getSession();
   if (!session?.userId) {
     redirect("/login");
   }
+
+  const resolvedSearchParams = (await searchParams) ?? {};
 
   const currentUser = await prisma.user.findUnique({ where: { id: session.userId as string } });
   if (!currentUser || currentUser.role !== "ADMIN") {
@@ -28,7 +30,7 @@ export default async function AdminMessagesPage({ searchParams }: { searchParams
   }
 
   // Fetch paginated contact messages, newest first
-  const currentPage = Math.max(1, parseInt(typeof searchParams?.page === "string" ? searchParams.page : "1", 10) || 1);
+  const currentPage = Math.max(1, parseInt(typeof resolvedSearchParams.page === "string" ? resolvedSearchParams.page : "1", 10) || 1);
 
   const [messages, totalMessages] = await Promise.all([
     prisma.contactMessage.findMany({

@@ -9,8 +9,8 @@ import {
   listAvailableEvents,
 } from '@/server/actions/staff-management'
 
-type StaffUser = NonNullable<Awaited<ReturnType<typeof listStaffUsers>>['data']>[number]
-type EventType = NonNullable<Awaited<ReturnType<typeof listAvailableEvents>>['data']>[number]
+type StaffUser = Extract<Awaited<ReturnType<typeof listStaffUsers>>, { success: true }>['data']['staff'][number]
+type EventType = Extract<Awaited<ReturnType<typeof listAvailableEvents>>, { success: true }>['data']['events'][number]
 
 export default function StaffManagementPage() {
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([])
@@ -43,8 +43,8 @@ export default function StaffManagementPage() {
           listAvailableEvents(),
         ])
 
-        if (staffRes.success) setStaffUsers(staffRes.data || [])
-        if (eventsRes.success) setEvents(eventsRes.data || [])
+        if (staffRes.success) setStaffUsers(staffRes.data.staff || [])
+        if (eventsRes.success) setEvents(eventsRes.data.events || [])
       } catch (error) {
         setMessage({ type: 'error', text: 'Failed to load data' })
       } finally {
@@ -73,7 +73,7 @@ export default function StaffManagementPage() {
         })
         // Reload staff list
         const res = await listStaffUsers()
-        if (res.success) setStaffUsers(res.data || [])
+        if (res.success) setStaffUsers(res.data.staff || [])
       } else {
         const errorRes = result as { success: false; error: any }
         const errorText = typeof errorRes.error === 'string'
@@ -103,7 +103,7 @@ export default function StaffManagementPage() {
         setAssignForm({ userId: '', eventId: '' })
         // Reload staff list
         const res = await listStaffUsers()
-        if (res.success) setStaffUsers(res.data || [])
+        if (res.success) setStaffUsers(res.data.staff || [])
 
         // Redirection logic for Kit Distribution
         const data = result.data as { eventName?: string }
@@ -132,7 +132,7 @@ export default function StaffManagementPage() {
         setMessage({ type: 'success', text: result.message || 'Staff removed from event' })
         // Reload staff list
         const res = await listStaffUsers()
-        if (res.success) setStaffUsers(res.data || [])
+        if (res.success) setStaffUsers(res.data.staff || [])
       } else {
         setMessage({
           type: 'error',

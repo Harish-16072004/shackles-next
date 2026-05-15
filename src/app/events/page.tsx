@@ -109,7 +109,7 @@ export default async function Events({
           EVENTS
         </h1>
         <p className="text-lg text-gray-600">
-          All category pages are synced from admin-created events.
+
         </p>
       </section>
 
@@ -118,16 +118,14 @@ export default async function Events({
           <Link
             key={category.id}
             href={`/events/${category.id}`}
-            className={`group flex h-full flex-col gap-4 rounded-2xl border-2 bg-white/50 p-6 shadow-xs transition-all hover:-translate-y-1 ${
-              borderColorMap[category.color as keyof typeof borderColorMap]
-            }`}
+            className={`group flex h-full flex-col gap-4 rounded-2xl border-2 bg-white/50 p-6 shadow-xs transition-all hover:-translate-y-1 ${borderColorMap[category.color as keyof typeof borderColorMap]
+              }`}
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <span
-                  className={`grid h-8 w-8 place-items-center text-xl font-bold ${
-                    textColorMap[category.color as keyof typeof textColorMap]
-                  }`}
+                  className={`grid h-8 w-8 place-items-center text-xl font-bold ${textColorMap[category.color as keyof typeof textColorMap]
+                    }`}
                 >
                   {category.icon}
                 </span>

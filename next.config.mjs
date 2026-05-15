@@ -68,7 +68,7 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
 
   // 2. Server Packages
-  serverExternalPackages: ["sharp", "pdfkit"],
+  serverExternalPackages: ["sharp", "pdfkit", "bullmq", "ioredis"],
 
   // 3. Webpack Configuration
   webpack: (config) => {
@@ -145,6 +145,8 @@ const nextConfig = {
       },
     ];
   },
+  // 6. Turbopack acknowledge (Required by Next.js 16 when custom webpack config exists)
+  turbopack: {},
 };
 
 // 6. PWA Wrapper

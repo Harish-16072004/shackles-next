@@ -117,11 +117,11 @@ async function main() {
 
   // --- SEED EVENTS ---
   const events = [
-    { name: "Paper Presentation", type: "TECHNICAL" },
-    { name: "Aqua Missile", type: "NON-TECHNICAL" },
-    { name: "CAD Modelling", type: "TECHNICAL" },
-    { name: "Treasure Hunt", type: "NON-TECHNICAL" },
-    { name: "Workshop: EV Tech", type: "TECHNICAL" }
+    { name: "Paper Presentation", type: "TECHNICAL", category: 'EVENT' as const },
+    { name: "Aqua Missile", type: "NON-TECHNICAL", category: 'EVENT' as const },
+    { name: "CAD Modelling", type: "TECHNICAL", category: 'EVENT' as const },
+    { name: "Treasure Hunt", type: "NON-TECHNICAL", category: 'EVENT' as const },
+    { name: "Workshop: EV Tech", type: "TECHNICAL", category: 'WORKSHOP' as const, trainerName: 'Dr. Elon Volt' }
   ]
 
   for (const evt of events) {
@@ -129,19 +129,23 @@ async function main() {
       where: { year_name: { year: activeYear, name: evt.name } },
       update: {
         type: evt.type,
+        category: evt.category,
+        trainerName: (evt as any).trainerName || null,
         isTemplate: true,
         isArchived: false,
-        isActive: false,
+        isActive: true, // Make active for easier testing
         templateSourceId: null,
       },
       create: {
         name: evt.name,
         year: activeYear,
         type: evt.type,
+        category: evt.category,
+        trainerName: (evt as any).trainerName || null,
         date: new Date(),
         isTemplate: true,
         isArchived: false,
-        isActive: false,
+        isActive: true,
         templateSourceId: null,
       },
     })

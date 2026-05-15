@@ -1,23 +1,412 @@
-// prisma/schema.prisma
-
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
   provider  = "postgresql"
-  // DATABASE_URL      → runtime queries (may be a pooler URL)
-  // DIRECT_DATABASE_URL → direct connection used by prisma migrate / prisma db push
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
+model User {
+  id                    String                 @id @default(cuid())
+  firstName             String
+  lastName              String
+  email                 String                 @unique
+  phone                 String
+  password              String
+  collegeName           String
+  collegeLoc            String
+  department            String
+  yearOfStudy           String
+  role                  Role                   @default(APPLICANT)
+  registrationType      RegistrationType       @default(GENERAL)
+  gender                String?
+  shacklesId            String?                @unique
+  qrToken               String?                @unique
+  qrImageUrl            String?
+  qrPath                String?
+  qrTokenExpiry         DateTime?
+  lastQrScan            DateTime?
+  kitStatus             KitStatus              @default(PENDING)
+  kitIssuedAt           DateTime?
+  kitIssuedBy           String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  verificationToken     String?                @unique
+  resetToken            String?                @unique
+  resetTokenExpiry      DateTime?
+  accommodation         Accommodation?
+  contactMessages       ContactMessage[]
+  registrations         EventRegistration[]
+  staffAssignments      EventStaffAssignment[]
+  judgeMarkings         JudgeMarking[]
+  createdOnSpotProfiles OnSpotProfile[]        @relation("OnSpotProfileCreator")
+  onSpotProfile         OnSpotProfile?
+  payment               Payment?
+  sessions              Session[]
+  teamsLed              Team[]                 @relation("TeamLeader")
+  teamInvitesSent       TeamInvite[]           @relation("TeamInviteSender")
+  teamInvitesUsed       TeamInvite[]           @relation("TeamInviteConsumer")
+
+  @@index([email])
+  @@index([shacklesId])
+  @@index([qrToken])
+  @@index([role])
+  @@index([createdAt])
+  @@index([registrationType, role])
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  mobile    String
+  message   String
+  createdAt DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model Payment {
+  id                   String               @id @default(cuid())
+  amount               Int
+  transactionId        String
+  proofUrl             String
+  proofPath            String?
+  status               PaymentStatus        @default(PENDING)
+  paymentChannel       PaymentChannel       @default(ONLINE)
+  captureSource        PaymentCaptureSource @default(WEBSITE)
+  packageType          PackageType?
+  year                 Int?
+  verificationDeviceId String?
+  verificationNote     String?
+  verifiedAt           DateTime?
+  verifiedBy           String?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+  userId               String               @unique
+  createdAt            DateTime             @default(now())
+  user                 User                 @relation(fields: [userId], references: [id])
+
+  @@index([captureSource, status, createdAt])
+  @@index([paymentChannel, status, createdAt])
+  @@index([status, year])
+}
+
+model OnSpotProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  createdByUserId String?
+  stationId       String?
+  deviceId        String?
+  referralSource  String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdByUser   User?    @relation("OnSpotProfileCreator", fields: [createdByUserId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@index([createdByUserId, createdAt])
+  @@index([stationId, createdAt])
+}
+
+model Accommodation {
+  id        String   @id @default(cuid())
+  days      String[]
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Event {
+  id                String                 @id @default(cuid())
+  name              String
+  year              Int                    @default(dbgenerated("(EXTRACT(year FROM CURRENT_DATE))::integer"))
+  type              String?
+  category          EventCategory?
+  dayLabel          String?
+  date              DateTime?
+  endDate           DateTime?
+  description       String?
+  rulesUrl          String?
+  coordinatorName   String?
+  coordinatorPhone  String?
+  trainerName       String?
+  contactName       String?
+  contactPhone      String?
+  participationMode EventParticipationMode @default(INDIVIDUAL)
+  allDay            Boolean                @default(false)
+  isAllDay          Boolean                @default(false)
+  teamMinSize       Int?
+  teamMaxSize       Int?
+  maxTeams          Int?
+  maxParticipants   Int?
+  isActive          Boolean                @default(true)
+  isArchived        Boolean                @default(false)
+  isTemplate        Boolean                @default(false)
+  templateSourceId  String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  templateSource    Event?                 @relation("EventTemplateSource", fields: [templateSourceId], references: [id], onDelete: SetNull)
+  templateCopies    Event[]                @relation("EventTemplateSource")
+  registrations     EventRegistration[]
+  staffAssignments  EventStaffAssignment[]
+  markingCriteria   MarkingCriteria?
+  teams             Team[]
+
+  @@unique([year, name])
+  @@index([year, isArchived, isActive])
+  @@index([year, isTemplate])
+  @@index([category, year])
+}
+
+model RolePermission {
+  role       Role
+  permission Permission
+
+  @@id([role, permission])
+}
+
+model EventStaffAssignment {
+  id        String    @id @default(cuid())
+  eventId   String
+  userId    String
+  staffRole StaffRole
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, userId, staffRole])
+  @@index([eventId, userId])
+}
+
+model Team {
+  id                         String              @id @default(cuid())
+  eventId                    String
+  name                       String
+  nameNormalized             String
+  teamCode                   String
+  joinCode                   String?             @unique
+  joinCodeExpiresAt          DateTime?
+  memberCount                Int                 @default(0)
+  status                     TeamStatus          @default(OPEN)
+  leaderUserId               String?
+  leaderContactPhoneSnapshot String?
+  leaderContactEmailSnapshot String?
+  lockedAt                   DateTime?
+  lockedBy                   String?
+  cancelledAt                DateTime?
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+  members                    EventRegistration[]
+  judgeMarkings              JudgeMarking[]
+  event                      Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  leader                     User?               @relation("TeamLeader", fields: [leaderUserId], references: [id])
+  invites                    TeamInvite[]
+  teamMarks                  TeamMark[]
+
+  @@unique([eventId, nameNormalized])
+  @@unique([eventId, teamCode])
+  @@index([joinCode])
+  @@index([eventId, status])
+}
+
+model TeamInvite {
+  id              String    @id @default(cuid())
+  teamId          String
+  token           String    @unique
+  invitedEmail    String?
+  invitedByUserId String
+  usedByUserId    String?
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime  @default(now())
+  invitedByUser   User      @relation("TeamInviteSender", fields: [invitedByUserId], references: [id])
+  team            Team      @relation(fields: [teamId], references: [id])
+  usedByUser      User?     @relation("TeamInviteConsumer", fields: [usedByUserId], references: [id])
+
+  @@index([teamId])
+  @@index([invitedByUserId])
+  @@index([invitedEmail])
+}
+
+model EventRegistration {
+  id                String                 @id @default(cuid())
+  userId            String
+  eventId           String
+  teamId            String?
+  memberRole        TeamMemberRole?
+  teamName          String?
+  teamSize          Int                    @default(1)
+  attended          Boolean                @default(false)
+  attendedAt        DateTime?
+  source            RegistrationSource     @default(ONLINE)
+  syncStatus        RegistrationSyncStatus @default(APPLIED)
+  stationId         String?
+  clientOperationId String?                @unique
+  syncError         String?
+  syncedAt          DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime?
+  year              Int?
+  event             Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  team              Team?                  @relation(fields: [teamId], references: [id])
+  user              User                   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, eventId])
+  @@index([year, eventId])
+  @@index([eventId, source])
+}
+
+model RegistrationOperation {
+  id               String                    @id @default(cuid())
+  operationId      String                    @unique
+  stationId        String
+  operationType    RegistrationOperationType
+  actorUserId      String?
+  participantId    String?
+  eventName        String?
+  teamName         String?
+  teamLeaderUserId String?
+  payload          Json?
+  payloadHash      String?
+  status           RegistrationSyncStatus    @default(PENDING)
+  conflictReason   String?
+  errorMessage     String?
+  processedAt      DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  @@index([stationId, createdAt])
+  @@index([status, createdAt])
+  @@index([participantId])
+}
+
+model ShacklesIdSequence {
+  id               String           @id @default(cuid())
+  year             Int
+  registrationType RegistrationType
+  lastIssued       Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([year, registrationType])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model MarkingCriteria {
+  id             String              @id @default(cuid())
+  eventId        String              @unique
+  name           String              @default("Default Marking Criteria")
+  description    String?
+  maxMarks       Int                 @default(100)
+  numberOfJudges Int                 @default(3)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  components     CriteriaComponent[]
+  judgeMarkings  JudgeMarking[]
+  event          Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  teamMarks      TeamMark[]
+
+  @@index([eventId])
+}
+
+model CriteriaComponent {
+  id                   String          @id @default(cuid())
+  markingCriteriaId    String
+  name                 String
+  description          String?
+  weightPercentage     Decimal         @db.Decimal(5, 2)
+  maxMarksForComponent Int
+  order                Int             @default(0)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  componentMarks       ComponentMark[]
+  criteria             MarkingCriteria @relation(fields: [markingCriteriaId], references: [id], onDelete: Cascade)
+  judgeMarkings        JudgeMarking[]
+
+  @@unique([markingCriteriaId, order])
+  @@index([markingCriteriaId])
+}
+
+model TeamMark {
+  id                String          @id @default(cuid())
+  teamId            String
+  markingCriteriaId String
+  totalMarks        Decimal         @default(0) @db.Decimal(6, 2)
+  judgeCount        Int             @default(0)
+  isSubmitted       Boolean         @default(false)
+  submittedByAdmin  Boolean         @default(false)
+  submittedAt       DateTime?
+  submittedBy       String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  componentMarks    ComponentMark[]
+  criteria          MarkingCriteria @relation(fields: [markingCriteriaId], references: [id], onDelete: Cascade)
+  team              Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, markingCriteriaId])
+  @@index([markingCriteriaId, isSubmitted])
+}
+
+model ComponentMark {
+  id           String            @id @default(cuid())
+  teamMarkId   String
+  componentId  String
+  averageMarks Decimal           @default(0) @db.Decimal(6, 2)
+  judgeCount   Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  component    CriteriaComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  teamMark     TeamMark          @relation(fields: [teamMarkId], references: [id], onDelete: Cascade)
+
+  @@unique([teamMarkId, componentId])
+  @@index([teamMarkId, componentId])
+}
+
+model JudgeMarking {
+  id                String            @id @default(cuid())
+  teamId            String
+  markingCriteriaId String
+  componentId       String
+  judgeId           String
+  marksAwarded      Decimal           @db.Decimal(6, 2)
+  judgeNotes        String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  component         CriteriaComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  judge             User              @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  criteria          MarkingCriteria   @relation(fields: [markingCriteriaId], references: [id], onDelete: Cascade)
+  team              Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, markingCriteriaId, componentId, judgeId])
+  @@index([markingCriteriaId, judgeId])
+}
+
 enum Role {
-  APPLICANT // Registered but pending payment check
-  PARTICIPANT // Verified (Has QR Code)
-  VOLUNTEER // Event-scoped operational staff
-  ADMIN // Super User
-  COORDINATOR // Event Manager
+  APPLICANT
+  PARTICIPANT
+  VOLUNTEER
+  ADMIN
+  COORDINATOR
 }
 
 enum Permission {
@@ -34,20 +423,17 @@ enum StaffRole {
   VOLUNTEER
 }
 
-// --- Package model (for symposium passes) ---
 enum PackageType {
   EVENT_ONLY
   WORKSHOP_ONLY
   COMBO
 }
 
-// --- Event categories ---
 enum EventCategory {
   EVENT
   WORKSHOP
 }
 
-// --- NEW ENUM ---
 enum RegistrationType {
   GENERAL
   WORKSHOP
@@ -101,481 +487,15 @@ enum EventParticipationMode {
   TEAM
 }
 
-// TeamStatus lifecycle:
-//   OPEN      → accepting new members (self-service join)
-//   LOCKED    → finalized, no changes allowed
-//   CANCELLED → team abandoned / deadline passed without locking
-//   DRAFT     → legacy alias kept for backward compatibility
-//   COMPLETED → legacy alias kept for backward compatibility
 enum TeamStatus {
-  OPEN       // Team is open for new members to join
-  DRAFT      // Legacy - kept for backward compatibility
-  LOCKED     // Team is locked, no more members can join
-  COMPLETED  // Legacy - kept for backward compatibility
-  CANCELLED  // Team was abandoned before being locked
+  OPEN
+  DRAFT
+  LOCKED
+  COMPLETED
+  CANCELLED
 }
 
 enum TeamMemberRole {
   LEADER
   MEMBER
-}
-
-model User {
-  id String @id @default(cuid())
-
-  // --- 1. Personal Details ---
-  firstName String
-  lastName  String
-  email     String @unique
-  phone     String
-  password  String
-
-  // --- 2. Education ---
-  collegeName String
-  collegeLoc  String
-  department  String
-  yearOfStudy String
-
-  // --- 3. System Fields ---
-  role Role @default(APPLICANT)
-
-  // --- NEW FIELD ---
-  registrationType RegistrationType @default(GENERAL)
-  gender           String?
-
-  // shacklesId is an internal system identifier generated after payment verification.
-  // It is embedded in QR codes and used by admin/coordinator tools.
-  // Participants should never need to type this to join events.
-  shacklesId String? @unique // Generated by Admin (e.g. SH26GN001)
-
-  // --- 4. Security (Dynamic QR) ---
-  qrToken       String?   @unique
-  qrImageUrl    String?
-  qrPath        String?
-  qrTokenExpiry DateTime?
-  lastQrScan    DateTime?
-
-  // --- 5. Event Logistics ---
-  kitStatus   KitStatus @default(PENDING)
-  kitIssuedAt DateTime?
-  kitIssuedBy String?
-
-  // --- 6. Meta ---
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  payment               Payment?
-  onSpotProfile         OnSpotProfile?
-  createdOnSpotProfiles OnSpotProfile[] @relation("OnSpotProfileCreator")
-  sessions              Session[]
-
-  // Tokens
-  verificationToken String?   @unique
-  resetToken        String?   @unique
-  resetTokenExpiry  DateTime?
-
-  // Accommodation
-  accommodation Accommodation?
-
-  // Events
-  registrations   EventRegistration[]
-  teamsLed        Team[]              @relation("TeamLeader")
-  teamInvitesSent TeamInvite[]        @relation("TeamInviteSender")
-  teamInvitesUsed TeamInvite[]        @relation("TeamInviteConsumer")
-
-  // Contact Messages
-  contactMessages ContactMessage[]
-  staffAssignments EventStaffAssignment[]
-  judgeMarkings    JudgeMarking[]
-
-  @@index([email])
-  @@index([shacklesId])
-  @@index([qrToken])
-  @@index([role])
-  @@index([createdAt])
-  @@index([registrationType, role])
-}
-
-model ContactMessage {
-  id        String   @id @default(cuid())
-  name      String
-  email     String
-  mobile    String
-  message   String
-  createdAt DateTime @default(now())
-
-  // Optional: Link to a registered user if email matches
-  user   User?   @relation(fields: [userId], references: [id])
-  userId String?
-}
-
-model Payment {
-  id                   String               @id @default(cuid())
-  amount               Int
-  transactionId        String
-  proofUrl             String
-  proofPath            String?
-  status               PaymentStatus        @default(PENDING)
-  paymentChannel       PaymentChannel       @default(ONLINE)
-  captureSource        PaymentCaptureSource @default(WEBSITE)
-  packageType          PackageType?         // e.g., EVENT_ONLY, WORKSHOP_ONLY, COMBO
-  year                 Int?                 // Active year for this payment
-  verificationDeviceId String?
-  verificationNote     String?
-
-  verifiedAt      DateTime?
-  verifiedBy      String?
-  rejectedAt      DateTime?
-  rejectionReason String?
-
-  user   User   @relation(fields: [userId], references: [id])
-  userId String @unique
-
-  createdAt DateTime @default(now())
-
-  @@index([captureSource, status, createdAt])
-  @@index([paymentChannel, status, createdAt])
-  @@index([status, year]) // For querying verified payments by year
-}
-
-model OnSpotProfile {
-  id              String   @id @default(cuid())
-  user            User     @relation(fields: [userId], references: [id])
-  userId          String   @unique
-  createdByUser   User?    @relation("OnSpotProfileCreator", fields: [createdByUserId], references: [id])
-  createdByUserId String?
-  stationId       String?
-  deviceId        String?
-  referralSource  String?
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([createdByUserId, createdAt])
-  @@index([stationId, createdAt])
-}
-
-model Accommodation {
-  id String @id @default(cuid())
-
-  days   String[] // Stores ["DAY1"] or ["DAY1", "DAY2"]
-
-  user   User   @relation(fields: [userId], references: [id])
-  userId String @unique
-
-  createdAt DateTime @default(now())
-}
-
-// --- NEW MODELS FOR LOGISTICS ---
-
-model Event {
-  id                String                 @id @default(cuid())
-  name              String // 'Paper Presentation', 'Aqua Missile'
-  year              Int                    @default(dbgenerated("EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER"))
-  type              String? // 'TECHNICAL', 'NON-TECHNICAL', 'SPECIAL', 'WORKSHOP'
-  category          EventCategory?         // EVENT or WORKSHOP
-  dayLabel          String?
-  date              DateTime?              // Start time
-  endDate           DateTime?              // End time
-  description       String?
-  rulesUrl          String?
-  coordinatorName   String?
-  coordinatorPhone  String?
-  trainerName       String?
-  contactName       String?
-  contactPhone      String?
-  participationMode EventParticipationMode @default(INDIVIDUAL)
-  allDay            Boolean                @default(false) // If true, doesn't cause time clash
-  isAllDay          Boolean                @default(false)
-  teamMinSize       Int?
-  teamMaxSize       Int?
-  maxTeams          Int?
-  maxParticipants   Int?
-  isActive          Boolean                @default(true)
-  isArchived        Boolean                @default(false)
-  isTemplate        Boolean                @default(false)
-  templateSourceId  String?
-  templateSource    Event?                 @relation("EventTemplateSource", fields: [templateSourceId], references: [id])
-  templateCopies    Event[]                @relation("EventTemplateSource")
-  staffAssignments  EventStaffAssignment[]
-  markingCriteria   MarkingCriteria?
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
-  registrations     EventRegistration[]
-  teams             Team[]
-
-  @@unique([year, name])
-  @@index([year, isArchived, isActive])
-  @@index([year, isTemplate])
-  @@index([category, year]) // For querying by category
-}
-
-model RolePermission {
-  role       Role
-  permission Permission
-
-  @@id([role, permission])
-}
-
-model EventStaffAssignment {
-  id        String     @id @default(cuid())
-  eventId   String
-  userId    String
-  staffRole StaffRole
-
-  event Event @relation(fields: [eventId], references: [id])
-  user  User  @relation(fields: [userId], references: [id])
-
-  @@unique([eventId, userId, staffRole])
-  @@index([eventId, userId])
-}
-
-model Team {
-  id                         String              @id @default(cuid())
-  event                      Event               @relation(fields: [eventId], references: [id])
-  eventId                    String
-  name                       String
-  nameNormalized             String
-  teamCode                   String              // Public display code
-  // joinCode: short 8-char alphanumeric code shared by the leader to invite members.
-  // Used exclusively for self-service web join flow. Separate from teamCode.
-  // Set to null after the team is LOCKED or CANCELLED.
-  joinCode                   String?             @unique // Short invite code for joining (8 chars)
-  joinCodeExpiresAt          DateTime?           // Optional expiry tied to registration deadline
-  memberCount                Int                 @default(0)
-  status                     TeamStatus          @default(OPEN)
-  leader                     User?               @relation("TeamLeader", fields: [leaderUserId], references: [id])
-  leaderUserId               String?
-  leaderContactPhoneSnapshot String?
-  leaderContactEmailSnapshot String?
-  lockedAt                   DateTime?
-  lockedBy                   String?             // userId of who triggered the lock
-  cancelledAt                DateTime?
-  createdAt                  DateTime            @default(now())
-  updatedAt                  DateTime            @updatedAt
-  members                    EventRegistration[]
-  invites                    TeamInvite[]
-  teamMarks                  TeamMark[]
-  judgeMarkings              JudgeMarking[]
-
-  @@unique([eventId, nameNormalized])
-  @@unique([eventId, teamCode])
-  @@index([joinCode])           // Fast lookup by join code
-  @@index([eventId, status])    // Filter open/locked teams per event
-}
-
-model TeamInvite {
-  id              String    @id @default(cuid())
-  team            Team      @relation(fields: [teamId], references: [id])
-  teamId          String
-  token           String    @unique
-  invitedEmail    String?
-  invitedByUser   User      @relation("TeamInviteSender", fields: [invitedByUserId], references: [id])
-  invitedByUserId String
-  usedByUser      User?     @relation("TeamInviteConsumer", fields: [usedByUserId], references: [id])
-  usedByUserId    String?
-  expiresAt       DateTime
-  usedAt          DateTime?
-  createdAt       DateTime  @default(now())
-
-  @@index([teamId])
-  @@index([invitedByUserId])
-  @@index([invitedEmail])
-}
-
-model EventRegistration {
-  id String @id @default(cuid())
-
-  user   User   @relation(fields: [userId], references: [id])
-  userId String
-
-  event   Event  @relation(fields: [eventId], references: [id])
-  eventId String
-
-  team       Team?           @relation(fields: [teamId], references: [id])
-  teamId     String?
-  memberRole TeamMemberRole?
-
-  teamName String?
-  teamSize Int     @default(1)
-
-  attended          Boolean                @default(false)
-  attendedAt        DateTime?
-  source            RegistrationSource     @default(ONLINE)
-  syncStatus        RegistrationSyncStatus @default(APPLIED)
-  stationId         String?
-  clientOperationId String?                @unique
-  syncError         String?
-  syncedAt          DateTime?
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime?
-  year              Int?
-
-  @@unique([userId, eventId]) // Prevent duplicate registration
-  @@index([year, eventId])
-  @@index([eventId, source])
-}
-
-model RegistrationOperation {
-  id               String                    @id @default(cuid())
-  operationId      String                    @unique
-  stationId        String
-  operationType    RegistrationOperationType
-  actorUserId      String?
-  participantId    String?
-  eventName        String?
-  teamName         String?
-  teamLeaderUserId String?
-  payload          Json?
-  payloadHash      String?
-  status           RegistrationSyncStatus    @default(PENDING)
-  conflictReason   String?
-  errorMessage     String?
-  processedAt      DateTime?
-  createdAt        DateTime                  @default(now())
-  updatedAt        DateTime                  @updatedAt
-
-  @@index([stationId, createdAt])
-  @@index([status, createdAt])
-  @@index([participantId])
-}
-
-model ShacklesIdSequence {
-  id               String           @id @default(cuid())
-  year             Int
-  registrationType RegistrationType
-  lastIssued       Int              @default(0)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-
-  @@unique([year, registrationType])
-}
-
-// Auth.js v5 / @auth/prisma-adapter models
-model Session {
-  id        String   @id @default(cuid())
-  sessionToken String  @unique
-  userId    String
-  expires   DateTime
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-}
-
-// --- MARKING & SCORING MODELS ---
-
-model MarkingCriteria {
-  id                 String                @id @default(cuid())
-  event              Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  eventId            String                @unique
-  
-  name               String                @default("Default Marking Criteria")
-  description        String?
-  maxMarks           Int                   @default(100)
-  numberOfJudges     Int                   @default(3)
-  
-  components         CriteriaComponent[]
-  teamMarks          TeamMark[]
-  judgeMarkings      JudgeMarking[]
-  
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
-
-  @@index([eventId])
-}
-
-model CriteriaComponent {
-  id                      String              @id @default(cuid())
-  criteria                MarkingCriteria     @relation(fields: [markingCriteriaId], references: [id], onDelete: Cascade)
-  markingCriteriaId       String
-  
-  name                    String              // e.g., "Innovation", "Presentation"
-  description             String?
-  weightPercentage        Decimal             @db.Decimal(5, 2) // 0.00 to 100.00
-  maxMarksForComponent    Int                 // e.g., 30 out of 100
-  order                   Int                 @default(0)
-  
-  judgeMarkings           JudgeMarking[]
-  componentMarks          ComponentMark[]
-  
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
-
-  @@unique([markingCriteriaId, order])
-  @@index([markingCriteriaId])
-}
-
-model TeamMark {
-  id                      String              @id @default(cuid())
-  team                    Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  teamId                  String
-  
-  criteria                MarkingCriteria     @relation(fields: [markingCriteriaId], references: [id], onDelete: Cascade)
-  markingCriteriaId       String
-  
-  totalMarks              Decimal             @db.Decimal(6, 2) @default(0)
-  judgeCount              Int                 @default(0)
-  isSubmitted             Boolean             @default(false)
-  
-  submittedByAdmin        Boolean             @default(false)
-  submittedAt             DateTime?
-  submittedBy             String? // SuperAdmin userId
-  
-  componentMarks          ComponentMark[]
-  
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
-
-  @@unique([teamId, markingCriteriaId])
-  @@index([markingCriteriaId, isSubmitted])
-}
-
-model ComponentMark {
-  id                      String              @id @default(cuid())
-  teamMark                TeamMark            @relation(fields: [teamMarkId], references: [id], onDelete: Cascade)
-  teamMarkId              String
-  
-  component               CriteriaComponent   @relation(fields: [componentId], references: [id], onDelete: Cascade)
-  componentId             String
-  
-  averageMarks            Decimal             @db.Decimal(6, 2) @default(0)
-  judgeCount              Int                 @default(0)
-  
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
-
-  @@unique([teamMarkId, componentId])
-  @@index([teamMarkId, componentId])
-}
-
-model JudgeMarking {
-  id                      String              @id @default(cuid())
-  team                    Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  teamId                  String
-  
-  criteria                MarkingCriteria     @relation(fields: [markingCriteriaId], references: [id], onDelete: Cascade)
-  markingCriteriaId       String
-  
-  component               CriteriaComponent   @relation(fields: [componentId], references: [id], onDelete: Cascade)
-  componentId             String
-  
-  judge                   User                @relation(fields: [judgeId], references: [id], onDelete: Cascade)
-  judgeId                 String
-  
-  marksAwarded            Decimal             @db.Decimal(6, 2)
-  judgeNotes              String?
-  
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
-
-  @@unique([teamId, markingCriteriaId, componentId, judgeId])
-  @@index([markingCriteriaId, judgeId])
 }

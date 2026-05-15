@@ -44,8 +44,18 @@ export default function KitDistributionScanner() {
       const rawToken = result[0].rawValue.trim()
       const res = await scanParticipantQR(rawToken)
 
-      if (!res.success || !res.data) {
+      if (!res.success) {
         setMessage({ type: 'error', text: res.error || 'Invalid participant QR' })
+        scannerRef.current = false
+        setTimeout(() => {
+          setScannerEnabled(true)
+          setMessage(null)
+        }, 3000)
+        return
+      }
+
+      if (!res.data) {
+        setMessage({ type: 'error', text: 'Participant data not found' })
         scannerRef.current = false
         setTimeout(() => {
           setScannerEnabled(true)

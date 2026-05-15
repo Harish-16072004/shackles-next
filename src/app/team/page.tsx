@@ -20,6 +20,13 @@ const OFFICE_BEARERS = [
   { name: "Siva G", role: "Accounts Secretary", image: "/team/ob4.jpg", linkedin: "#" },
 ];
 
+const EXECUTIVES = [
+  { name: "Coordinator 1", role: "Event Coordinator", image: "/team/coord1.jpg", linkedin: "#" },
+  { name: "Coordinator 2", role: "Event Coordinator", image: "/team/coord2.jpg", linkedin: "#" },
+  { name: "Coordinator 3", role: "Technical Lead", image: "/team/coord3.jpg", linkedin: "#" },
+  { name: "Coordinator 4", role: "Design Lead", image: "/team/coord4.jpg", linkedin: "#" },
+];
+
 const COORDINATORS = [
   { name: "Coordinator 1", role: "Event Coordinator", image: "/team/coord1.jpg", linkedin: "#" },
   { name: "Coordinator 2", role: "Event Coordinator", image: "/team/coord2.jpg", linkedin: "#" },
@@ -38,7 +45,7 @@ function SectionTitle({ title }: { title: string }) {
   );
 }
 
-function MemberCard({ member }: { member: { name: string; role: string; image: string; linkedin: string } }) {
+function MemberCard({ member, showLinkedin = false }: { member: { name: string; role: string; image: string; linkedin?: string }, showLinkedin?: boolean }) {
   const [imgSrc, setImgSrc] = useState(member.image);
 
   return (
@@ -59,7 +66,7 @@ function MemberCard({ member }: { member: { name: string; role: string; image: s
       <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide text-center">{member.name}</h3>
       <p className="text-xs text-gray-500 mt-1">{member.role}</p>
 
-      {member.linkedin && member.linkedin !== "#" && (
+      {showLinkedin && member.linkedin && (
         <a
           href={member.linkedin}
           target="_blank"
@@ -91,7 +98,7 @@ export default function TeamPage() {
           <SectionTitle title="Staff-In-Charge" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-lg mx-auto">
             {STAFF_IN_CHARGE.map((member, idx) => (
-              <MemberCard key={idx} member={member} />
+              <MemberCard key={idx} member={member} showLinkedin={false} />
             ))}
           </div>
         </section>
@@ -101,7 +108,17 @@ export default function TeamPage() {
           <SectionTitle title="Office Bearers" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {OFFICE_BEARERS.map((member, idx) => (
-              <MemberCard key={idx} member={member} />
+              <MemberCard key={idx} member={member} showLinkedin={true} />
+            ))}
+          </div>
+        </section>
+
+        {/* Executives */}
+        <section className="mb-16">
+          <SectionTitle title="Executives" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {EXECUTIVES.map((member, idx) => (
+              <MemberCard key={idx} member={member} showLinkedin={true} />
             ))}
           </div>
         </section>
@@ -111,8 +128,23 @@ export default function TeamPage() {
           <SectionTitle title="Coordinators" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {COORDINATORS.map((member, idx) => (
-              <MemberCard key={idx} member={member} />
+              <MemberCard key={idx} member={member} showLinkedin={true} />
             ))}
+          </div>
+        </section>
+
+        {/* Group Photo Frame */}
+        <section className="mb-16">
+          <SectionTitle title="The Entire Crew" />
+          <div className="w-full aspect-[21/9] bg-gray-50 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors relative overflow-hidden group">
+            {/* The actual image can be placed here later using the next/image component */}
+            <div className="text-center z-10 p-6">
+              <svg className="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="block text-lg font-semibold text-gray-700">Group Photo Placeholder</span>
+              <span className="block text-sm mt-1">Replace this placeholder with the actual team photo.</span>
+            </div>
           </div>
         </section>
 

@@ -125,17 +125,18 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <LiveSyncRefresher intervalMs={12000} />
-      <div className="max-w-6xl mx-auto space-y-8">
-        <div className="flex justify-between items-start gap-4">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Event Registrations</h1>
-            <p className="text-gray-600">Filter by event type and search participants.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Event Registrations</h1>
+            <p className="text-gray-500 text-sm mt-1">Manage participants across all events.</p>
           </div>
-          <div className="text-right text-sm text-gray-600">
-            <div className="font-semibold text-gray-900">Total Registrations: {totals.registrations}</div>
-            <div>Events: {totals.events}</div>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="font-semibold text-gray-900">{totals.registrations} registrations</span>
+            <span className="text-gray-400">·</span>
+            <span className="text-gray-600">{totals.events} events</span>
           </div>
         </div>
 
@@ -208,45 +209,14 @@ export default async function AdminEventRegistrationsPage({ searchParams }: { se
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-3">
-            <h2 className="text-lg font-bold text-gray-900">CSV Export</h2>
-            <p className="text-sm text-gray-600">Download all event registrations with team and attendance fields.</p>
-            <a
-              href="/api/admin/csv/registrations/export"
-              className="inline-flex rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-            >
-              Download Registrations CSV
-            </a>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-3">
-            <h2 className="text-lg font-bold text-gray-900">CSV Import</h2>
-            <p className="text-sm text-gray-600">Upload registrations CSV (eventName + userEmail required). Optional event schedule and limit columns update matched events before rows are upserted.</p>
-            <div className="flex items-center gap-3">
-              <a
-                href="/api/admin/csv/registrations/template"
-                className="inline-flex rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-              >
-                Download CSV Template
-              </a>
-              <span className="text-xs text-gray-500">Get a blank template with headers</span>
-            </div>
-            <form action="/api/admin/csv/registrations/import" method="post" encType="multipart/form-data" className="flex flex-col sm:flex-row gap-2 sm:items-center">
-              <input
-                type="file"
-                name="file"
-                required
-                accept=".csv,text/csv"
-                className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border file:border-gray-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-gray-700 hover:file:bg-gray-50"
-              />
-              <label className="inline-flex items-center gap-2 text-xs text-gray-700">
-                <input type="checkbox" name="dryRun" value="true" /> Dry run
-              </label>
-              <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">
-                Import
-              </button>
-            </form>
-          </div>
+        <div className="flex items-center gap-3">
+          <a
+            href="/api/admin/csv/registrations/export"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export All CSV
+          </a>
         </div>
 
         {filtered.length === 0 ? (

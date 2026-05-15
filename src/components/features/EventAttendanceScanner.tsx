@@ -7,7 +7,7 @@ import { processQRScanAction, checkRegistrationStatus, scannerRegisterForEvent, 
 
 interface ParticipantInfo {
   name: string
-  shacklesId: string
+  shacklesId: string | null
   college?: string
 }
 
@@ -16,8 +16,8 @@ interface EventInfo {
   name: string
   type: string
   participationMode: string
-  minTeamSize?: number
-  maxTeamSize?: number
+  minTeamSize?: number | null
+  maxTeamSize?: number | null
 }
 
 interface EventAttendanceScannerProps {
@@ -144,7 +144,7 @@ export default function EventAttendanceScanner({
     setLoading(true)
     try {
       const data = await scannerRegisterForEvent({
-        shacklesId: participant.shacklesId,
+        shacklesId: participant.shacklesId!,
         eventId,
       })
 
@@ -181,7 +181,7 @@ export default function EventAttendanceScanner({
     setLoading(true)
     try {
       const data = await scannerCreateTeam({
-        scannedShacklesId: participant.shacklesId,
+        scannedShacklesId: participant.shacklesId!,
         memberShacklesIds: memberIds,
         eventId,
         teamName: teamName.trim(),

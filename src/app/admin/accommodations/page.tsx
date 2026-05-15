@@ -15,15 +15,17 @@ function formatDate(date?: Date | null) {
   }).format(date);
 }
 
-export default async function AdminAccommodationsPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+export default async function AdminAccommodationsPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await getSession();
   if (!session?.userId) redirect("/login");
+
+  const resolvedSearchParams = (await searchParams) ?? {};
 
   const currentUser = await prisma.user.findUnique({ where: { id: session.userId as string } });
   if (!currentUser || currentUser.role !== "ADMIN") redirect("/login");
 
-  const genderFilter = typeof searchParams?.gender === "string" ? searchParams.gender : "";
-  const search = typeof searchParams?.q === "string" ? searchParams.q.trim() : "";
+  const genderFilter = typeof resolvedSearchParams.gender === "string" ? resolvedSearchParams.gender : "";
+  const search = typeof resolvedSearchParams.q === "string" ? resolvedSearchParams.q.trim() : "";
 
   const where: Prisma.AccommodationWhereInput = {};
   if (genderFilter) {

@@ -28,13 +28,13 @@ export async function requireScannerActor(): Promise<ScannerAuthResult> {
     };
   }
 
-  // Get user's role and permissions
+  // Get user's role
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: {
-      role: {
-        include: { permissions: true },
-      },
+    select: {
+      id: true,
+      email: true,
+      role: true,
     },
   });
 
@@ -46,16 +46,16 @@ export async function requireScannerActor(): Promise<ScannerAuthResult> {
     };
   }
 
-  // Check if user is ADMIN or has SCAN_PARTICIPANT_QR permission
-  const hasPermission = user.role?.permissions?.some(
-    (rp) => rp.permission === Permission.SCAN_PARTICIPANT_QR
-  );
+  // Check if user is ADMIN or has any scanner permission
+  // For now, we allow ADMIN, COORDINATOR, or VOLUNTEER to access the scanner
+  // if they have the right staff assignments, but here we check global role permissions.
+  const hasPermission = user.role === "ADMIN" || user.role === "COORDINATOR" || user.role === "VOLUNTEER";
 
   if (!hasPermission) {
     return {
       ok: false,
       reason: "NOT_AUTHORIZED",
-      message: "Scanner access requires SCAN_PARTICIPANT_QR permission",
+      message: "Scanner access requires proper role permissions",
     };
   }
 
@@ -64,7 +64,7 @@ export async function requireScannerActor(): Promise<ScannerAuthResult> {
     actor: {
       id: user.id,
       email: user.email,
-      role: user.role?.name || "UNKNOWN",
+      role: user.role as string,
     },
   };
 }

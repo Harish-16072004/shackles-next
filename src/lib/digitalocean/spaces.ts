@@ -62,7 +62,7 @@ export async function createSpacesSignedGetUrl(key: string, expiresIn = 300) {
     Key: key,
   });
 
-  return getSignedUrl(client, command, { expiresIn });
+  return getSignedUrl(client as any, command as any, { expiresIn });
 }
 
 export function resolveSpacesPublicUrlFromCdn(key: string) {

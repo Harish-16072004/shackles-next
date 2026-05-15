@@ -4,12 +4,12 @@
 FROM node:20-alpine AS deps
 
 # Native module build tools (sharp, onnxruntime-node, bcryptjs)
-RUN apk add --no-cache libc6-compat python3 make g++
+RUN apk add --no-cache libc6-compat python3 make g++ openssl
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --prefer-offline
+RUN npm ci --prefer-offline --legacy-peer-deps
 
 # ============================================================
 # Stage 2 — builder: compile the Next.js app (standalone output)
@@ -31,9 +31,13 @@ ENV NODE_ENV=production
 # Real secrets are injected at runtime via environment variables.
 ENV DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder
 ENV DIRECT_DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder
-ENV SESSION_SECRET=placeholder-build-time-only-not-used-in-production
+ENV SESSION_SECRET=placeholder-build-time-only-not-used-in-production-long-secret
+ENV ACTIVE_YEAR=2026
+ENV ACTIVE_THEME_KEY=shackles
+ENV ACTIVE_PUBLIC_DOMAIN=localhost
+ENV NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-RUN npm run build
+RUN npx next build --webpack
 
 # ============================================================
 # Stage 3 — runner: lean production image
@@ -59,6 +63,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 
 # Static assets (JS chunks, CSS, images)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Additional files for background worker (src, prisma, config)
+COPY --from=builder --chown=nextjs:nodejs /app/src ./src
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+
+# Install openssl and prisma CLI for runtime migrations
+RUN apk add --no-cache openssl \
+ && npm install -g prisma@5.19.1
 
 USER nextjs
 

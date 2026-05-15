@@ -53,23 +53,52 @@ function readFirstCsvField(row: string[], headerMap: Map<string, number>, aliase
   return "";
 }
 
-function normalizeDateTimeInput(value: string) {
-  return value.includes(" ") && !value.includes("T") ? value.replace(" ", "T") : value;
+function normalizeDateStr(value: string) {
+  // Check for DD/MM/YYYY or MM/DD/YYYY formats
+  const match = value.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (match) {
+    const part1 = parseInt(match[1]);
+    const part2 = parseInt(match[2]);
+    let day = match[1].padStart(2, "0");
+    let month = match[2].padStart(2, "0");
+    
+    // If middle part > 12, it must be the day (MM/DD/YYYY)
+    if (part2 > 12) {
+      day = match[2].padStart(2, "0");
+      month = match[1].padStart(2, "0");
+    } 
+    // Else assume DD/MM/YYYY by default
+    
+    return `${match[3]}-${month}-${day}`;
+  }
+  return value;
 }
 
 function datePart(value: string) {
-  return value.split(/[ T]/)[0] || value;
+  return value.trim().split(/[ T]/)[0] || value;
+}
+
+function timePart(value: string) {
+  const parts = value.trim().split(/[ T]/);
+  return parts.slice(1).join(" ") || "";
 }
 
 function combineDateAndTime(dateValue: string, timeValue: string) {
   if (!dateValue) return "";
-  if (!timeValue) return normalizeDateTimeInput(dateValue);
-  return `${datePart(dateValue)}T${timeValue}`;
+  
+  const dPart = normalizeDateStr(datePart(dateValue));
+  const tPart = timeValue ? timeValue.trim() : timePart(dateValue);
+
+  if (tPart) {
+    // A space separator natively parses time cleanly in V8, e.g., "YYYY-MM-DD 9:00"
+    return `${dPart} ${tPart}`;
+  }
+  return dPart;
 }
 
 function parseDateValue(value: string, label: string, errors: string[]) {
   if (!value) return null;
-  const parsed = new Date(normalizeDateTimeInput(value));
+  const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     errors.push(`${label} is not a valid date/time.`);
     return null;

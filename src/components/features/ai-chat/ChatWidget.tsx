@@ -2,13 +2,7 @@
 
 import React, { useState, useEffect, useRef, useId } from 'react';
 import Image from 'next/image';
-import { 
-  X, 
-  Send, 
-  User, 
-  Loader2, 
-  ChevronDown 
-} from 'lucide-react';
+import { X, Send, User, Loader2, ChevronDown } from 'lucide-react';
 
 const ASSISTANT_NAME = "Mickey";
 
@@ -75,7 +69,7 @@ interface Message {
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
-  
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -182,11 +176,11 @@ export default function ChatWidget() {
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
-      
+
       {/* Chat Window */}
       {isOpen && (
         <div className="mb-4 w-[350px] sm:w-[400px] h-[550px] max-h-[80vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 transition-all duration-300 ease-in-out">
-          
+
           {/* Header */}
           <div className="bg-gradient-to-r from-[#161616] via-[#1f1b12] to-[#d89b11] p-4 text-white flex items-start justify-between gap-4 shadow-md border-b border-amber-400/20">
             <div className="flex-1 text-center">
@@ -194,7 +188,7 @@ export default function ChatWidget() {
               <p className="text-sm font-semibold text-amber-100 mt-1">Shackles mascot guide</p>
               <p className="text-xs text-amber-50/90 mt-1 hidden sm:block">Your quick guide for events, rules, and registration.</p>
             </div>
-            <button 
+            <button
               onClick={toggleChat}
               className="shrink-0 p-2 hover:bg-white/20 rounded-full transition-colors"
               aria-label="Close chat"
@@ -222,7 +216,7 @@ export default function ChatWidget() {
                     <p className="text-sm text-gray-600 mb-5 max-w-[24rem]">
                       {ASSISTANT_NAME} can answer questions about the symposium, events, schedule, and rules.
                     </p>
-                    
+
                     <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
                       {QUICK_ACTIONS.map((action, idx) => (
                         <button
@@ -240,8 +234,8 @@ export default function ChatWidget() {
             )}
 
             {messages.map((m) => (
-              <div 
-                key={m.id} 
+              <div
+                key={m.id}
                 className={`flex w-full ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div className={`flex max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -250,19 +244,18 @@ export default function ChatWidget() {
                   >
                     {m.role === 'user' ? <User size={14} /> : <MascotAvatar size={24} />}
                   </div>
-                  <div 
-                    className={`px-4 py-2 rounded-2xl text-sm whitespace-pre-wrap ${
-                      m.role === 'user' 
-                        ? 'bg-indigo-600 text-white rounded-tr-none' 
+                  <div
+                    className={`px-4 py-2 rounded-2xl text-sm whitespace-pre-wrap ${m.role === 'user'
+                        ? 'bg-indigo-600 text-white rounded-tr-none'
                         : 'bg-white border border-amber-100 text-gray-800 shadow-sm rounded-tl-none'
-                    }`}
+                      }`}
                   >
                     {m.content}
                   </div>
                 </div>
               </div>
             ))}
-            
+
             {isLoading && messages[messages.length - 1]?.role === 'user' && (
               <div className="flex justify-start w-full">
                 <div className="flex flex-row max-w-[85%]">
@@ -277,19 +270,19 @@ export default function ChatWidget() {
                 </div>
               </div>
             )}
-            
+
             {error && (
               <div className="bg-red-50 text-red-500 text-xs p-3 rounded-xl text-center border border-red-100 mt-2">
                 Sorry, there was an error processing your request. Please try again.
               </div>
             )}
-            
+
             <div ref={messagesEndRef} />
           </div>
 
           {/* Input Area */}
           <div className="p-3 bg-white border-t border-gray-100">
-            <form 
+            <form
               onSubmit={handleSubmit}
               className="flex items-center bg-gray-50 border border-gray-200 rounded-full px-2 py-1 focus-within:ring-2 focus-within:ring-amber-500/20 focus-within:border-amber-500 transition-all"
             >
@@ -301,8 +294,8 @@ export default function ChatWidget() {
                 className="flex-1 bg-transparent border-none focus:outline-none px-3 py-2 text-sm text-gray-700 placeholder-gray-400"
                 disabled={isLoading}
               />
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={!input.trim() || isLoading}
                 className="bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 text-[#161616] rounded-full p-2 h-8 w-8 flex items-center justify-center transition-colors shadow-sm"
                 aria-label="Send message"
@@ -320,13 +313,12 @@ export default function ChatWidget() {
       {/* Floating Button */}
       <button
         onClick={toggleChat}
-        className={`${
-          isOpen ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gradient-to-br from-[#141414] via-[#2a2415] to-[#d89b11] hover:from-[#1c1c1c] hover:to-[#f2b326]'
-        } text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-1 relative overflow-hidden border border-amber-300/20`}
+        className={`${isOpen ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gradient-to-br from-[#141414] via-[#2a2415] to-[#d89b11] hover:from-[#1c1c1c] hover:to-[#f2b326]'
+          } text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-1 relative overflow-hidden border border-amber-300/20`}
         aria-label="Toggle chat window"
       >
         {isOpen ? <X size={24} /> : <MascotAvatar size={28} />}
-        
+
         {/* Unread Indicator */}
         {!isOpen && hasUnread && (
           <span className="absolute top-0 right-0 flex h-3 w-3">

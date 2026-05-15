@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { executeSafeAction } from '@/lib/safe-action'
 import { Permission, Role } from '@prisma/client'
 import { z } from 'zod'
+import { broadcastLeaderboardUpdate } from '@/lib/leaderboard-broadcast'
 
 // Validation schemas
 const CreateMarkingCriteriaSchema = z.object({
@@ -479,7 +480,7 @@ export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSch
             const marksForComponent = tm.componentMarks.find(m => m.componentId === component.id)
             if (!marksForComponent) continue
 
-            const weighted = (marksForComponent.marks / component.maxMarksForComponent) * component.weightPercentage
+            const weighted = (marksForComponent.marks / component.maxMarksForComponent) * Number(component.weightPercentage)
             totalMarks += weighted
 
             let finalAverage = marksForComponent.marks
@@ -537,6 +538,14 @@ export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSch
 
     const succeeded = results.filter(r => r.success).length
     const failed = results.length - succeeded
+
+    // Trigger real-time leaderboard update via SSE broadcast
+    if (succeeded > 0) {
+      // We don't await this to keep the action responsive
+      broadcastLeaderboardUpdate(eventId).catch(err => 
+        console.error('[LeaderboardBroadcast] Failed:', err)
+      );
+    }
 
     return {
       success: true,

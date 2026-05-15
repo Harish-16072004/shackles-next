@@ -15,15 +15,19 @@ const MIME_TYPES: Record<string, string> = {
  * GET /api/files/payment-proof/[...path]
  * Serves payment proof images from private storage with authentication.
  */
-export async function GET(request: NextRequest, context: any) {
-  const params = context?.params?.path ?? [] as string[]
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  const resolvedParams = await params;
+  const segments: string[] = resolvedParams.path;
+
   // 1. Authentication check
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
-  const segments = params;
   if (!segments || segments.length === 0) {
     return NextResponse.json({ error: "File path required" }, { status: 400 });
   }

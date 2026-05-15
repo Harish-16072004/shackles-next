@@ -27,6 +27,8 @@ export interface QRScanResult {
   userName?: string;
   message?: string;
   error?: string;
+  registeredEvents?: Array<{ id: string; name: string; type: string | null; attended: boolean }>;
+  availableEvents?: Array<{ id: string; name: string; type: string | null; participationMode?: string; maxTeamSize?: number | null }>;
 }
 
 /**
@@ -248,6 +250,30 @@ async function processStructuredScan(
       return await performAttendanceUpdate(db as Prisma.TransactionClient);
     } else {
       // General symposium attendance (no eventId)
+      const allEvents = await db.event.findMany({
+        where: { year: activeYear, isActive: true },
+        select: { id: true, name: true, type: true, participationMode: true, teamMaxSize: true }
+      });
+      
+      const userRegistrations = await db.eventRegistration.findMany({
+        where: { userId: user.id },
+        select: { eventId: true, attended: true }
+      });
+      
+      const registeredEventIds = new Set(userRegistrations.map(r => r.eventId));
+      
+      const registeredEventsList = allEvents.filter(e => registeredEventIds.has(e.id)).map(e => ({
+        ...e,
+        attended: userRegistrations.find(r => r.eventId === e.id)?.attended || false
+      }));
+      const availableEventsList = allEvents.filter(e => !registeredEventIds.has(e.id)).map(e => ({
+        id: e.id,
+        name: e.name,
+        type: e.type,
+        participationMode: e.participationMode,
+        maxTeamSize: e.teamMaxSize,
+      }));
+
       await logScanOperation(db, payload, user.id);
       return {
         success: true,
@@ -255,6 +281,8 @@ async function processStructuredScan(
         shacklesId: user.shacklesId || undefined,
         userName,
         message: `SYMPOSIUM ENTRY RECORDED FOR ${userName.toUpperCase()}.`,
+        registeredEvents: registeredEventsList,
+        availableEvents: availableEventsList,
       };
     }
   } else if (payload.operationType === "KIT") {

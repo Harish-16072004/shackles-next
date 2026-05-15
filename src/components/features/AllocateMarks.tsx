@@ -59,7 +59,7 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
     setLoading(true)
     const res = await fetchEventMarkingData(eventId)
     if (res.success && res.data) {
-      const markingData = res.data;
+      const markingData = res.data as MarkingData;
       setData(markingData)
       // Pre-fill state
       const initialMarks: Record<string, Record<string, Record<number, number>>> = {}

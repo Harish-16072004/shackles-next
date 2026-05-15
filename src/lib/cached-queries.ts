@@ -20,12 +20,27 @@ export const getCachedDashboardStats = unstable_cache(
       femaleAccommodations,
       events,
     ] = await Promise.all([
-      prisma.user.count(),
+      prisma.user.count({ where: { payment: { status: 'VERIFIED' } } }),
       prisma.payment.count({ where: { status: 'VERIFIED' } }),
       prisma.payment.count({ where: { status: 'PENDING' } }),
-      prisma.user.count({ where: { registrationType: 'GENERAL' } }),
-      prisma.user.count({ where: { registrationType: 'WORKSHOP' } }),
-      prisma.user.count({ where: { registrationType: 'COMBO' } }),
+      prisma.user.count({ 
+        where: { 
+          registrationType: 'GENERAL',
+          payment: { status: 'VERIFIED' }
+        } 
+      }),
+      prisma.user.count({ 
+        where: { 
+          registrationType: 'WORKSHOP',
+          payment: { status: 'VERIFIED' }
+        } 
+      }),
+      prisma.user.count({ 
+        where: { 
+          registrationType: 'COMBO',
+          payment: { status: 'VERIFIED' }
+        } 
+      }),
       prisma.user.count({ where: { kitStatus: 'ISSUED' } }),
       prisma.accommodation.count(),
       prisma.accommodation.count({ where: { user: { gender: 'MALE' } } }),
@@ -35,6 +50,13 @@ export const getCachedDashboardStats = unstable_cache(
           orderBy: { name: 'asc' },
           include: {
             registrations: {
+              where: {
+                user: {
+                  payment: {
+                    status: 'VERIFIED'
+                  }
+                }
+              },
               select: { teamSize: true },
             },
           },

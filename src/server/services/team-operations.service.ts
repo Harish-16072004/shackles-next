@@ -201,8 +201,7 @@ export async function createTeamForEvent(input: CreateTeamInput): Promise<Create
       eventName: event.name,
       joinCode,
       joinUrl,
-      teamMinSize: event.teamMinSize ?? undefined,
-      teamMaxSize: event.teamMaxSize ?? undefined,
+      teamCode: result.teamCode,
     });
 
     return {
@@ -532,10 +531,7 @@ export async function lockTeam(input: LockTeamInput): Promise<LockTeamResult> {
         memberName: member.user.firstName,
         teamName: team.name,
         eventName: team.event.name,
-        eventDate: team.event.date?.toLocaleDateString(),
-        eventTime: team.event.date?.toLocaleTimeString(),
-        teamSize: team.memberCount,
-        memberRole: member.memberRole ?? TeamMemberRole.MEMBER,
+        teamCode: team.teamCode,
       });
     }
 

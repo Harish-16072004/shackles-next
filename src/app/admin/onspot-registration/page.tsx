@@ -52,11 +52,13 @@ function formatINR(amount?: number | null) {
   }).format(amount);
 }
 
-export default async function OnSpotRegistrationPage({ searchParams }: { searchParams?: SearchParams | Promise<SearchParams> }) {
+export default async function OnSpotRegistrationPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
   const session = await getSession();
   if (!session?.userId) {
     redirect('/login');
   }
+
+  const resolvedSearchParams = (await searchParams) ?? {};
 
   const currentUser = await prisma.user.findUnique({
     where: { id: String(session.userId) },
@@ -67,7 +69,6 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
     redirect('/login');
   }
 
-  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
   const tab = resolvedSearchParams.tab === 'users' ? 'users' : 'verify';
   const selectedStatus = asStatus(resolvedSearchParams.status);
   const selectedChannel = asChannel(resolvedSearchParams.channel);
@@ -87,8 +88,8 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
     ? summaryResult.data
     : { total: 0, pending: 0, verified: 0, rejected: 0, cash: 0, online: 0 };
 
-  const participants = participantsResult.success ? participantsResult.data : [];
-  const showActionsColumn = participants.some((participant) => participant.payment?.status === 'PENDING');
+  const participants = participantsResult.success ? participantsResult.data.data : [];
+  const showActionsColumn = participants.some((participant: any) => participant.payment?.status === 'PENDING');
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">
@@ -233,7 +234,7 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                       <td className="px-3 py-4 text-gray-500" colSpan={showActionsColumn ? 5 : 4}>No on-spot participants for selected filters.</td>
                     </tr>
                   )}
-                  {participants.map((user) => (
+                  {participants.map((user: any) => (
                     <tr key={user.id} className="border-t align-top">
                       <td className="px-3 py-3">
                         <p className="font-semibold text-gray-900">{user.firstName} {user.lastName}</p>
@@ -263,7 +264,7 @@ export default async function OnSpotRegistrationPage({ searchParams }: { searchP
                           <p className="text-xs text-gray-500">No registrations</p>
                         ) : (
                           <ul className="space-y-1">
-                            {user.registrations.map((registration) => (
+                            {user.registrations.map((registration: any) => (
                               <li key={registration.id} className="text-xs text-gray-700">
                                 {registration.event.name}
                               </li>

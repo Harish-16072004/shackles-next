@@ -1,12 +1,56 @@
+import { Suspense } from "react";
+import { prisma } from "@/lib/prisma";
+import { getActiveYear } from "@/lib/edition";
 import EventCategoryPage from "@/components/features/EventCategoryPage";
 
-export default function WorkshopsPage() {
+export default async function WorkshopsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const activeYear = getActiveYear();
+  const resolvedParams = (await searchParams) ?? {};
+
+  const events = await prisma.event.findMany({
+    where: {
+      year: activeYear,
+      category: "WORKSHOP",
+      isActive: true,
+      isArchived: false,
+    },
+    orderBy: [{ date: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      rulesUrl: true,
+      date: true,
+      endDate: true,
+      participationMode: true,
+      teamMinSize: true,
+      teamMaxSize: true,
+      trainerName: true,
+      coordinatorName: true,
+      coordinatorPhone: true,
+      contactName: true,
+      contactPhone: true,
+    },
+  });
+
+  const serializedEvents = events.map((e) => ({
+    ...e,
+    date: e.date?.toISOString() ?? null,
+    endDate: e.endDate?.toISOString() ?? null,
+  }));
+
   return (
-    <EventCategoryPage
-      category="WORKSHOP"
-      title="Workshops"
-      subtitle="Backend-managed workshops by trainers"
-      accent="cyan"
-    />
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading Workshops...</div>}>
+      <EventCategoryPage
+        category="WORKSHOP"
+        events={serializedEvents}
+        inviteToken={typeof resolvedParams.inviteToken === "string" ? resolvedParams.inviteToken : undefined}
+        teamCode={typeof resolvedParams.teamCode === "string" ? resolvedParams.teamCode : undefined}
+      />
+    </Suspense>
   );
 }

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { getActiveYear } from "@/lib/edition";
 import EventCategoryPage from "@/components/features/EventCategoryPage";
@@ -14,6 +15,7 @@ export default async function SpecialEventsPage({
     where: {
       year: activeYear,
       type: "SPECIAL",
+      category: "EVENT",
       isActive: true,
       isTemplate: false,
       isArchived: false,
@@ -45,12 +47,13 @@ export default async function SpecialEventsPage({
   }));
 
   return (
-    <EventCategoryPage
-      category="SPECIAL"
-      subtitle="Backend-managed unique experiences"
-      events={serializedEvents}
-      inviteToken={typeof resolvedParams.inviteToken === "string" ? resolvedParams.inviteToken : undefined}
-      teamCode={typeof resolvedParams.teamCode === "string" ? resolvedParams.teamCode : undefined}
-    />
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading Special Events...</div>}>
+      <EventCategoryPage
+        category="SPECIAL"
+        events={serializedEvents}
+        inviteToken={typeof resolvedParams.inviteToken === "string" ? resolvedParams.inviteToken : undefined}
+        teamCode={typeof resolvedParams.teamCode === "string" ? resolvedParams.teamCode : undefined}
+      />
+    </Suspense>
   );
 }

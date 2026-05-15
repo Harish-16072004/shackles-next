@@ -27,20 +27,6 @@ function toSafeSlug(value: string) {
     .slice(0, 60) || "event";
 }
 
-function pad(value: number) {
-  return String(value).padStart(2, "0");
-}
-
-function toDateCell(date?: Date | null) {
-  if (!date) return "";
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-function toTimeCell(date?: Date | null) {
-  if (!date) return "";
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 export async function GET(request: Request) {
   const admin = await getAdminContext();
   if (!admin) {
@@ -87,13 +73,12 @@ export async function GET(request: Request) {
           },
         },
     include: {
-      event: true,
-      user: true,
+      event: { select: { name: true, type: true } },
+      user: { select: { firstName: true, lastName: true, email: true, collegeName: true, shacklesId: true } },
       team: {
         include: {
           leader: {
             select: {
-              shacklesId: true,
               firstName: true,
               lastName: true,
             },
@@ -108,55 +93,29 @@ export async function GET(request: Request) {
     stringifyCsvRow([
       "eventName",
       "eventType",
-      "eventYear",
-      "dayLabel",
-      "eventDate",
-      "eventTime",
-      "eventEndDate",
-      "eventEndTime",
-      "isAllDay",
-      "participationMode",
-      "teamMinSize",
-      "teamMaxSize",
-      "maxTeams",
-      "maxParticipants",
-      "userEmail",
-      "userFirstName",
-      "userLastName",
+      "participantName",
+      "email",
+      "collegeName",
+      "shacklesId",
       "teamName",
-      "teamStatus",
       "memberRole",
-      "teamLeaderShacklesId",
-      "teamLeaderName",
-      "teamSize",
+      "teamLeader",
       "attended",
       "attendedAt",
     ]),
     ...registrations.map((registration) =>
       stringifyCsvRow([
         registration.event.name,
-        registration.event.type,
-        registration.event.year,
-        registration.event.dayLabel,
-        toDateCell(registration.event.date),
-        toTimeCell(registration.event.date),
-        toDateCell(registration.event.endDate),
-        toTimeCell(registration.event.endDate),
-        registration.event.isAllDay,
-        registration.event.participationMode,
-        registration.event.teamMinSize,
-        registration.event.teamMaxSize,
-        registration.event.maxTeams,
-        registration.event.maxParticipants,
+        registration.event.type || "",
+        `${registration.user.firstName} ${registration.user.lastName}`.trim(),
         registration.user.email,
-        registration.user.firstName,
-        registration.user.lastName,
-        registration.teamName,
-        registration.team?.status || "",
+        registration.user.collegeName || "",
+        registration.user.shacklesId || "",
+        registration.teamName || registration.team?.name || "",
         registration.memberRole || "",
-        registration.team?.leader?.shacklesId || "",
-        registration.team?.leader ? `${registration.team.leader.firstName} ${registration.team.leader.lastName}`.trim() : "",
-        registration.teamSize,
+        registration.team?.leader
+          ? `${registration.team.leader.firstName} ${registration.team.leader.lastName}`.trim()
+          : "",
         registration.attended,
         registration.attendedAt ? registration.attendedAt.toISOString() : "",
       ])

@@ -10,7 +10,7 @@ type CountdownValue = {
   seconds: string;
 };
 
-export const REGISTRATION_TARGET_TIME = new Date("2026-04-05T10:00:00+05:30").getTime();
+export const REGISTRATION_TARGET_TIME = new Date("2026-05-23T10:00:00+05:30").getTime();
 const INITIAL_COUNTDOWN: CountdownValue = {
   days: "0",
   hours: "00",

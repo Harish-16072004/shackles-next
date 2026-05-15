@@ -18,7 +18,7 @@ interface TeamLeaderboard {
   teamName: string
   memberCount: number
   totalMarks: number
-  submittedAt: string
+  submittedAt: string | Date | null
   componentMarks: ComponentMark[]
 }
 
@@ -26,7 +26,7 @@ interface Component {
   id: string
   name: string
   order: number
-  weightPercentage: number
+  weightPercentage: number | any
   maxMarksForComponent: number
 }
 

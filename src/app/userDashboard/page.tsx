@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getQrSignedUrl } from "@/lib/storage/signed-urls";
 import Image from "next/image";
 import LiveSyncRefresher from "@/components/common/LiveSyncRefresher";
+import { encodeQrPayload } from "@/server/services/qr.service";
+import { getActiveYear } from "@/lib/edition";
 
 export default async function UserDashboardPage() {
   const session = await getSession();
@@ -28,6 +30,11 @@ export default async function UserDashboardPage() {
     redirect("/login");
   }
 
+  // Redirect staff/admin users to their proper dashboards
+  if (user.role === "ADMIN") redirect("/admin/adminDashboard");
+  if (user.role === "COORDINATOR") redirect("/staff/coordinatorDashboard");
+  if (user.role === "VOLUNTEER") redirect("/staff/volunteerDashboard");
+
   const userName = `${user.firstName} ${user.lastName}`.trim();
   const isPaymentVerified = user.payment?.status === "VERIFIED";
   const isOnSpotUser = user.payment?.captureSource === "ON_SPOT" || Boolean(user.onSpotProfile);
@@ -44,9 +51,17 @@ export default async function UserDashboardPage() {
     return !eventName.includes("workshop") && eventType !== "WORKSHOP";
   });
 
-  const qrValue = user.qrToken;
-  const generatedQrFallbackUrl = qrValue
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrValue)}`
+  const activeYear = getActiveYear();
+  const encodedQr = user.qrToken ? encodeQrPayload({
+    v: 1,
+    type: "USER",
+    uid: user.qrToken,
+    sid: user.shacklesId || undefined,
+    y: activeYear
+  }) : null;
+
+  const generatedQrFallbackUrl = encodedQr
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(encodedQr)}`
     : null;
   const qrSignedUrl = await getQrSignedUrl(user.qrPath, 300);
   const qrImageUrl = qrSignedUrl || user.qrImageUrl || generatedQrFallbackUrl;

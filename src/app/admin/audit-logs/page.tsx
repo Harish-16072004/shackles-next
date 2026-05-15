@@ -21,18 +21,20 @@ function getFailureReason(details: Record<string, unknown> | undefined) {
   return value.trim().toUpperCase();
 }
 
-export default async function AdminAuditLogsPage({ searchParams }: { searchParams?: Params }) {
+export default async function AdminAuditLogsPage({ searchParams }: { searchParams?: Promise<Params> }) {
   const session = await getSession();
   if (!session?.userId) redirect("/login");
+
+  const resolvedSearchParams = (await searchParams) ?? {};
 
   const user = await prisma.user.findUnique({ where: { id: String(session.userId) } });
   if (!user || user.role !== "ADMIN") redirect("/login");
 
-  const action = typeof searchParams?.action === "string" ? searchParams.action : "";
-  const status = typeof searchParams?.status === "string" ? searchParams.status : "";
-  const dateFrom = typeof searchParams?.dateFrom === "string" ? searchParams.dateFrom : "";
-  const dateTo = typeof searchParams?.dateTo === "string" ? searchParams.dateTo : "";
-  const q = typeof searchParams?.q === "string" ? searchParams.q.trim() : "";
+  const action = typeof resolvedSearchParams.action === "string" ? resolvedSearchParams.action : "";
+  const status = typeof resolvedSearchParams.status === "string" ? resolvedSearchParams.status : "";
+  const dateFrom = typeof resolvedSearchParams.dateFrom === "string" ? resolvedSearchParams.dateFrom : "";
+  const dateTo = typeof resolvedSearchParams.dateTo === "string" ? resolvedSearchParams.dateTo : "";
+  const q = typeof resolvedSearchParams.q === "string" ? resolvedSearchParams.q.trim() : "";
 
   const records = await readAdminAuditLogs({ action, status, dateFrom, dateTo, q, limit: 1000 });
   const actionOptions = Array.from(new Set(records.map((record) => record.action))).sort();

@@ -10,15 +10,15 @@ interface MarkingComponent {
   id: string
   name: string
   order: number
-  weightPercentage: number
+  weightPercentage: number | any
   maxMarksForComponent: number
-  description?: string
+  description?: string | null
 }
 
 interface MarkingCriteria {
   id: string
   name: string
-  description?: string
+  description?: string | null
   maxMarks: number
   numberOfJudges: number
   components: MarkingComponent[]
@@ -63,7 +63,7 @@ export function CoordinatorMarking({ eventId, teams }: CoordinatorMarkingProps) 
         const initialMarks: Record<string, Record<string, number>> = {}
         teams.forEach(team => {
           initialMarks[team.id] = {}
-          response.criteria.components.forEach((comp: MarkingComponent) => {
+          response.criteria!.components.forEach((comp: any) => {
             initialMarks[team.id][comp.id] = 0
           })
         })

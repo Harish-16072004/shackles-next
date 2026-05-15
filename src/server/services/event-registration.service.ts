@@ -148,8 +148,6 @@ export async function registerForIndividualEvent(input: {
         userEmail: user.email,
         userName: user.firstName,
         eventName: event.name,
-        eventDate: event.date?.toLocaleDateString(),
-        eventTime: event.date?.toLocaleTimeString(),
       });
     }
 

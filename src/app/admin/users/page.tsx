@@ -25,23 +25,25 @@ function formatDate(date?: Date | null) {
   }).format(date);
 }
 
-export default async function UserManagementPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+export default async function UserManagementPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await getSession();
   if (!session?.userId) {
     redirect("/login");
   }
+
+  const resolvedSearchParams = (await searchParams) ?? {};
 
   const currentUser = await prisma.user.findUnique({ where: { id: session.userId as string } });
   if (!currentUser || currentUser.role !== "ADMIN") {
     redirect("/login");
   }
 
-  const search = typeof searchParams?.q === "string" ? searchParams.q.trim() : "";
-  const regType = parseFilter<RegistrationType>(typeof searchParams?.type === "string" ? searchParams.type : undefined, ["GENERAL", "WORKSHOP", "COMBO"], undefined);
-  const paymentStatus = parseFilter<PaymentStatus>(typeof searchParams?.payment === "string" ? searchParams.payment : undefined, ["PENDING", "VERIFIED", "REJECTED"], undefined);
-  const kitStatus = parseFilter<KitStatus>(typeof searchParams?.kit === "string" ? searchParams.kit : undefined, ["PENDING", "ISSUED"], undefined);
-  const sort = typeof searchParams?.sort === "string" ? searchParams.sort : "date-desc";
-  const currentPage = Math.max(1, parseInt(typeof searchParams?.page === "string" ? searchParams.page : "1", 10) || 1);
+  const search = typeof resolvedSearchParams.q === "string" ? resolvedSearchParams.q.trim() : "";
+  const regType = parseFilter<RegistrationType>(typeof resolvedSearchParams.type === "string" ? resolvedSearchParams.type : undefined, ["GENERAL", "WORKSHOP", "COMBO"], undefined);
+  const paymentStatus = parseFilter<PaymentStatus>(typeof resolvedSearchParams.payment === "string" ? resolvedSearchParams.payment : undefined, ["PENDING", "VERIFIED", "REJECTED"], undefined);
+  const kitStatus = parseFilter<KitStatus>(typeof resolvedSearchParams.kit === "string" ? resolvedSearchParams.kit : undefined, ["PENDING", "ISSUED"], undefined);
+  const sort = typeof resolvedSearchParams.sort === "string" ? resolvedSearchParams.sort : "date-desc";
+  const currentPage = Math.max(1, parseInt(typeof resolvedSearchParams.page === "string" ? resolvedSearchParams.page : "1", 10) || 1);
 
   const where: Prisma.UserWhereInput = {
     role: { in: ["APPLICANT", "PARTICIPANT"] },

@@ -526,18 +526,20 @@ export async function lockTeam(input: LockTeamInput): Promise<LockTeamResult> {
       },
     });
 
-    // 5. Send confirmation emails to all members
-    for (const member of team.members) {
-      await sendTeamLockedEmail({
-        memberEmail: member.user.email,
-        memberName: member.user.firstName,
-        teamName: team.name,
-        eventName: team.event.name,
-        teamCode: team.teamCode,
-        submissionUrl: team.event.submissionUrl,
-        submissionDeadline: team.event.submissionDeadline,
-      });
-    }
+    // 5. Send confirmation emails to all members concurrently without failing the lock
+    await Promise.allSettled(
+      team.members.map((member) =>
+        sendTeamLockedEmail({
+          memberEmail: member.user.email,
+          memberName: member.user.firstName,
+          teamName: team.name,
+          eventName: team.event.name,
+          teamCode: team.teamCode,
+          submissionUrl: team.event.submissionUrl,
+          submissionDeadline: team.event.submissionDeadline,
+        })
+      )
+    );
 
     return {
       success: true,

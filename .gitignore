@@ -58,3 +58,6 @@ next-env.d.ts
 *.log
 *.txt
 !.env.example
+
+# IDE configurations
+.idea/

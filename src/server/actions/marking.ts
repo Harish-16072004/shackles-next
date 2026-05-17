@@ -465,6 +465,8 @@ export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSch
             })
           }
 
+          const newJudgeComponents = new Set<string>();
+
           if (tm.judgeId) {
             for (const cm of tm.componentMarks) {
               const existing = await tx.judgeMarking.findFirst({
@@ -485,6 +487,12 @@ export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSch
                     judgeId: tm.judgeId,
                     marksAwarded: cm.marks,
                   },
+                })
+                newJudgeComponents.add(cm.componentId)
+              } else {
+                await tx.judgeMarking.update({
+                  where: { id: existing.id },
+                  data: { marksAwarded: cm.marks },
                 })
               }
             }
@@ -517,7 +525,9 @@ export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSch
                 where: { id: componentMark.id },
                 data: {
                   averageMarks: finalAverage,
-                  judgeCount: tm.judgeId ? componentMark.judgeCount + 1 : 1,
+                  judgeCount: tm.judgeId 
+                    ? (newJudgeComponents.has(component.id) ? componentMark.judgeCount + 1 : componentMark.judgeCount)
+                    : 1,
                 },
               })
             } else {

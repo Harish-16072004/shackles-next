@@ -115,7 +115,7 @@ export async function restoreEventAction(formData: FormData) {
   redirect(`/admin/events?year=${encodeURIComponent(selectedYear)}&showArchived=true&formReset=${Date.now()}`);
 }
 
-export async function updateEventAction(formData: FormData) {
+export async function updateEventAction(prevState: any, formData: FormData) {
   'use server'
   const admin = await assertAdmin();
 
@@ -138,8 +138,8 @@ export async function updateEventAction(formData: FormData) {
   const isActiveRaw = formData.get("isActive") as string | null;
   const isAllDayRaw = formData.get("isAllDay") as string | null;
 
-  if (!eventId || !name) return;
-  if (!coordinatorDetails) return;
+  if (!eventId || !name) return { error: "Event ID and Name are required" };
+  if (!coordinatorDetails) return { error: "Invalid coordinator details. Please ensure names and valid Indian phone numbers are filled" };
 
   const type = typeRaw ? typeRaw.toUpperCase() : null;
   const category = categoryRaw ? (categoryRaw.toUpperCase() as "EVENT" | "WORKSHOP") : "EVENT";
@@ -157,18 +157,18 @@ export async function updateEventAction(formData: FormData) {
   const isAllDay = isAllDayRaw === "on";
   const year = Number(yearRaw);
 
-  if ((date && Number.isNaN(date.getTime())) || (endDate && Number.isNaN(endDate.getTime()))) return;
-  if (submissionDeadline && Number.isNaN(submissionDeadline.getTime())) return;
-  if (date && endDate && endDate < date) return;
-  if (!Number.isInteger(year) || year < 2000 || year > 3000) return;
+  if ((date && Number.isNaN(date.getTime())) || (endDate && Number.isNaN(endDate.getTime()))) return { error: "Invalid date format" };
+  if (submissionDeadline && Number.isNaN(submissionDeadline.getTime())) return { error: "Invalid submission deadline format" };
+  if (date && endDate && endDate < date) return { error: "End date cannot be before start date" };
+  if (!Number.isInteger(year) || year < 2000 || year > 3000) return { error: "Invalid event year" };
 
-  if (maxParticipants != null && maxParticipants < 1) return;
-  if (maxTeams != null && maxTeams < 1) return;
+  if (maxParticipants != null && maxParticipants < 1) return { error: "Max participants must be at least 1" };
+  if (maxTeams != null && maxTeams < 1) return { error: "Max teams must be at least 1" };
 
   if (participationMode === "TEAM") {
-    if (teamMinSize != null && teamMinSize < 1) return;
-    if (teamMaxSize != null && teamMaxSize < 1) return;
-    if (teamMinSize != null && teamMaxSize != null && teamMinSize > teamMaxSize) return;
+    if (teamMinSize != null && teamMinSize < 1) return { error: "Min team size must be at least 1" };
+    if (teamMaxSize != null && teamMaxSize < 1) return { error: "Max team size must be at least 1" };
+    if (teamMinSize != null && teamMaxSize != null && teamMinSize > teamMaxSize) return { error: "Min team size cannot exceed max team size" };
   }
 
   await prisma.event.update({
@@ -220,7 +220,7 @@ export async function updateEventAction(formData: FormData) {
   redirect(`/admin/events?year=${encodeURIComponent(String(year))}`);
 }
 
-export async function createEventAction(formData: FormData) {
+export async function createEventAction(prevState: any, formData: FormData) {
   'use server'
   const user = await assertAdmin();
 
@@ -262,42 +262,42 @@ export async function createEventAction(formData: FormData) {
   const year = Number(yearRaw);
 
   if (!name) {
-    return;
+    return { error: "Event name is required" };
   }
 
   if (!Number.isInteger(year) || year < 2000 || year > 3000) {
-    return;
+    return { error: "Invalid event year" };
   }
 
   if ((date && Number.isNaN(date.getTime())) || (endDate && Number.isNaN(endDate.getTime()))) {
-    return;
+    return { error: "Invalid date format" };
   }
 
   if (date && endDate && endDate < date) {
-    return;
+    return { error: "End date cannot be before start date" };
   }
 
   if (!coordinatorDetails) {
-    return;
+    return { error: "Invalid coordinator details. Please ensure names and valid Indian phone numbers are filled" };
   }
 
   if (maxParticipants != null && (!Number.isFinite(maxParticipants) || maxParticipants < 1)) {
-    return;
+    return { error: "Max participants must be at least 1" };
   }
 
   if (maxTeams != null && (!Number.isFinite(maxTeams) || maxTeams < 1)) {
-    return;
+    return { error: "Max teams must be at least 1" };
   }
 
   if (participationMode === "TEAM") {
     if (teamMinSize != null && (!Number.isFinite(teamMinSize) || teamMinSize < 1)) {
-      return;
+      return { error: "Min team size must be at least 1" };
     }
     if (teamMaxSize != null && (!Number.isFinite(teamMaxSize) || teamMaxSize < 1)) {
-      return;
+      return { error: "Max team size must be at least 1" };
     }
     if (teamMinSize != null && teamMaxSize != null && teamMinSize > teamMaxSize) {
-      return;
+      return { error: "Min team size cannot exceed max team size" };
     }
   }
 

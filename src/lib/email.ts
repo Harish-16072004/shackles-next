@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { safeLogError } from '@/lib/safe-log';
+import { safeLogError, safeLogInfo } from '@/lib/safe-log';
 
 export type InlineAttachment = {
   filename: string;
@@ -99,17 +99,17 @@ async function sendEmailHybrid(to: string, subject: string, html: string, attach
   if (resendApiKey && process.env.NODE_ENV !== 'development') {
     const result = await sendViaResend(to, subject, html, attachments);
     if (result.success) {
-      console.log(`[EMAIL] Sent via Resend to ${to}`);
+      safeLogInfo('[EMAIL]', `Sent via Resend to ${to}`);
       return { success: true };
     }
-    console.warn(`[EMAIL] Resend failed (${result.error}), falling back to Nodemailer`);
+    safeLogInfo('[EMAIL] Warning', `Resend failed (${result.error}), falling back to Nodemailer`);
   }
   const result = await sendViaNodemailer(to, subject, html, attachments);
   if (result.success) {
-    console.log(`[EMAIL] Sent via Nodemailer to ${to}`);
+    safeLogInfo('[EMAIL]', `Sent via Nodemailer to ${to}`);
     return { success: true };
   }
-  console.error(`[EMAIL] Both transports failed for ${to}: ${result.error}`);
+  safeLogError('[EMAIL] Error', new Error(`Both transports failed for ${to}: ${result.error}`));
   return { success: false, error: result.error };
 }
 

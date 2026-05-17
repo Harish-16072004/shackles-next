@@ -1,4 +1,6 @@
-import React from 'react';
+'use client';
+
+import React, { useActionState } from 'react';
 import { Prisma } from '@prisma/client';
 import { 
   updateEventAction, 
@@ -35,6 +37,16 @@ export function EventModals({
   const [editingCoordinatorName1, editingCoordinatorName2, editingCoordinatorName3] = splitCoordinatorField(editingEvent?.coordinatorName);
   const [editingCoordinatorPhone1, editingCoordinatorPhone2, editingCoordinatorPhone3] = splitCoordinatorField(editingEvent?.coordinatorPhone);
 
+  const [createState, createAction, isCreatePending] = useActionState(
+    createEventAction,
+    null
+  );
+
+  const [updateState, updateAction, isUpdatePending] = useActionState(
+    updateEventAction,
+    null
+  );
+
   return (
     <>
       {editingEvent && (
@@ -49,7 +61,12 @@ export function EventModals({
                 Close Form
               </a>
             </div>
-            <form action={updateEventAction} className="space-y-3">
+            <form action={updateAction} className="space-y-3">
+              {updateState?.error && (
+                <div className="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-lg font-medium">
+                  {updateState.error}
+                </div>
+              )}
               <input type="hidden" name="eventId" value={editingEvent.id} />
               <input type="hidden" name="year" value={editingEvent.year} />
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -188,7 +205,9 @@ export function EventModals({
                 </div>
               </div>
               <div className="flex justify-end">
-                <button type="submit" className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800">Update Event</button>
+                <button type="submit" disabled={isUpdatePending} className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50 transition-all">
+                  {isUpdatePending ? 'Updating...' : 'Update Event'}
+                </button>
               </div>
             </form>
           </div>
@@ -211,7 +230,12 @@ export function EventModals({
               </a>
             </div>
 
-            <form key={formReset} action={createEventAction} className="space-y-6" autoComplete="off">
+            <form key={formReset} action={createAction} className="space-y-6" autoComplete="off">
+              {createState?.error && (
+                <div className="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-lg font-medium">
+                  {createState.error}
+                </div>
+              )}
               <input type="hidden" name="year" value={selectedYear} />
               <input type="hidden" name="category" value={createType} />
               
@@ -378,9 +402,10 @@ export function EventModals({
                 </a>
                 <button 
                   type="submit"
-                  className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-gray-900 text-white shadow-lg hover:bg-gray-800 transition-all hover:shadow-xl active:scale-95"
+                  disabled={isCreatePending}
+                  className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-gray-900 text-white shadow-lg hover:bg-gray-800 transition-all hover:shadow-xl active:scale-95 disabled:opacity-50"
                 >
-                  Create {createType === 'WORKSHOP' ? 'Workshop' : 'Event'}
+                  {isCreatePending ? 'Creating...' : `Create ${createType === 'WORKSHOP' ? 'Workshop' : 'Event'}`}
                 </button>
               </div>
             </form>

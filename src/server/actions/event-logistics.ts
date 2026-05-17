@@ -1154,60 +1154,70 @@ export async function scannerCreateTeam(input: {
     }
 
     const normalizedName = normalizeTeamName(teamName);
-    const teamCode = await generateUniqueTeamCode(prisma, eventId);
-
-    const existingTeamName = await prisma.team.findUnique({
-      where: { eventId_nameNormalized: { eventId, nameNormalized: normalizedName } },
-    });
-
-    if (existingTeamName) {
-      return { success: false, error: "A team with this name already exists" };
-    }
-
     const session = await getSession();
     const isLocked = lockStatus === "LOCKED";
     const isFull = totalSize === event.teamMaxSize;
     const finalStatus = (isLocked || isFull) ? "LOCKED" : "OPEN";
 
-    const team = await prisma.team.create({
-      data: {
-        eventId,
-        name: teamName,
-        nameNormalized: normalizedName,
-        teamCode,
-        status: finalStatus,
-        leaderUserId: captain.id,
-        leaderContactEmailSnapshot: captain.email,
-        leaderContactPhoneSnapshot: captain.phone,
-        memberCount: totalSize,
-        lockedAt: (isLocked || isFull) ? new Date() : null,
-        lockedBy: (isLocked || isFull) ? String(session?.userId || "") : null,
-      },
-    });
+    const result = await prisma.$transaction(async (tx) => {
+      const existingTeamName = await tx.team.findUnique({
+        where: { eventId_nameNormalized: { eventId, nameNormalized: normalizedName } },
+      });
 
-    const allTeamUserIds = [captain.id, ...memberIds];
-    await prisma.eventRegistration.createMany({
-      data: allTeamUserIds.map((userId) => ({
-        userId,
-        eventId,
+      if (existingTeamName) {
+        throw new Error("A_TEAM_WITH_THIS_NAME_ALREADY_EXISTS");
+      }
+
+      const teamCode = await generateUniqueTeamCode(tx, eventId);
+
+      const team = await tx.team.create({
+        data: {
+          eventId,
+          name: teamName,
+          nameNormalized: normalizedName,
+          teamCode,
+          status: finalStatus,
+          leaderUserId: captain.id,
+          leaderContactEmailSnapshot: captain.email,
+          leaderContactPhoneSnapshot: captain.phone,
+          memberCount: totalSize,
+          lockedAt: (isLocked || isFull) ? new Date() : null,
+          lockedBy: (isLocked || isFull) ? String(session?.userId || "") : null,
+        },
+      });
+
+      const allTeamUserIds = [captain.id, ...memberIds];
+      await tx.eventRegistration.createMany({
+        data: allTeamUserIds.map((userId) => ({
+          userId,
+          eventId,
+          teamId: team.id,
+          year: activeYear,
+          attended: false,
+          memberRole: userId === captain.id ? "LEADER" : "MEMBER",
+          teamName: teamName,
+          teamSize: totalSize,
+          source: "ONLINE" as const,
+          syncStatus: "APPLIED" as const,
+        })),
+      });
+
+      return {
+        success: true,
         teamId: team.id,
-        year: activeYear,
-        attended: false,
-        memberRole: userId === captain.id ? "LEADER" : "MEMBER",
-        teamName: teamName,
-        teamSize: totalSize,
-        source: "ONLINE" as const,
-        syncStatus: "APPLIED" as const,
-      })),
+        totalMembers: totalSize,
+        message: isLocked ? "Team created and locked successfully." : `Draft team "${teamName}" saved successfully.`,
+      };
     });
 
-    return {
-      success: true,
-      teamId: team.id,
-      totalMembers: totalSize,
-      message: isLocked ? "Team created and locked successfully." : `Draft team "${teamName}" saved successfully.`,
-    };
-  } catch (error) {
+    return result;
+  } catch (error: any) {
+    if (error.code === "P2002") {
+      return { success: false, error: "A team with this name already exists" };
+    }
+    if (error.message === "A_TEAM_WITH_THIS_NAME_ALREADY_EXISTS") {
+      return { success: false, error: "A team with this name already exists" };
+    }
     console.error("Create Team Error:", error);
     return { success: false, error: "Internal Server Error" };
   }

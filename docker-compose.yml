@@ -18,6 +18,20 @@ services:
       timeout: 5s
       retries: 5
 
+  # Run Prisma migrations automatically
+  init-db:
+    image: node:20-alpine
+    container_name: shackles-init-db
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/shackles_local
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "npm install && npx prisma migrate dev --name init"
+
   # Redis cache for rate limiting and caching
   redis:
     image: redis:7-alpine

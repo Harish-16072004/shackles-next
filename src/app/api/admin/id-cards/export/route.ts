@@ -148,7 +148,7 @@ export async function GET(request: Request) {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(`${filename}`)}`,
       "Content-Length": String(pdfBuffer.byteLength),
       "Cache-Control": "no-store",
     },

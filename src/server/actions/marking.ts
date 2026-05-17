@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { executeSafeAction } from '@/lib/safe-action'
+import { getSession } from '@/lib/session'
 import { Permission, Role } from '@prisma/client'
 import { z } from 'zod'
 import { broadcastLeaderboardUpdate } from '@/lib/leaderboard-broadcast'
@@ -114,7 +115,12 @@ export async function createMarkingCriteria(
  * Get marking criteria and components for an event
  */
 export async function getMarkingCriteria(eventId: string) {
-  return executeSafeAction({ permission: Permission.MANAGE_SCORES }, async (session) => {
+  try {
+    const session = await getSession();
+    if (!session?.userId || (session.role !== 'ADMIN' && session.role !== 'COORDINATOR')) {
+      return { success: false, error: 'Unauthorized to manage marking criteria' };
+    }
+
     const criteria = await prisma.markingCriteria.findUnique({
       where: { eventId },
       include: {
@@ -125,11 +131,13 @@ export async function getMarkingCriteria(eventId: string) {
     })
 
     if (!criteria) {
-      throw new Error('No marking criteria found for this event')
+      return { success: false, error: 'No marking criteria found for this event' };
     }
 
     return {
-      id: criteria.id,
+      success: true,
+      data: {
+        id: criteria.id,
       name: criteria.name,
       description: criteria.description,
       maxMarks: criteria.maxMarks,
@@ -142,9 +150,13 @@ export async function getMarkingCriteria(eventId: string) {
         maxMarksForComponent: c.maxMarksForComponent,
         order: c.order,
       })),
-      createdAt: criteria.createdAt,
-    }
-  })
+        createdAt: criteria.createdAt,
+      }
+    };
+  } catch (error: any) {
+    console.error("getMarkingCriteria error:", error);
+    return { success: false, error: "An unexpected error occurred" };
+  }
 }
 
 /**
@@ -431,17 +443,16 @@ export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSch
       componentMarksCount?: number;
     }> = []
 
-    await prisma.$transaction(async (tx) => {
-      for (const tm of teamMarks) {
-        try {
+    for (const tm of teamMarks) {
+      try {
+        await prisma.$transaction(async (tx) => {
           const team = await tx.team.findFirst({
             where: { id: tm.teamId, eventId },
             select: { id: true, name: true },
           })
 
           if (!team) {
-            results.push({ teamId: tm.teamId, success: false, error: 'Team not found for this event' })
-            continue
+            throw new Error('Team not found for this event')
           }
 
           let teamMark = await tx.teamMark.findFirst({
@@ -486,9 +497,6 @@ export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSch
             const marksForComponent = tm.componentMarks.find(m => m.componentId === component.id)
             if (!marksForComponent) continue
 
-            const weighted = (marksForComponent.marks / component.maxMarksForComponent) * Number(component.weightPercentage)
-            totalMarks += weighted
-
             let finalAverage = marksForComponent.marks
             if (tm.judgeId) {
               const allJudgeMarks = await tx.judgeMarking.findMany({
@@ -496,6 +504,9 @@ export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSch
               })
               finalAverage = allJudgeMarks.reduce((s, j) => s + Number(j.marksAwarded), 0) / allJudgeMarks.length
             }
+
+            const weighted = (finalAverage / component.maxMarksForComponent) * Number(component.weightPercentage)
+            totalMarks += weighted
 
             const componentMark = await tx.componentMark.findFirst({
               where: { teamMarkId: teamMark.id, componentId: component.id },
@@ -523,6 +534,9 @@ export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSch
             componentUpdates.push({ componentId: component.id, marks: marksForComponent.marks })
           }
 
+          // Scale from percentage (since weights sum to 100) to actual criteria.maxMarks
+          totalMarks = (totalMarks / 100) * criteria.maxMarks
+
           await tx.teamMark.update({
             where: { id: teamMark.id },
             data: { totalMarks, isSubmitted: true, submittedAt: new Date() },
@@ -535,12 +549,12 @@ export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSch
             totalMarks,
             componentMarksCount: componentUpdates.length,
           })
-        } catch (error) {
-          console.error(`Error submitting marks for team ${tm.teamId}:`, error)
-          results.push({ teamId: tm.teamId, success: false, error: 'Failed to submit marks' })
-        }
+        })
+      } catch (error: any) {
+        console.error(`Error submitting marks for team ${tm.teamId}:`, error)
+        results.push({ teamId: tm.teamId, success: false, error: error.message || 'Failed to submit marks' })
       }
-    })
+    }
 
     const succeeded = results.filter(r => r.success).length
     const failed = results.length - succeeded

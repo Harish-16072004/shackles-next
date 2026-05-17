@@ -118,9 +118,15 @@ export async function sendTeamCreatedEmail(input: {
       <p>Hi <strong>${leaderName}</strong>, your team <strong>${teamName}</strong>
          for <strong>${eventName}</strong> has been created!</p>
 
-      <div style="margin-top:20px;padding:16px;background:#f5f5f5;border-radius:8px">
-        <p style="margin:0 0 6px;font-size:13px;color:#555">Team Code</p>
-        <p style="margin:0;font-size:28px;font-weight:700;letter-spacing:4px;font-family:monospace">${teamCode}</p>
+      <div style="margin-top:20px;padding:16px;background:#f5f5f5;border-radius:8px;display:flex;gap:24px">
+        <div>
+          <p style="margin:0 0 6px;font-size:13px;color:#555">Team Code</p>
+          <p style="margin:0;font-size:24px;font-weight:700;letter-spacing:2px;font-family:monospace">${teamCode}</p>
+        </div>
+        <div>
+          <p style="margin:0 0 6px;font-size:13px;color:#555">Join Code</p>
+          <p style="margin:0;font-size:24px;font-weight:700;letter-spacing:2px;font-family:monospace">${escapeHtml(input.joinCode)}</p>
+        </div>
       </div>
 
       <p style="margin-top:16px;font-size:13px;color:#555">

@@ -6,6 +6,7 @@ import QRCode from "qrcode";
 import { getStorageProvider, shouldUseDigitalOcean, shouldUseLocal } from "@/lib/storage-provider";
 import { uploadToSpaces } from "@/lib/digitalocean/spaces";
 import { encodeQrPayload } from "@/server/services/qr.service";
+import { safeLogInfo, safeLogError } from "@/lib/safe-log";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -87,16 +88,16 @@ async function processQRGeneration(job: Job<QRJobData>) {
           eventYear: year,
           qrImageBuffer: qrBuffer,
         });
-        console.log(`[QRWorker] Payment verification email (with QR) sent to ${user.email}`);
+        safeLogInfo('[QRWorker]', `Payment verification email (with QR) sent to ${user.email}`);
       }
     } catch (emailError) {
       // Non-fatal: QR was generated successfully, just log the email failure
-      console.error(`[QRWorker] Failed to send verification email for ${userId}:`, emailError);
+      safeLogError(`[QRWorker] Failed to send verification email for ${userId}`, emailError);
     }
 
     return { success: true, qrPath };
   } catch (error) {
-    console.error(`[QRWorker] Failed to process job ${job.id}:`, error);
+    safeLogError(`[QRWorker] Failed to process job ${job.id}`, error);
     throw error;
   }
 }
@@ -111,9 +112,9 @@ export const qrWorker = new Worker(
 );
 
 qrWorker.on("completed", (job) => {
-  console.log(`[QRWorker] Job ${job.id} completed successfully`);
+  safeLogInfo('[QRWorker]', `Job ${job.id} completed successfully`);
 });
 
 qrWorker.on("failed", (job, err) => {
-  console.error(`[QRWorker] Job ${job?.id} failed:`, err);
+  safeLogError(`[QRWorker] Job ${job?.id} failed`, err);
 });

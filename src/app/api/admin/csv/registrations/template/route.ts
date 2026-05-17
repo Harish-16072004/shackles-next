@@ -74,7 +74,7 @@ export async function GET(request: Request) {
   return new Response(stringifyCsvRow(headers), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${fileName}"`,
+      "Content-Disposition": `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(`${fileName}`)}`,
       "Cache-Control": "no-store",
     },
   });

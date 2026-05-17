@@ -69,7 +69,7 @@ export async function GET(request: Request) {
   return new Response(lines.join("\n"), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="audit-logs-${new Date().toISOString().slice(0, 10)}.csv"`,
+      "Content-Disposition": `attachment; filename="audit-logs-${new Date().toISOString().slice(0, 10)}.csv"; filename*=UTF-8''${encodeURIComponent(`audit-logs-${new Date().toISOString().slice(0, 10)}.csv`)}`,
       "Cache-Control": "no-store",
     },
   });

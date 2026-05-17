@@ -64,6 +64,36 @@ async function processQRGeneration(job: Job<QRJobData>) {
       },
     });
 
+    // 5. Send Payment Verified Email (with QR code embedded inline)
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          email: true,
+          firstName: true,
+          lastName: true,
+          shacklesId: true,
+          payment: { select: { packageType: true } },
+        },
+      });
+
+      if (user?.email && user.shacklesId) {
+        const { sendPaymentVerificationEmail } = await import("@/server/services/email.service");
+        await sendPaymentVerificationEmail({
+          userEmail: user.email,
+          userName: `${user.firstName} ${user.lastName}`.trim(),
+          shacklesId: user.shacklesId,
+          packageType: user.payment?.packageType || "EVENT_ONLY",
+          eventYear: year,
+          qrImageBuffer: qrBuffer,
+        });
+        console.log(`[QRWorker] Payment verification email (with QR) sent to ${user.email}`);
+      }
+    } catch (emailError) {
+      // Non-fatal: QR was generated successfully, just log the email failure
+      console.error(`[QRWorker] Failed to send verification email for ${userId}:`, emailError);
+    }
+
     return { success: true, qrPath };
   } catch (error) {
     console.error(`[QRWorker] Failed to process job ${job.id}:`, error);

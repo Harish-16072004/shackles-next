@@ -150,6 +150,14 @@ export function EventModals({
                     <input name="rulesUrl" defaultValue={editingEvent.rulesUrl || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-gray-700">
+                    Submission Form URL
+                    <input name="submissionUrl" placeholder="e.g. Google Forms link" defaultValue={editingEvent.submissionUrl || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm text-gray-700">
+                    Submission Deadline
+                    <input type="datetime-local" name="submissionDeadline" defaultValue={toDateTimeLocalValue(editingEvent.submissionDeadline)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm text-gray-700">
                     Trainer Name (Workshops)
                     <input name="trainerName" defaultValue={editingEvent.trainerName || ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-900" />
                   </label>
@@ -318,6 +326,16 @@ export function EventModals({
                     Rules URL
                     <input name="rulesUrl" placeholder="Link to document (optional)" className="border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-gray-900 outline-hidden" />
                   </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <label className="flex flex-col gap-1.5 text-sm font-semibold text-gray-700">
+                      Submission URL
+                      <input name="submissionUrl" placeholder="Google Forms Link" className="border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-gray-900 outline-hidden" />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-sm font-semibold text-gray-700">
+                      Submission Deadline
+                      <input type="datetime-local" name="submissionDeadline" className="border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-gray-900 outline-hidden" />
+                    </label>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <label className="flex flex-col gap-1.5 text-sm font-semibold text-gray-700">
                       Coordinator 1 Name*

@@ -43,9 +43,21 @@ export default function StaffManagementPage() {
           listAvailableEvents(),
         ])
 
-        if (staffRes.success) setStaffUsers(staffRes.data.staff || [])
-        if (eventsRes.success) setEvents(eventsRes.data.events || [])
+        if (staffRes.success) {
+          setStaffUsers(staffRes.data.staff || [])
+        } else {
+          console.error('[StaffMgmt] listStaffUsers failed:', staffRes)
+          setMessage({ type: 'error', text: `Failed to load staff: ${staffRes.error || 'Unknown error'}` })
+        }
+
+        if (eventsRes.success) {
+          setEvents(eventsRes.data.events || [])
+        } else {
+          console.error('[StaffMgmt] listAvailableEvents failed:', eventsRes)
+          setMessage({ type: 'error', text: `Failed to load events: ${eventsRes.error || 'Unknown error'}` })
+        }
       } catch (error) {
+        console.error('[StaffMgmt] loadData error:', error)
         setMessage({ type: 'error', text: 'Failed to load data' })
       } finally {
         setLoading(false)

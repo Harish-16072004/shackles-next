@@ -138,7 +138,7 @@ export async function getMarkingCriteria(eventId: string) {
         id: c.id,
         name: c.name,
         description: c.description,
-        weightPercentage: c.weightPercentage,
+        weightPercentage: Number(c.weightPercentage),
         maxMarksForComponent: c.maxMarksForComponent,
         order: c.order,
       })),
@@ -309,7 +309,10 @@ export async function getLeaderboard(eventId: string) {
       leaderboard: {
         eventId,
         maxMarks: criteria.maxMarks,
-        components: criteria.components,
+        components: criteria.components.map(c => ({
+          ...c,
+          weightPercentage: Number(c.weightPercentage),
+        })),
         teams: criteria.teamMarks.map((tm, index) => ({
           rank: index + 1,
           teamId: tm.team.id,
@@ -356,7 +359,10 @@ export async function fetchCriteriaForCoordinator(eventId: string) {
         description: criteria.description,
         maxMarks: criteria.maxMarks,
         numberOfJudges: criteria.numberOfJudges,
-        components: criteria.components,
+        components: criteria.components.map(c => ({
+          ...c,
+          weightPercentage: Number(c.weightPercentage),
+        })),
         createdAt: criteria.createdAt,
         updatedAt: criteria.updatedAt,
       },
@@ -671,7 +677,10 @@ export async function getLeaderboardData(eventId: string) {
         criteriaName: criteria.name,
         maxMarks: criteria.maxMarks,
         numberOfJudges: criteria.numberOfJudges,
-        components: criteria.components,
+        components: criteria.components.map(c => ({
+          ...c,
+          weightPercentage: Number(c.weightPercentage),
+        })),
         teams: leaderboard,
         totalTeamsSubmitted: leaderboard.length,
       },

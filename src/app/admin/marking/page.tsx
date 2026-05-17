@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSession, requireEventStaff } from "@/lib/session";
 import { getActiveYear } from "@/lib/edition";
 import { ScoringSetup } from "@/components/features/ScoringSetup";
+import { LeaderboardView } from "@/components/features/LeaderboardView";
 
 export default async function AdminMarkingPage({
   searchParams,
@@ -13,11 +14,18 @@ export default async function AdminMarkingPage({
   const isAdmin = session.role === "ADMIN";
 
   const resolvedParams = (await searchParams) ?? {};
-  const eventId =
+  const scoringEventId =
+    typeof resolvedParams.scoring === "string" ? resolvedParams.scoring : null;
+  const leaderboardEventId =
+    typeof resolvedParams.leaderboard === "string" ? resolvedParams.leaderboard : null;
+  // Keep legacy support
+  const legacyEventId =
     typeof resolvedParams.eventId === "string" ? resolvedParams.eventId : null;
 
+  const activeEventId = scoringEventId || legacyEventId;
+
   if (!isAdmin) {
-    if (!eventId) {
+    if (!activeEventId) {
       return (
         <div className="p-8 text-center text-red-600">
           <p>Please select an event from your dashboard to mark.</p>
@@ -27,8 +35,7 @@ export default async function AdminMarkingPage({
         </div>
       );
     }
-    // Verify they are staff for this event
-    await requireEventStaff(eventId, "MANAGE_SCORES");
+    await requireEventStaff(activeEventId, "MANAGE_SCORES");
   }
 
   const activeYear = getActiveYear();
@@ -48,7 +55,8 @@ export default async function AdminMarkingPage({
     orderBy: [{ date: "asc" }, { name: "asc" }],
   });
 
-  const selectedEvent = eventId ? events.find((e) => e.id === eventId) : null;
+  const selectedScoringEvent = activeEventId ? events.find((e) => e.id === activeEventId) : null;
+  const selectedLeaderboardEvent = leaderboardEventId ? events.find((e) => e.id === leaderboardEventId) : null;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">
@@ -58,7 +66,7 @@ export default async function AdminMarkingPage({
             Marking & Scoring
           </h1>
           <p className="text-gray-600 mt-2 text-sm sm:text-base">
-            {isAdmin ? `Configure criteria and review live marks for SHACKLES ${activeYear} events.` : `Allocate marks for ${selectedEvent?.name}.`}
+            {isAdmin ? `Configure criteria and review live marks for SHACKLES ${activeYear} events.` : `Allocate marks for ${selectedScoringEvent?.name}.`}
           </p>
         </div>
 
@@ -133,14 +141,14 @@ export default async function AdminMarkingPage({
 
                     <div className="flex flex-wrap gap-2">
                       <Link
-                        href={`/admin/marking?eventId=${event.id}`}
-                        className="px-3 py-2 rounded-md bg-violet-100 text-violet-800 text-sm font-semibold hover:bg-violet-200"
+                        href={`/admin/marking?scoring=${event.id}`}
+                        className="px-3 py-2 rounded-md bg-violet-100 text-violet-800 text-sm font-semibold hover:bg-violet-200 transition-colors"
                       >
                         Scoring Setup
                       </Link>
                       <Link
-                        href={`/admin/liveDashboard?eventId=${event.id}`}
-                        className="px-3 py-2 rounded-md bg-lime-100 text-lime-800 text-sm font-semibold hover:bg-lime-200"
+                        href={`/admin/marking?leaderboard=${event.id}`}
+                        className="px-3 py-2 rounded-md bg-lime-100 text-lime-800 text-sm font-semibold hover:bg-lime-200 transition-colors"
                       >
                         Live Leaderboard
                       </Link>
@@ -152,23 +160,56 @@ export default async function AdminMarkingPage({
           </div>
         )}
 
-        {selectedEvent && (
-          <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900">
-                Scoring Setup — {selectedEvent.name}
-              </h2>
-              <Link
-                href="/admin/marking"
-                className="text-sm text-gray-500 hover:text-gray-800"
-              >
-                ✕ Close
-              </Link>
+        {/* ─── Scoring Setup Modal ──────────────────────────────────────────── */}
+        {selectedScoringEvent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-gray-900/60 backdrop-blur-sm overflow-y-auto">
+            <div className="relative w-full max-w-3xl my-auto bg-white border-2 border-gray-900 rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Scoring Setup — {selectedScoringEvent.name}
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Configure marking criteria and scoring components
+                  </p>
+                </div>
+                <Link
+                  href="/admin/marking"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                >
+                  ✕
+                </Link>
+              </div>
+              <ScoringSetup
+                eventId={selectedScoringEvent.id}
+                eventName={selectedScoringEvent.name}
+              />
             </div>
-            <ScoringSetup
-              eventId={selectedEvent.id}
-              eventName={selectedEvent.name}
-            />
+          </div>
+        )}
+
+        {/* ─── Live Leaderboard Modal ──────────────────────────────────────── */}
+        {selectedLeaderboardEvent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-gray-900/60 backdrop-blur-sm overflow-y-auto">
+            <div className="relative w-full max-w-5xl my-auto bg-white border-2 border-gray-900 rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Live Leaderboard — {selectedLeaderboardEvent.name}
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Real-time aggregated marks and ranking
+                  </p>
+                </div>
+                <Link
+                  href="/admin/marking"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                >
+                  ✕
+                </Link>
+              </div>
+              <LeaderboardView eventId={selectedLeaderboardEvent.id} />
+            </div>
           </div>
         )}
       </div>

@@ -68,14 +68,24 @@ export default function EventRegistrationCard({ event }: { event: EventWithRegis
             </h3>
           </div>
           {/* CSV download — stops propagation so it doesn't trigger Link */}
-          <a
-            href={`/api/admin/csv/registrations/export?eventId=${encodeURIComponent(event.id)}`}
-            onClick={(e) => e.stopPropagation()}
-            title="Download CSV"
-            className="shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors"
-          >
-            <Download size={15} />
-          </a>
+          <div className="flex gap-2 shrink-0">
+            <a
+              href={`/api/admin/csv/attendance/export?eventId=${encodeURIComponent(event.id)}`}
+              onClick={(e) => e.stopPropagation()}
+              title="Download Attendance CSV"
+              className="p-2 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50 transition-colors flex items-center justify-center"
+            >
+              <CheckCircle2 size={15} />
+            </a>
+            <a
+              href={`/api/admin/csv/registrations/export?eventId=${encodeURIComponent(event.id)}`}
+              onClick={(e) => e.stopPropagation()}
+              title="Download Full CSV"
+              className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors flex items-center justify-center"
+            >
+              <Download size={15} />
+            </a>
+          </div>
         </div>
 
         {/* Stats row */}

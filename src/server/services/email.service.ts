@@ -5,7 +5,7 @@
  * All user-controlled strings are HTML-escaped before injection.
  */
 
-import { sendEmailHybrid } from '@/lib/email';
+import { sendEmailHybrid, type InlineAttachment } from '@/lib/email';
 import { safeLogError } from '@/lib/safe-log';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -25,37 +25,70 @@ function escapeHtml(str: string): string {
 export async function sendPaymentVerificationEmail(input: {
   userEmail: string;
   userName: string;
+  shacklesId: string;
   packageType: string;
-  qrCodeUrl?: string;
   eventYear: number;
+  qrImageBuffer?: Buffer;
 }): Promise<{ success: boolean; error?: string }> {
   const userName = escapeHtml(input.userName);
+  const shacklesId = escapeHtml(input.shacklesId);
   const packageLabel = escapeHtml(
     ({ EVENT_ONLY: 'Event Only', WORKSHOP_ONLY: 'Workshop Only', COMBO: 'Combo (Events & Workshops)' } as Record<string, string>)[input.packageType] ?? input.packageType
   );
+  const dashboardUrl = `${appUrl}/userDashboard`;
 
-  const qrSection = input.qrCodeUrl
-    ? `<p style="margin-top:16px;font-size:13px;color:#555">Your personal QR code:</p>
-       <img src="${escapeHtml(input.qrCodeUrl)}" alt="Your QR Code"
-            style="display:block;margin-top:8px;width:160px;height:160px" />`
-    : '';
+  const qrSection = input.qrImageBuffer
+    ? `<div style="margin-top:20px;text-align:center">
+         <p style="margin:0 0 8px;font-size:13px;color:#555">Your Event QR Code</p>
+         <img src="cid:qrcode" alt="Your QR Code"
+              style="display:block;margin:0 auto;width:200px;height:200px;border:1px solid #e0e0e0;border-radius:8px" />
+         <p style="margin-top:8px;font-size:11px;color:#999">Show this QR at all stations</p>
+       </div>`
+    : `<p style="margin-top:16px;font-size:13px;color:#555">
+         Your QR code is ready on your dashboard. You'll need it at all stations for kit collection, attendance, and event access.
+       </p>`;
 
   const html = `
-    <div style="font-family:sans-serif;padding:24px;max-width:480px">
+    <div style="font-family:sans-serif;padding:24px;max-width:480px;margin:0 auto">
       <h2 style="margin-bottom:8px">Payment Verified ✓</h2>
       <p>Hi <strong>${userName}</strong>, your payment for Shackles Symposium ${input.eventYear} has been verified.</p>
-      <p style="margin-top:8px">Package: <strong>${packageLabel}</strong></p>
+
+      <div style="margin-top:20px;padding:16px;background:#f5f5f5;border-radius:8px;text-align:center">
+        <p style="margin:0 0 6px;font-size:13px;color:#555">Your Shackles ID</p>
+        <p style="margin:0;font-size:28px;font-weight:700;letter-spacing:2px;font-family:monospace">${shacklesId}</p>
+      </div>
+
+      <p style="margin-top:16px">Package: <strong>${packageLabel}</strong></p>
+
       ${qrSection}
-      <p style="margin-top:20px;font-size:13px;color:#555">
-        Use your QR code at all stations for kit, attendance, and resource access.
-      </p>
+
+      <a href="${dashboardUrl}"
+         style="display:inline-block;margin-top:16px;padding:10px 24px;background:#000;color:#fff;text-decoration:none;border-radius:6px">
+        View Dashboard
+      </a>
+
       <p style="margin-top:20px;font-size:12px;color:#888">
         Questions? <a href="mailto:${supportEmail}" style="color:#000">${supportEmail}</a>
       </p>
     </div>`;
 
+  const attachments: InlineAttachment[] = [];
+  if (input.qrImageBuffer) {
+    attachments.push({
+      filename: 'qr-code.png',
+      content: input.qrImageBuffer,
+      contentType: 'image/png',
+      cid: 'qrcode',
+    });
+  }
+
   try {
-    return await sendEmailHybrid(input.userEmail, `Payment Verified — Shackles Symposium ${input.eventYear}`, html);
+    return await sendEmailHybrid(
+      input.userEmail,
+      `Payment Verified — Shackles Symposium ${input.eventYear}`,
+      html,
+      attachments.length > 0 ? attachments : undefined
+    );
   } catch (err) {
     safeLogError('sendPaymentVerificationEmail error', err, { email: input.userEmail });
     return { success: false, error: 'Failed to send payment verification email' };
@@ -122,11 +155,33 @@ export async function sendTeamLockedEmail(input: {
   teamName: string;
   eventName: string;
   teamCode: string;
+  submissionUrl?: string | null;
+  submissionDeadline?: Date | null;
 }): Promise<{ success: boolean; error?: string }> {
   const memberName = escapeHtml(input.memberName);
   const teamName = escapeHtml(input.teamName);
   const eventName = escapeHtml(input.eventName);
   const teamCode = escapeHtml(input.teamCode);
+
+  let submissionBlock = '';
+  if (input.submissionUrl) {
+    const deadlineText = input.submissionDeadline
+      ? `by <strong>${input.submissionDeadline.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</strong>`
+      : 'as soon as possible';
+
+    submissionBlock = `
+      <div style="margin-top:24px;padding:20px;border:1px solid #e0e0e0;border-radius:8px;background:#fefefe">
+        <h3 style="margin:0 0 12px;font-size:16px;color:#d32f2f">Next Steps: Submit Your Document</h3>
+        <p style="margin:0 0 16px;font-size:14px;color:#333">
+          This event requires a document submission. Please ensure you upload your abstract/presentation ${deadlineText}.
+        </p>
+        <a href="${escapeHtml(input.submissionUrl)}"
+           style="display:inline-block;padding:10px 20px;background:#000;color:#fff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600">
+          Upload Submission
+        </a>
+      </div>
+    `;
+  }
 
   const html = `
     <div style="font-family:sans-serif;padding:24px;max-width:480px">
@@ -136,6 +191,9 @@ export async function sendTeamLockedEmail(input: {
       <p style="margin-top:12px;font-size:13px;color:#555">
         Team Code: <strong style="font-family:monospace;font-size:16px">${teamCode}</strong>
       </p>
+
+      ${submissionBlock}
+
       <p style="margin-top:20px;font-size:13px;color:#555">See you at the event!</p>
       <p style="margin-top:20px;font-size:12px;color:#888">
         Questions? <a href="mailto:${supportEmail}" style="color:#000">${supportEmail}</a>

@@ -1,6 +1,13 @@
 import nodemailer from 'nodemailer';
 import { safeLogError } from '@/lib/safe-log';
 
+export type InlineAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+  cid: string; // Content-ID for inline reference: <img src="cid:xxx">
+};
+
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const resendApiKey = process.env.RESEND_API_KEY;
 const smtpHost = process.env.SMTP_HOST || '';
@@ -25,21 +32,41 @@ function getTransporter(): nodemailer.Transporter {
   return _transporter;
 }
 
-async function sendViaResend(to: string, subject: string, html: string): Promise<{ success: boolean; error?: string }> {
+async function sendViaResend(to: string, subject: string, html: string, attachments?: InlineAttachment[]): Promise<{ success: boolean; error?: string }> {
   if (!resendApiKey) return { success: false, error: 'Resend API key not configured' };
   try {
+    const payload: Record<string, unknown> = {
+      from: process.env.RESEND_FROM_EMAIL || 'noreply@shackles.com',
+      to,
+      subject,
+      html,
+    };
+
+    if (attachments?.length) {
+      payload.attachments = attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content.toString('base64'),
+        content_type: a.contentType,
+      }));
+      // Resend doesn't support CID natively — convert cid refs to base64 data URIs as fallback
+      let processedHtml = html;
+      for (const a of attachments) {
+        processedHtml = processedHtml.replace(
+          new RegExp(`cid:${a.cid}`, 'g'),
+          `data:${a.contentType};base64,${a.content.toString('base64')}`
+        );
+      }
+      payload.html = processedHtml;
+      delete payload.attachments; // Use data URI instead for Resend
+    }
+
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${resendApiKey}`,
       },
-      body: JSON.stringify({
-        from: process.env.RESEND_FROM_EMAIL || 'noreply@shackles.com',
-        to,
-        subject,
-        html,
-      }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -51,27 +78,33 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
   }
 }
 
-async function sendViaNodemailer(to: string, subject: string, html: string): Promise<{ success: boolean; error?: string }> {
+async function sendViaNodemailer(to: string, subject: string, html: string, attachments?: InlineAttachment[]): Promise<{ success: boolean; error?: string }> {
   try {
     const transport = getTransporter();
-    await transport.sendMail({ from: fromAddress, to, subject, html });
+    const mailAttachments = attachments?.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+      contentType: a.contentType,
+      cid: a.cid,
+    }));
+    await transport.sendMail({ from: fromAddress, to, subject, html, attachments: mailAttachments });
     return { success: true };
   } catch (err) {
     return { success: false, error: String(err) };
   }
 }
 
-async function sendEmailHybrid(to: string, subject: string, html: string): Promise<{ success: boolean; error?: string }> {
+async function sendEmailHybrid(to: string, subject: string, html: string, attachments?: InlineAttachment[]): Promise<{ success: boolean; error?: string }> {
   // In production try Resend first
   if (resendApiKey && process.env.NODE_ENV !== 'development') {
-    const result = await sendViaResend(to, subject, html);
+    const result = await sendViaResend(to, subject, html, attachments);
     if (result.success) {
       console.log(`[EMAIL] Sent via Resend to ${to}`);
       return { success: true };
     }
     console.warn(`[EMAIL] Resend failed (${result.error}), falling back to Nodemailer`);
   }
-  const result = await sendViaNodemailer(to, subject, html);
+  const result = await sendViaNodemailer(to, subject, html, attachments);
   if (result.success) {
     console.log(`[EMAIL] Sent via Nodemailer to ${to}`);
     return { success: true };

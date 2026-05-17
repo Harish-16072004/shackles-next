@@ -131,6 +131,8 @@ model Event {
   endDate           DateTime?
   description       String?
   rulesUrl          String?
+  submissionUrl     String?
+  submissionDeadline DateTime?
   coordinatorName   String?
   coordinatorPhone  String?
   trainerName       String?

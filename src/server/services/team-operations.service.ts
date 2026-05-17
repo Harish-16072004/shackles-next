@@ -452,6 +452,8 @@ export async function lockTeam(input: LockTeamInput): Promise<LockTeamResult> {
             teamMaxSize: true,
             date: true,
             endDate: true,
+            submissionUrl: true,
+            submissionDeadline: true,
           },
         },
         members: {
@@ -532,6 +534,8 @@ export async function lockTeam(input: LockTeamInput): Promise<LockTeamResult> {
         teamName: team.name,
         eventName: team.event.name,
         teamCode: team.teamCode,
+        submissionUrl: team.event.submissionUrl,
+        submissionDeadline: team.event.submissionDeadline,
       });
     }
 

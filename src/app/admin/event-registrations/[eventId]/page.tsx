@@ -136,13 +136,22 @@ export default async function EventRegistrationDetailPage({
                             </span>
                             <h1 className="text-2xl font-bold text-gray-900">{event.name}</h1>
                         </div>
-                        <a
-                            href={`/api/admin/csv/registrations/export?eventId=${encodeURIComponent(event.id)}`}
-                            className="inline-flex items-center gap-2 shrink-0 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-                        >
-                            <Download size={14} />
-                            Download CSV
-                        </a>
+                        <div className="flex gap-2 shrink-0">
+                            <a
+                                href={`/api/admin/csv/attendance/export?eventId=${encodeURIComponent(event.id)}`}
+                                className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                            >
+                                <CheckCircle2 size={14} />
+                                Attendance
+                            </a>
+                            <a
+                                href={`/api/admin/csv/registrations/export?eventId=${encodeURIComponent(event.id)}`}
+                                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                                <Download size={14} />
+                                Full CSV
+                            </a>
+                        </div>
                     </div>
 
                     {/* Stat pills */}

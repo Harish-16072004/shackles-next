@@ -128,6 +128,9 @@ export async function updateEventAction(formData: FormData) {
   const endDateRaw = (formData.get("endDate") as string | null)?.trim();
   const description = (formData.get("description") as string | null)?.trim() || null;
   const rulesUrl = (formData.get("rulesUrl") as string | null)?.trim() || null;
+  const submissionUrl = (formData.get("submissionUrl") as string | null)?.trim() || null;
+  const submissionDeadlineRaw = (formData.get("submissionDeadline") as string | null)?.trim();
+  const submissionDeadline = submissionDeadlineRaw ? new Date(submissionDeadlineRaw) : null;
   const coordinatorDetails = parseCoordinators(formData);
   const participationModeRaw = (formData.get("participationMode") as string | null)?.trim();
   const categoryRaw = (formData.get("category") as string | null)?.trim();
@@ -155,6 +158,7 @@ export async function updateEventAction(formData: FormData) {
   const year = Number(yearRaw);
 
   if ((date && Number.isNaN(date.getTime())) || (endDate && Number.isNaN(endDate.getTime()))) return;
+  if (submissionDeadline && Number.isNaN(submissionDeadline.getTime())) return;
   if (date && endDate && endDate < date) return;
   if (!Number.isInteger(year) || year < 2000 || year > 3000) return;
 
@@ -178,6 +182,8 @@ export async function updateEventAction(formData: FormData) {
       endDate,
       description,
       rulesUrl,
+      submissionUrl,
+      submissionDeadline,
       coordinatorName: coordinatorDetails.coordinatorName,
       coordinatorPhone: coordinatorDetails.coordinatorPhone,
       category,
@@ -228,6 +234,9 @@ export async function createEventAction(formData: FormData) {
   const endDateRaw = (formData.get("endDate") as string | null)?.trim();
   const description = (formData.get("description") as string | null)?.trim() || null;
   const rulesUrl = (formData.get("rulesUrl") as string | null)?.trim() || null;
+  const submissionUrl = (formData.get("submissionUrl") as string | null)?.trim() || null;
+  const submissionDeadlineRaw = (formData.get("submissionDeadline") as string | null)?.trim();
+  const submissionDeadline = submissionDeadlineRaw ? new Date(submissionDeadlineRaw) : null;
   const coordinatorDetails = parseCoordinators(formData);
   const participationModeRaw = (formData.get("participationMode") as string | null)?.trim();
   const participationMode = participationModeRaw === "TEAM"
@@ -308,6 +317,8 @@ export async function createEventAction(formData: FormData) {
     endDate,
     description,
     rulesUrl,
+    submissionUrl,
+    submissionDeadline,
     coordinatorName: coordinatorDetails.coordinatorName,
     coordinatorPhone: coordinatorDetails.coordinatorPhone,
     category,

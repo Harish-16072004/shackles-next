@@ -42,7 +42,7 @@ export function evaluateAttendanceState(registration: AttendanceRegistrationStat
 type AttendanceDb = {
   event: {
     findFirst: (args: {
-      where: { name: { equals: string; mode: "insensitive" }; year: number; isArchived: false; isTemplate: false };
+      where: { name: { equals: string; mode: "insensitive" }; year: number; isArchived: false; isTemplate: false; isActive: true };
       select: { id: true };
     }) => Promise<{ id: string } | null>;
   };
@@ -81,6 +81,7 @@ export async function applyAttendanceMark(input: {
       year: getActiveYear(),
       isArchived: false,
       isTemplate: false,
+      isActive: true,
     },
     select: { id: true },
   });
@@ -130,15 +131,8 @@ export async function applyAttendanceMark(input: {
     };
   }
 
-  if (!registration) {
-    return {
-      status: "NOT_REGISTERED",
-      message: input.notRegisteredMessage || "Participant is not registered for this event.",
-    };
-  }
-
   await input.db.eventRegistration.update({
-    where: { id: registration.id },
+    where: { id: registration!.id },
     data: {
       attended: true,
       attendedAt: new Date(),

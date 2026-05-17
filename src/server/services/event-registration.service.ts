@@ -9,11 +9,12 @@ import {
 } from "@/server/services/registration-helpers.service";
 import { sendEventRegistrationEmail } from "@/server/services/email.service";
 import { getActiveYear } from "@/lib/edition";
+import { safeLogError } from "@/lib/safe-log";
 
 type DbClient = Prisma.TransactionClient | PrismaClient;
 
 export type EventRegistrationServiceResult =
-  | { success: true; message: string }
+  | { success: true; message: string; reason?: string }
   | { success: false; reason: string; error: string; details?: Record<string, unknown> };
 
 /**
@@ -117,8 +118,14 @@ export async function registerForIndividualEvent(input: {
     });
 
     if (existing) {
-      return { success: true, message: "Already registered for this event." };
+      return { success: true, reason: "ALREADY_REGISTERED", message: "Already registered for this event." };
     }
+
+    // Acquire lock to prevent race conditions on capacity check
+    await input.db.event.update({
+      where: { id: event.id },
+      data: { isActive: event.isActive },
+    });
 
     // 6. Check capacity
     const participantCount = await getEventParticipantCount({
@@ -142,13 +149,13 @@ export async function registerForIndividualEvent(input: {
       },
     });
 
-    // 8. Send confirmation email if requested
+    // 8. Send confirmation email if requested (fire and forget)
     if (input.sendEmail) {
-      await sendEventRegistrationEmail({
+      sendEventRegistrationEmail({
         userEmail: user.email,
         userName: user.firstName,
         eventName: event.name,
-      });
+      }).catch(err => safeLogError("Email failed in registration", err));
     }
 
     return {
@@ -156,7 +163,7 @@ export async function registerForIndividualEvent(input: {
       message: `Successfully registered for ${event.name}.`,
     };
   } catch (err) {
-    console.error("Error registering for event:", err);
+    safeLogError("Error registering for event", err);
     return {
       success: false,
       reason: "REGISTRATION_FAILED",
@@ -173,13 +180,13 @@ export async function registerForIndividualEvent(input: {
 export async function quickRegisterAndMarkAttendance(input: {
   db: DbClient;
   userId: string;
-  eventName: string;
+  eventId: string;
   stationId: string;
   clientOperationId?: string;
   syncedAt?: Date;
   teamEventMessage?: string;
   successMessage?: string;
-}): Promise<EventRegistrationServiceResult> {
+}) {
   const activeYear = getActiveYear();
 
   const user = await input.db.user.findUnique({
@@ -201,7 +208,7 @@ export async function quickRegisterAndMarkAttendance(input: {
 
   const event = await input.db.event.findFirst({
     where: {
-      name: { equals: normalizeName(input.eventName), mode: "insensitive" },
+      id: input.eventId,
       year: activeYear,
       isActive: true,
       isArchived: false,
@@ -263,13 +270,14 @@ export async function quickRegisterAndMarkAttendance(input: {
   });
 
   if (existing) {
-    return { success: true, message: "Already registered." };
+    return { success: true, reason: "ALREADY_REGISTERED", message: "Already registered." };
   }
 
-  const registeredTeams = await input.db.eventRegistration.count({ where: { eventId: event.id } });
-  if (isMaxTeamsExceeded(event.maxTeams, registeredTeams, 1)) {
-    return { success: false, reason: "TEAM_SLOTS_FULL", error: "Team slots are full." };
-  }
+  // Acquire lock to prevent race conditions on capacity check
+  await input.db.event.update({
+    where: { id: event.id },
+    data: { isActive: true },
+  });
 
   const participantCount = await getEventParticipantCount({
     db: input.db,
@@ -298,6 +306,6 @@ export async function quickRegisterAndMarkAttendance(input: {
 
   return {
     success: true,
-    message: input.successMessage || `Successfully registered & marked present for ${input.eventName}`,
+    message: input.successMessage || `Successfully registered & marked present for ${event.name}`,
   };
 }

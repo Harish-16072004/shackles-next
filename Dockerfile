@@ -8,8 +8,8 @@ RUN apk add --no-cache libc6-compat python3 make g++ openssl
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci --prefer-offline --legacy-peer-deps
+COPY package.json package-lock.json .npmrc ./
+RUN npm ci --prefer-offline
 
 # ============================================================
 # Stage 2 — builder: compile the Next.js app (standalone output)
@@ -19,7 +19,12 @@ FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb836
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+
+# Copy config files first (rarely change → better layer caching)
+COPY package.json package-lock.json tsconfig.json next.config.mjs postcss.config.mjs .npmrc ./
+
+# Prisma schema + migrations (changes less often than src)
+COPY prisma ./prisma
 
 # Generate Prisma client for the target platform
 RUN npx prisma generate
@@ -36,6 +41,10 @@ ENV ACTIVE_YEAR=2026
 ENV ACTIVE_THEME_KEY=shackles
 ENV ACTIVE_PUBLIC_DOMAIN=localhost
 ENV NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Copy source code last (most frequent changes → least cached)
+COPY src ./src
+COPY public ./public
 
 RUN npx next build --webpack
 

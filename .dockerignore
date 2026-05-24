@@ -5,13 +5,36 @@ node_modules
 .env.local
 .env.production
 .env.development
+.env.test
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .vercel
 .turbo
+
+# Documentation
 README.md
 DEPLOYMENT.md
+TECH_STACK.md
+docs/
+
+# CI/CD and IDE
+.github/
+.vscode/
+.idea/
+
+# Testing
+tests/
+test-results/
+coverage/
+playwright.config.ts
+vitest.config.ts
+
+# Docker (avoid recursive context)
 docker-compose.yml
 Dockerfile
+Dockerfile.worker
+
+# Local storage and scratch
+storage/

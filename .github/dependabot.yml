@@ -1,0 +1,38 @@
+version: 2
+updates:
+  # npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      # Group minor/patch updates to reduce PR noise
+      production-deps:
+        patterns: ["*"]
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      dev-deps:
+        patterns: ["*"]
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+    # Don't auto-update these (manual review needed)
+    ignore:
+      - dependency-name: "next-auth"   # beta — manual updates only
+      - dependency-name: "next"        # major framework — manual updates only
+      - dependency-name: "react"       # major — manual updates only
+      - dependency-name: "react-dom"   # major — manual updates only
+
+  # GitHub Actions versions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Docker base images
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

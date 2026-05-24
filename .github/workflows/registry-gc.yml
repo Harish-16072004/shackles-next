@@ -1,0 +1,29 @@
+name: Registry Garbage Collection
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # Every Sunday at 3 AM UTC
+  workflow_dispatch:       # Allow manual trigger
+
+jobs:
+  gc:
+    name: Clean up old container images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DO_API_TOKEN }}
+
+      - name: Delete old manifests (keep last 10)
+        run: |
+          doctl registry repository list-manifests shackles-next \
+            --format Digest,UpdatedAt --no-header \
+            | sort -k2 -r \
+            | tail -n +11 \
+            | awk '{print $1}' \
+            | xargs -I {} doctl registry repository delete-manifest shackles-next {} --force || true
+
+      - name: Run garbage collection
+        run: doctl registry garbage-collection start --include-untagged-manifests --force

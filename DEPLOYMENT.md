@@ -40,7 +40,7 @@ This application is containerized and designed for deployment on any VPS (Digita
 ## 🏗️ Architecture
 - **App (`shackles-app`)**: Next.js production server (Standalone mode).
 - **Worker (`shackles-worker`)**: Background job processor for heavy tasks (QR generation, CSV exports).
-- **Database (`shackles-local-db`)**: PostgreSQL 15.
+- **Database (`shackles-local-db`)**: PostgreSQL 16.
 - **Cache (`shackles-local-redis`)**: Redis 7 for BullMQ and rate-limiting.
 
 ## 🔑 Key Configuration
@@ -80,4 +80,30 @@ To deploy updates from your repository:
 git pull
 docker-compose up --build -d
 docker exec -it shackles-app npx prisma migrate deploy
+```
+
+## 🔒 Branch Protection (Recommended)
+
+Configure branch protection on `main` to prevent accidental pushes and ensure CI always gates deployments.
+
+**Settings → Branches → Add rule → `main`:**
+
+| Setting | Value |
+|---|---|
+| Require a pull request before merging | ✅ |
+| Required approvals | 1 |
+| Require status checks to pass | ✅ |
+| Required checks | `Lint · Typecheck · Unit Tests · Build` |
+| Require branches to be up to date | ✅ |
+| Do not allow bypassing | ✅ |
+| Restrict force pushes | ✅ |
+
+Or via GitHub CLI:
+```bash
+gh api repos/{owner}/{repo}/branches/main/protection \
+  --method PUT \
+  --field required_status_checks='{"strict":true,"contexts":["Lint · Typecheck · Unit Tests · Build"]}' \
+  --field enforce_admins=true \
+  --field required_pull_request_reviews='{"required_approving_review_count":1}' \
+  --field restrictions=null
 ```

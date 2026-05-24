@@ -1,13 +1,13 @@
 services:
   # PostgreSQL database
   db:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: shackles-local-db
     restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: shackles_local
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-shackles_local}
     ports:
       - "5433:5432"  # Local development port mapping
     volumes:
@@ -26,7 +26,7 @@ services:
     volumes:
       - .:/app
     environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/shackles_local
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-shackles_local}
     depends_on:
       db:
         condition: service_healthy
@@ -52,13 +52,12 @@ services:
   worker:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.worker
     container_name: shackles-worker
-    command: npx tsx src/worker.ts
     restart: always
     environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/shackles_local
-      - DIRECT_DATABASE_URL=postgresql://postgres:password@db:5432/shackles_local
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-shackles_local}
+      - DIRECT_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-shackles_local}
       - REDIS_URL=redis://redis:6379
       - ACTIVE_YEAR=2026
       - STORAGE_PROVIDER=local
@@ -84,8 +83,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/shackles_local
-      - DIRECT_DATABASE_URL=postgresql://postgres:password@db:5432/shackles_local
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-shackles_local}
+      - DIRECT_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-shackles_local}
       - REDIS_URL=redis://redis:6379
       - NODE_ENV=production
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}

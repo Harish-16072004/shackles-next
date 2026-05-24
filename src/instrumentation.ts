@@ -17,7 +17,14 @@ export async function register() {
   // Only run server-side logic in the Node.js runtime.
   // The Edge runtime has a separate, limited environment.
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // Initialize Sentry for server-side error tracking (no-ops if DSN is not set)
+    await import("../sentry.server.config");
+
     const { validateServerEnv } = await import("@/lib/env");
     validateServerEnv();
+  }
+
+  if (process.env.NEXT_RUNTIME === "edge") {
+    await import("../sentry.edge.config");
   }
 }

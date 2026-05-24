@@ -1,7 +1,7 @@
 # ============================================================
 # Stage 1 — deps: install production + dev deps for the build
 # ============================================================
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS deps
+FROM node:26-alpine@sha256:7c6af15abe4e3de859690e7db171d0d711bf37d27528eddfe625b2fe89e097f8 AS deps
 
 # Native module build tools (sharp, onnxruntime-node, bcryptjs)
 RUN apk add --no-cache libc6-compat python3 make g++ openssl
@@ -14,7 +14,7 @@ RUN npm ci --prefer-offline
 # ============================================================
 # Stage 2 — builder: compile the Next.js app (standalone output)
 # ============================================================
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
+FROM node:26-alpine@sha256:7c6af15abe4e3de859690e7db171d0d711bf37d27528eddfe625b2fe89e097f8 AS builder
 
 WORKDIR /app
 
@@ -51,7 +51,7 @@ RUN npx next build --webpack
 # ============================================================
 # Stage 3 — runner: lean production image
 # ============================================================
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS runner
+FROM node:26-alpine@sha256:7c6af15abe4e3de859690e7db171d0d711bf37d27528eddfe625b2fe89e097f8 AS runner
 
 WORKDIR /app
 

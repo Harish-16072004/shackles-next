@@ -25,7 +25,7 @@ jobs:
       # 1. Source
       # --------------------------------------------------------
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # Check out the commit that triggered the CI run, not HEAD.
           ref: ${{ github.event.workflow_run.head_sha }}

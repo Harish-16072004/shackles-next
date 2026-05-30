@@ -41,39 +41,34 @@ jobs:
       - name: Authenticate with DO Container Registry
         run: doctl registry login --expiry-seconds 1200
 
-      # --------------------------------------------------------
-      # 3. Run Database Migrations (Before Building Image)
-      # --------------------------------------------------------
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
 
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Apply Database Migrations
-        run: npx prisma migrate deploy
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       # --------------------------------------------------------
-      # 4. Docker build + push
+      # 4. Docker build + push (App and Worker)
       # --------------------------------------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push image
+      - name: Build and push Web App
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # Tag with the exact commit SHA (for rollback) and 'latest'
           tags: |
             registry.digitalocean.com/${{ secrets.DO_REGISTRY_NAME }}/shackles-next:${{ github.event.workflow_run.head_sha }}
             registry.digitalocean.com/${{ secrets.DO_REGISTRY_NAME }}/shackles-next:latest
-          # GitHub Actions layer cache — keeps subsequent builds fast
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      - name: Build and push Worker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.worker
+          push: true
+          tags: |
+            registry.digitalocean.com/${{ secrets.DO_REGISTRY_NAME }}/shackles-worker:${{ github.event.workflow_run.head_sha }}
+            registry.digitalocean.com/${{ secrets.DO_REGISTRY_NAME }}/shackles-worker:latest
           cache-from: type=gha
           cache-to:   type=gha,mode=max
 
@@ -133,5 +128,6 @@ jobs:
         run: |
           echo "### Deployment triggered ✅" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.event.workflow_run.head_sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** registry.digitalocean.com/${{ secrets.DO_REGISTRY_NAME }}/shackles-next:${{ github.event.workflow_run.head_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**App Image:** registry.digitalocean.com/${{ secrets.DO_REGISTRY_NAME }}/shackles-next:${{ github.event.workflow_run.head_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Worker Image:** registry.digitalocean.com/${{ secrets.DO_REGISTRY_NAME }}/shackles-worker:${{ github.event.workflow_run.head_sha }}" >> $GITHUB_STEP_SUMMARY
           echo "**App ID:** ${{ vars.DO_APP_ID }}" >> $GITHUB_STEP_SUMMARY

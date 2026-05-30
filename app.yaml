@@ -1,0 +1,95 @@
+name: shackles-symposium
+region: nyc3
+
+services:
+  # --------------------------------------------------------
+  # 1. Main Next.js Web Application
+  # --------------------------------------------------------
+  - name: web
+    image:
+      registry_type: DOCR
+      repository: shackles-next
+      tag: latest
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: DIRECT_DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: REDIS_URL
+        scope: RUN_TIME
+        value: ${redis.REDIS_URL}
+      # Required Secrets (To be configured in DO App Dashboard)
+      - key: NEXTAUTH_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: SESSION_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: NEXTAUTH_URL
+        scope: RUN_TIME
+        value: ${APP_URL}
+      - key: STORAGE_PROVIDER
+        scope: RUN_TIME
+        value: digitalocean
+
+  # --------------------------------------------------------
+  # 2. BullMQ Background Worker
+  # --------------------------------------------------------
+  - name: worker
+    image:
+      registry_type: DOCR
+      repository: shackles-worker
+      tag: latest
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: DIRECT_DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: REDIS_URL
+        scope: RUN_TIME
+        value: ${redis.REDIS_URL}
+      - key: STORAGE_PROVIDER
+        scope: RUN_TIME
+        value: digitalocean
+
+jobs:
+  # --------------------------------------------------------
+  # 3. Database Migrations (Runs before new containers boot)
+  # --------------------------------------------------------
+  - name: migrate
+    kind: PRE_DEPLOY
+    image:
+      registry_type: DOCR
+      repository: shackles-next
+      tag: latest
+    run_command: npx prisma migrate deploy
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+
+databases:
+  # --------------------------------------------------------
+  # 4. Managed Infrastructure
+  # --------------------------------------------------------
+  - name: db
+    engine: PG
+    version: "15"
+    size: db-s-dev-database
+    num_nodes: 1
+  - name: redis
+    engine: REDIS
+    version: "7"
+    size: db-s-dev-redis
+    num_nodes: 1

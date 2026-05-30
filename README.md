@@ -1,106 +1,154 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<div align="center">
+  <h1>🔗 Shackles Symposium</h1>
+  <p><strong>A Full-Stack Event Management Platform for College Symposiums</strong></p>
+  <p>
+    Registration • Payments • QR-Based Logistics • Team Management • Live Scoring • Admin Dashboards
+  </p>
+</div>
 
-## Getting Started
+---
 
-First, run the development server:
+## 📖 Overview
 
+**Shackles Symposium** is a robust, highly-scalable web application designed to handle the end-to-end lifecycle of college symposiums. It provides a seamless experience for applicants, participants, volunteers, coordinators, and administrators. 
+
+Built with modern web technologies, the platform supports multi-year operations, background job processing, resilient infrastructure, and secure access controls.
+
+---
+
+## 🏗 Architecture & Tech Stack
+
+This project is built using a modern **TypeScript** full-stack ecosystem, optimized for performance and maintainability.
+
+### Core Stack
+- **Framework**: [Next.js (App Router)](https://nextjs.org/)
+- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **Authentication**: [NextAuth.js v5 (Beta)](https://authjs.dev/) with Credentials Provider and JWT strategies.
+
+### Database & Caching
+- **Primary Database**: [PostgreSQL 15](https://www.postgresql.org/)
+- **ORM**: [Prisma](https://www.prisma.io/)
+- **Caching & Rate Limiting**: [Redis](https://redis.io/) (via Upstash Redis)
+
+### Background Jobs & Logistics
+- **Queue System**: [BullMQ](https://docs.bullmq.io/) (Powered by Redis)
+- **Background Worker**: Dedicated Node.js worker process for heavy tasks (e.g., CSV exports, QR generation).
+
+### Storage & Media
+- **Object Storage**: [DigitalOcean Spaces](https://www.digitalocean.com/products/spaces) (S3-Compatible)
+- **Image Processing**: [Sharp](https://sharp.pixelplumbing.com/) and client-side compression.
+
+### Tooling & CI/CD
+- **Testing**: [Vitest](https://vitest.dev/) (Unit/Integration) & [Playwright](https://playwright.dev/) (E2E)
+- **Containerization**: [Docker](https://www.docker.com/) (Multi-stage builds)
+- **Pipelines**: GitHub Actions (Lint, Typecheck, Build, Test, Deploy)
+- **Deployment**: DigitalOcean App Platform (via `app.yaml` IaC)
+
+---
+
+## ✨ Key Features
+
+- **🛡️ Role-Based Access Control (RBAC)**: Fine-grained permissions for users spanning `APPLICANT`, `PARTICIPANT`, `VOLUNTEER`, `COORDINATOR`, and `ADMIN`.
+- **📱 Mobile-First QR Scanning**: Integrated HTML5 QR code scanning for fast, secure event attendance and kit distribution.
+- **⚙️ Multi-Year Architecture**: Designed to run continuously across multiple years. "Yearly Editions" allow seamless data archiving and event cloning without losing historical records.
+- **✉️ Transactional Emails**: Automated email confirmations for registrations, team locks, and payment verification via Resend & Nodemailer.
+- **🚀 Progressive Web App (PWA)**: Installable on mobile devices with service worker caching for offline resilience.
+
+---
+
+## 💻 Local Development
+
+### Prerequisites
+- Node.js `20.x`
+- Docker & Docker Compose
+- Git
+
+### 1. Environment Setup
+Clone the repository and set up your environment variables:
 ```bash
+git clone https://github.com/Aravind6626/shackles-next.git
+cd shackles-next
+cp .env.example .env
+```
+*Note: Update `.env` with your specific local or cloud credentials.*
+
+### 2. Start Services
+Spin up the local PostgreSQL database, Redis instance, and run the initial Prisma migrations:
+```bash
+docker-compose up -d db redis init-db
+```
+
+### 3. Install & Run
+Install dependencies and start the Next.js development server (using Turbopack for faster builds):
+```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
+Access the application at [http://localhost:3000](http://localhost:3000).
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🔄 Yearly Edition Bootstrap
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This project supports continuous multi-year operation utilizing a single database.
 
-## Yearly Edition Bootstrap
-
-This project supports multi-year operation with one database.
-
-### Seed template events
-
-Template events are seeded with `isTemplate=true` for `ACTIVE_YEAR`.
-
-```bash
-npm run prisma db seed
-```
-
-### Clone templates to a target year
-
-Create active, non-template events for a new year from template rows:
-
+### 1. Clone templates to a target year
+You can create active, non-template events for a new year derived from template rows:
 ```bash
 npm run bootstrap:year -- 2027 --from=2026
 ```
+*(Use the `--dry-run` flag to test the output before committing to the database).*
 
-Dry run mode:
+### 2. Year Switch Configuration
+Set yearly controls through your environment variables during rollover:
+- `ACTIVE_YEAR`: The active public year scope (e.g., `2027`).
+- `ACTIVE_THEME_KEY`: Visual theme key (`default`, `classic`, `future`).
+- `ACTIVE_PUBLIC_DOMAIN`: Public domain for metadata context.
 
-```bash
-npm run bootstrap:year -- 2027 --from=2026 --dry-run
-```
-
-Notes:
-- The command is idempotent for already-cloned template sets.
-- Existing target-year events are not deleted.
-- Historical years remain in the same DB and can be archived without hard deletion.
-
-### Year switch configuration
-
-Set yearly controls through environment variables:
-
-- `ACTIVE_YEAR`: active public year scope
-- `ACTIVE_THEME_KEY`: visual theme key (`default`, `classic`, `future`)
-- `ACTIVE_PUBLIC_DOMAIN`: public domain for metadata and deployment context
-
-At yearly rollover:
-
-1. Seed/verify template rows for source year.
-2. Run `npm run bootstrap:year -- <targetYear> --from=<sourceYear>`.
-3. Update `ACTIVE_YEAR`, `ACTIVE_THEME_KEY`, `ACTIVE_PUBLIC_DOMAIN`.
-4. Archive previous year events in admin events page.
-
-Validate with tests:
-
-```bash
-npx vitest run tests/unit/edition.test.ts tests/unit/shackles-id.service.test.ts tests/integration/year-visibility.routes.test.ts tests/integration/event-archive.service.test.ts tests/integration/shackles-id.sequence.test.ts tests/integration/year-bootstrap.service.test.ts
-```
-
-### Archive operations
-
-Export yearly archive snapshot:
-
+### 3. Archive Operations
+Export a yearly archive snapshot for safe keeping:
 ```bash
 npm run archive:year:export -- 2026
 ```
 
-Run restore drill for one archived event in a year:
+---
 
+## 🚢 Deployment
+
+The deployment architecture consists of two primary Docker containers:
+1. **`shackles-next`**: The Next.js web application (running in Standalone mode).
+2. **`shackles-worker`**: The background worker processing BullMQ queues.
+
+### DigitalOcean App Platform
+This project is configured for continuous deployment to the DigitalOcean App Platform. 
+
+To provision the infrastructure (App, Worker, Postgres DB, and Redis), authenticate with the DigitalOcean CLI (`doctl`) and run:
 ```bash
-npm run archive:year:restore-drill -- 2026
+doctl apps create --spec app.yaml
+```
+GitHub Actions (`deploy.yml`) will automatically build, push, and deploy new Docker images whenever code is merged into the `main` branch.
+
+---
+
+## 🧪 Testing
+
+Run the testing suites to ensure platform stability:
+
+**Unit & Integration Tests (Vitest)**
+```bash
+npm run test
 ```
 
-Operational checklist and rollback workflow:
+**End-to-End Tests (Playwright)**
+```bash
+npx playwright test
+```
 
-- `docs/YEARLY_ROLLOVER_RUNBOOK.md`
+---
 
-## Learn More
+## 📜 License & Contribution
 
-To learn more about Next.js, take a look at the following resources:
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/Aravind6626/shackles-next/issues).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+> **Note**: This repository represents a specialized implementation for college symposiums. If you plan to fork this for your own institution, ensure you update the branding, email templates, and DigitalOcean resource identifiers.

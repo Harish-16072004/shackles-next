@@ -1,6 +1,6 @@
 import * as React from 'react'
 
-export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {}
+export type CardProps = React.HTMLAttributes<HTMLDivElement>
 
 export function Card({ className = '', ...props }: CardProps) {
   const classes = ['rounded-lg border border-gray-200 bg-white text-gray-900 shadow-sm', className]

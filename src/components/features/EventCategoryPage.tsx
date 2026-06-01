@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, Users, User, X, ExternalLink, ChevronRight, ChevronLeft, MapPin } from 'lucide-react';
+import { Calendar, Users, User, X, ExternalLink, ChevronRight, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { InviteModal } from '@/components/features/InviteModal';
 import {
@@ -132,7 +132,7 @@ const defaultAccent = accentMap['TECHNICAL'];
 
 export default function EventCategoryPage({
   category,
-  subtitle,
+  subtitle: _subtitle,
   events = [],
   inviteToken: inviteTokenFromUrl,
   teamCode: teamCodeFromUrl,
@@ -145,16 +145,9 @@ export default function EventCategoryPage({
 
   // Registration form state
   const [teamName, setTeamName] = useState('');
-  const [joinCode, setJoinCode] = useState('');
-  const [inviteToken, setInviteToken] = useState('');
+  const [joinCode, setJoinCode] = useState(searchParams.get("teamCode") || '');
+  const [inviteToken, setInviteToken] = useState(searchParams.get("inviteToken") || '');
   const [latestTeamCode, setLatestTeamCode] = useState<string | null>(null);
-
-  useEffect(() => {
-    const incomingCode = searchParams.get("teamCode");
-    const incomingToken = searchParams.get("inviteToken");
-    if (incomingCode) setJoinCode(incomingCode);
-    if (incomingToken) setInviteToken(incomingToken);
-  }, [searchParams]);
 
   const [registering, setRegistering] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -186,28 +179,30 @@ export default function EventCategoryPage({
   }, []);
 
   useEffect(() => {
-    fetchMyRegistrations();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchMyRegistrations();
   }, [fetchMyRegistrations]);
 
   // ── Clear form when modal changes ─────────────────────────────────────────
 
   const [inviteHandled, setInviteHandled] = useState(false);
 
-  useEffect(() => {
-    // Don't clear if this is from an invite link — the invite effect will set the joinCode
-    if (teamCodeFromUrl && !inviteHandled) return;
-    setTeamName('');
-    setJoinCode('');
-    setLatestTeamCode(null);
-    setFeedback(null);
-    setRegistering(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedEvent?.id]);
+  const handleOpenEvent = (event: Event) => {
+    if (!(teamCodeFromUrl && !inviteHandled)) {
+      setTeamName('');
+      setJoinCode('');
+      setLatestTeamCode(null);
+      setFeedback(null);
+      setRegistering(false);
+    }
+    setSelectedEvent(event);
+  };
 
   // ── Auto-join from invite link ─────────────────────────────────────────────
 
   useEffect(() => {
     if (inviteHandled || !teamCodeFromUrl || events.length === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setInviteHandled(true);
 
     // Find the team event that matches (team events only have teamCode-based join)
@@ -388,7 +383,7 @@ export default function EventCategoryPage({
             return (
               <button
                 key={event.id}
-                onClick={() => setSelectedEvent(event)}
+                onClick={() => handleOpenEvent(event)}
                 className={`group relative flex flex-col rounded-2xl border-2 bg-white p-5 text-left shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${accent.border} ${accent.hoverBorder} ${accent.cardGlow}`}
               >
                 {/* Registered indicator */}

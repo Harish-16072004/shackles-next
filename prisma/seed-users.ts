@@ -29,7 +29,7 @@ async function main() {
   ];
 
   // Shuffle arrays for randomness
-  const shuffle = (array: any[]) => array.sort(() => Math.random() - 0.5);
+  const shuffle = <T,>(array: T[]) => array.sort(() => Math.random() - 0.5);
   shuffle(types);
   shuffle(genders);
 

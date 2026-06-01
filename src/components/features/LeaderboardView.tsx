@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getLeaderboardData } from '@/server/actions/marking'
@@ -50,7 +50,7 @@ export function LeaderboardView({ eventId, onRefresh }: LeaderboardViewProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const fetchLeaderboard = async () => {
+  const fetchLeaderboard = useCallback(async () => {
     try {
       setError('')
       setLoading(true)
@@ -69,11 +69,11 @@ export function LeaderboardView({ eventId, onRefresh }: LeaderboardViewProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [eventId])
 
   useEffect(() => {
     fetchLeaderboard()
-  }, [eventId])
+  }, [fetchLeaderboard])
 
   if (loading) {
     return <div className="text-center py-8">Loading leaderboard...</div>

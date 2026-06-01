@@ -5,7 +5,7 @@ import crypto from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 import { createRateLimiter, rateLimitPresets } from '@/lib/rate-limit'
-import { TeamMemberRole, TeamStatus } from '@prisma/client'
+import { TeamMemberRole, TeamStatus, Prisma, User, Event } from '@prisma/client'
 import { sendTeamInviteEmail } from '@/lib/email'
 import { getActiveYear } from '@/lib/edition'
 import { normalizeTeamName, validateTeamName, generateUniqueJoinCode } from '@/server/services/team-registration.service'
@@ -48,7 +48,7 @@ const inviteRateLimiter = createRateLimiter({
   keyPrefix: 'api:team:invite',
 })
 
-async function generateUniqueTeamCode(tx: any, eventId: string) {
+async function generateUniqueTeamCode(tx: Prisma.TransactionClient, eventId: string) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const code = crypto.randomBytes(4).toString('hex').toUpperCase()
     const existing = await tx.team.findUnique({
@@ -73,7 +73,7 @@ async function checkRateLimitAndAuth(actionType: string) {
   return { success: true, session }
 }
 
-async function performRegistrationChecks(tx: any, user: any, event: any, action: string) {
+async function performRegistrationChecks(tx: Prisma.TransactionClient, user: User & { payment?: any }, event: Event, action: string) {
   if (user.payment?.status !== 'VERIFIED') {
     return { error: 'Only payment-verified users can register for events.' }
   }
@@ -97,7 +97,7 @@ async function performRegistrationChecks(tx: any, user: any, event: any, action:
       select: { event: { select: { name: true, date: true, endDate: true } } },
     })
 
-    const conflictingRegistration = sameUserRegistrations.find((reg: any) => {
+    const conflictingRegistration = sameUserRegistrations.find((reg: { event: { date: Date | null, endDate: Date | null, name: string } }) => {
       if (!reg.event.date) return false
       const otherSlot = normalizeEventSlot(reg.event.date, reg.event.endDate)
       return hasScheduleOverlap(currentSlot, otherSlot)
@@ -518,11 +518,11 @@ export async function getPublicEventStats(category?: string) {
       prisma.eventRegistration.groupBy({ by: ['eventId'], where: { eventId: { in: eventIds }, teamId: null }, _sum: { teamSize: true } }),
     ]) : [[], [], [], []]
 
-    const mapCount = (arr: any[]) => new Map(arr.map(e => [e.eventId, e._count?.id ?? 0]))
+    const mapCount = (arr: Array<{ eventId: string, _count?: { id?: number } }>) => new Map(arr.map(e => [e.eventId, e._count?.id ?? 0]))
     const teamC = mapCount(teamCounts)
     const regC = mapCount(regRowCounts)
     const memC = mapCount(teamMemberCounts)
-    const sumC = new Map(indSums.map((e: any) => [e.eventId, e._sum.teamSize ?? 0]))
+    const sumC = new Map(indSums.map((e: { eventId: string, _sum: { teamSize: number | null } }) => [e.eventId, e._sum.teamSize ?? 0]))
 
     const payload = events.map(event => {
       const isTeam = event.participationMode === 'TEAM'

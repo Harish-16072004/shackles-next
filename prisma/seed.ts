@@ -130,7 +130,7 @@ async function main() {
       update: {
         type: evt.type,
         category: evt.category,
-        trainerName: (evt as any).trainerName || null,
+        trainerName: (evt as Record<string, unknown>).trainerName as string | undefined || null,
         isTemplate: true,
         isArchived: false,
         isActive: true, // Make active for easier testing
@@ -141,7 +141,7 @@ async function main() {
         year: activeYear,
         type: evt.type,
         category: evt.category,
-        trainerName: (evt as any).trainerName || null,
+        trainerName: (evt as Record<string, unknown>).trainerName as string | undefined || null,
         date: new Date(),
         isTemplate: true,
         isArchived: false,

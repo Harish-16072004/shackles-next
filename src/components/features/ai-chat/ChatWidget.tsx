@@ -106,7 +106,7 @@ export default function ChatWidget() {
     setError(false);
     setIsLoading(true);
 
-    const userMessage: Message = { id: Date.now().toString(), role: 'user', content: text };
+    const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content: text };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput("");
@@ -130,8 +130,7 @@ export default function ChatWidget() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let assistantContent = "";
-      const assistantMessageId = (Date.now() + 1).toString();
+      const assistantMessageId = crypto.randomUUID();
 
       // Append initial empty assistant message
       setMessages((prev) => [
@@ -144,14 +143,13 @@ export default function ChatWidget() {
         if (done) break;
 
         const chunkText = decoder.decode(value, { stream: true });
-        assistantContent += chunkText;
 
-        // Update the last message
+        // Update the last message incrementally
         setMessages((prev) => {
           const newMessages = [...prev];
           const lastMsg = newMessages[newMessages.length - 1];
           if (lastMsg && lastMsg.id === assistantMessageId) {
-            lastMsg.content = assistantContent;
+            lastMsg.content = lastMsg.content + chunkText;
           }
           return newMessages;
         });

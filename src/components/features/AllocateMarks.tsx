@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { fetchEventMarkingData, saveTeamMarksAllocation } from '@/server/actions/marking-allocation'
 
 interface MarkingComponent {
@@ -51,11 +51,7 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
   const [saving, setSaving] = useState<string | null>(null)
   const [message, setMessage] = useState('')
 
-  useEffect(() => {
-    loadData()
-  }, [eventId])
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
     const res = await fetchEventMarkingData(eventId)
     if (res.success && res.data) {
@@ -84,7 +80,11 @@ export default function AllocateMarks({ eventId }: { eventId: string }) {
       setMessage('Failed to load event data.')
     }
     setLoading(false)
-  }
+  }, [eventId])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleMarkChange = (teamId: string, compId: string, judgeIndex: number, val: string) => {
     setMarksState(prev => ({

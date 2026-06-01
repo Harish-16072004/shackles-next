@@ -117,7 +117,7 @@ jobs:
           curl -sf -X POST \
             -H "Authorization: Bearer ${{ secrets.DO_API_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{\"deployment_id\": \"${{ env.PREV_DEPLOYMENT_ID }}\"}" \
+            -d "{\"deployment_id\": \"${PREV_DEPLOYMENT_ID}\"}" \
             "https://api.digitalocean.com/v2/apps/${{ vars.DO_APP_ID }}/rollback"
 
       # --------------------------------------------------------

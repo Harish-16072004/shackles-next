@@ -925,7 +925,7 @@ export async function processQRScanAction(input: {
   stationId: string;
   eventId?: string;
   operationType: string;
-}): Promise<{ success: boolean; error?: string; [key: string]: any }> {
+}): Promise<{ success: boolean; error?: string; [key: string]: unknown }> {
   const { qrData, stationId, eventId, operationType } = input;
 
   if (!qrData || !stationId || !operationType) {
@@ -1211,7 +1211,7 @@ export async function scannerCreateTeam(input: {
     });
 
     return result;
-  } catch (error: any) {
+  } catch (error) {
     if (error.code === "P2002") {
       return { success: false, error: "A team with this name already exists" };
     }

@@ -114,7 +114,7 @@ export async function fetchEventMarkingData(eventId: string) {
         select: { id: true, email: true }
     })
     
-    let existingMarks: any[] = []
+    let existingMarks: Array<{ teamId: string, componentId: string, judgeId: string, marksAwarded: number }> = []
     if (criteriaPlain) {
         const rawMarks = await prisma.judgeMarking.findMany({
             where: { markingCriteriaId: criteriaPlain.id },

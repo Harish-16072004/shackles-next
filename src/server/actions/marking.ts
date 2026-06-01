@@ -153,7 +153,7 @@ export async function getMarkingCriteria(eventId: string) {
         createdAt: criteria.createdAt,
       }
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("getMarkingCriteria error:", error);
     return { success: false, error: "An unexpected error occurred" };
   }
@@ -560,9 +560,9 @@ export async function submitJudgeMarks(input: z.infer<typeof SubmitJudgeMarksSch
             componentMarksCount: componentUpdates.length,
           })
         })
-      } catch (error: any) {
+      } catch (error) {
         console.error(`Error submitting marks for team ${tm.teamId}:`, error)
-        results.push({ teamId: tm.teamId, success: false, error: error.message || 'Failed to submit marks' })
+        results.push({ teamId: tm.teamId, success: false, error: error instanceof Error ? error.message : 'Failed to submit marks' })
       }
     }
 

@@ -7,6 +7,7 @@ export default function RegisterPage() {
   const activeYearShort = getActiveYearShort();
 
   // Hard server-side enforcement
+  // eslint-disable-next-line react-hooks/purity
   if (Date.now() >= REGISTRATION_TARGET_TIME) {
     redirect("/onspot-registration");
   }

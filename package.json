@@ -61,7 +61,7 @@
     "@swc/core": "^1.15.18",
     "@tailwindcss/postcss": "^4.2.4",
     "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^20",
+    "@types/node": "^25",
     "@types/nodemailer": "^7.0.5",
     "@types/pdfkit": "^0.17.5",
     "@types/qrcode": "^1.5.6",
